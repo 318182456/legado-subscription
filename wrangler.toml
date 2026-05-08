@@ -20,6 +20,7 @@ command = "npm run build"
 [triggers]
 crons = [ "*/30 * * * *" ]
 
+# wrangler v4 自动 provisioning：首次 deploy 时自动创建 KV/D1 并写入 id
 [[kv_namespaces]]
 binding = "KV"
 

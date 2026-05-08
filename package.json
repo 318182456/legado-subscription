@@ -30,16 +30,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "wrangler": "^3.112.0"
-  },
-  "cloudflare": {
-    "bindings": {
-      "KV": {
-        "description": "KV namespace for caching subscription output (sources/rules)"
-      },
-      "DB": {
-        "description": "D1 database for storing subscriptions, sources, rules and passkeys"
-      }
-    }
+    "wrangler": "^4.0.0"
   }
 }
