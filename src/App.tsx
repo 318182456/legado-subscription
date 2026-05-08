@@ -248,9 +248,9 @@ function DashboardView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="flex flex-col gap-6">
-          <StatCard icon={<Book size={24} />} label="已启用阅读源" value={stats?.sources.enabled.toLocaleString() || '0'} color="bg-surface-container text-primary" />
-          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value={stats?.rules.enabled.toLocaleString() || '0'} color="bg-tertiary-container/10 text-tertiary" />
-          <StatCard icon={<RefreshCw size={24} />} label="启用订阅总数" value={stats?.subscriptions.total.toLocaleString() || '0'} color="bg-secondary-container text-on-surface" />
+          <StatCard icon={<Book size={24} />} label="已启用阅读源" value={stats?.sources?.total?.toLocaleString() || '0'} color="bg-surface-container text-primary" />
+          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value={stats?.rules?.total?.toLocaleString() || '0'} color="bg-tertiary-container/10 text-tertiary" />
+          <StatCard icon={<RefreshCw size={24} />} label="启用订阅总数" value={stats?.subscriptions?.total?.toLocaleString() || '0'} color="bg-secondary-container text-on-surface" />
         </div>
 
         <div className="md:col-span-2 bg-primary text-on-primary rounded-xl p-8 relative overflow-hidden flex flex-col justify-between">
@@ -547,8 +547,8 @@ function RulesView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <SummaryIconCard icon={<Sparkles size={24} />} label="总规则数量" value={rules.length.toLocaleString()} />
-        <SummaryIconCard icon={<CheckCircle2 size={24} />} label="已启用规则" value={rules.filter(r => r.enabled).length.toLocaleString()} />
+        <SummaryIconCard icon={<Sparkles size={24} />} label="总规则数量" value={rules.length?.toLocaleString() || '0'} />
+        <SummaryIconCard icon={<CheckCircle2 size={24} />} label="已启用规则" value={rules.filter(r => r.enabled).length?.toLocaleString() || '0'} />
         <SummaryIconCard icon={<RefreshCw size={24} />} label="最近更新" value="刚刚" />
       </div>
 
