@@ -174,7 +174,12 @@ export default function App() {
               transition={{ duration: 0.2 }}
             >
               {currentPage === 'dashboard' && <DashboardView onImport={() => setIsAddModalOpen(true)} />}
-              {currentPage === 'subscriptions' && <SubscriptionView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'subscriptions' && (
+                <SubscriptionView 
+                  onImport={() => setIsAddModalOpen(true)} 
+                  onExplore={() => setIsMiaogongziModalOpen(true)} 
+                />
+              )}
               {currentPage === 'sources' && <SourceListView onImport={() => setIsAddModalOpen(true)} />}
               {currentPage === 'rules' && <RulesView onImport={() => setIsAddModalOpen(true)} />}
               {currentPage === 'settings' && <SettingsView />}
@@ -192,7 +197,7 @@ export default function App() {
         }}
       />
 
-      <MiaogongziPickerModal
+      <RemoteUrlPickerModal
         isOpen={isMiaogongziModalOpen}
         onClose={() => setIsMiaogongziModalOpen(false)}
         onAdded={() => {
@@ -775,7 +780,7 @@ function RulesView({ onImport }: { onImport: () => void }) {
   );
 }
 
-function SubscriptionView({ onImport }: { onImport: () => void }) {
+function SubscriptionView({ onImport, onExplore }: { onImport: () => void; onExplore: () => void }) {
   const [subs, setSubs] = useState<api.Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<number | null>(null);
@@ -848,10 +853,10 @@ function SubscriptionView({ onImport }: { onImport: () => void }) {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setIsMiaogongziModalOpen(true)}
+            onClick={onExplore}
             className="flex items-center gap-2 px-4 py-2 bg-tertiary-container/20 text-tertiary rounded-lg hover:bg-tertiary-container/30 transition-all text-sm font-medium shadow-sm"
           >
-            <Sparkles size={18} /> 从苗公子导入
+            <Sparkles size={18} /> 外部网页解析
           </button>
           <button 
             onClick={onImport}
@@ -1051,18 +1056,28 @@ function AddSubscriptionModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
   );
 }
 
-function MiaogongziPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
+function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
+  const [url, setUrl] = useState('');
   const [list, setList] = useState<{ name: string; url: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
+
+  const handleParse = async () => {
+    if (!url) return;
+    setLoading(true);
+    try {
+      const data = await api.parseLinks(url);
+      setList(data);
+    } catch (e) {
+      alert('解析失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
-      setLoading(true);
-      api.getMiaogongziSources()
-        .then(setList)
-        .catch(e => alert('加载失败: ' + String(e)))
-        .finally(() => setLoading(false));
+      handleParse();
     }
   }, [isOpen]);
 
@@ -1091,23 +1106,44 @@ function MiaogongziPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; 
         <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright shrink-0">
           <h3 className="font-bold text-lg flex items-center gap-2">
             <Sparkles size={20} className="text-tertiary" />
-            从苗公子源库导入
+            外部网页解析 (提取导入链接)
           </h3>
           <button onClick={onClose} className="p-1 text-secondary hover:text-on-surface transition-colors">
             <X size={20} />
           </button>
         </div>
 
+        <div className="p-6 border-b border-outline-variant bg-surface shrink-0 space-y-4">
+          <div className="flex gap-2">
+            <input 
+              type="url" 
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="输入网页 URL (如: https://yuedu.miaogongzi.net/gx.html)"
+              className="flex-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+            <button 
+              onClick={handleParse}
+              disabled={loading}
+              className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? <RefreshCw className="animate-spin" size={16} /> : <Search size={16} />}
+              解析
+            </button>
+          </div>
+          <p className="text-[10px] text-secondary">将自动提取页面中 yuedu:// 或 legado:// 协议的导入链接</p>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {loading ? (
             <div className="py-12 text-center">
               <RefreshCw className="animate-spin mx-auto text-primary mb-4" size={32} />
-              <p className="text-secondary">正在解析苗公子源库...</p>
+              <p className="text-secondary">正在获取并解析页面内容...</p>
             </div>
           ) : list.length === 0 ? (
             <div className="py-12 text-center">
               <Info className="mx-auto text-secondary mb-4" size={32} />
-              <p className="text-secondary">未找到任何有效的订阅链接</p>
+              <p className="text-secondary">未找到任何有效的导入链接，请尝试输入其他 URL</p>
             </div>
           ) : (
             list.map((item, idx) => (
@@ -1127,10 +1163,6 @@ function MiaogongziPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; 
               </div>
             ))
           )}
-        </div>
-
-        <div className="p-4 border-t border-outline-variant bg-surface shrink-0 text-center">
-          <p className="text-[10px] text-secondary">数据来源：https://yuedu.miaogongzi.net/gx.html</p>
         </div>
       </motion.div>
     </div>

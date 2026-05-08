@@ -140,4 +140,4 @@ export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method
 export const getSources = (q = "", page = 1) => apiFetch<any[]>(`/api/sources?q=${q}&page=${page}`);
 export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}&page=${page}`);
 
-export const getMiaogongziSources = () => apiFetch<{ name: string; url: string }[]>("/api/miaogongzi");
+export const parseLinks = (url: string) => apiFetch<{ name: string; url: string }[]>(`/api/parse-links?url=${encodeURIComponent(url)}`);

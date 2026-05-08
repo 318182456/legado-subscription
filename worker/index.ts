@@ -117,8 +117,8 @@ export default {
       if (path === "/api/sources" && method === "GET") return handleListSources(env, url);
       if (path === "/api/rules" && method === "GET") return handleListRules(env, url);
 
-      // ── /api/miaogongzi ───────────────────────────────────────────
-      if (path === "/api/miaogongzi" && method === "GET") return handleMiaogongzi(env);
+      // ── /api/parse-links ──────────────────────────────────────────
+      if (path === "/api/parse-links" && method === "GET") return handleParseLinks(url);
 
       return err("Not Found", 404);
     } catch (e) {
@@ -389,18 +389,20 @@ async function handleListRules(env: Env, url: URL): Promise<Response> {
   return ok(results);
 }
 
-async function handleMiaogongzi(env: Env): Promise<Response> {
+async function handleParseLinks(url: URL): Promise<Response> {
+  const targetUrl = url.searchParams.get("url");
+  if (!targetUrl) return err("url 不能为空");
+
   try {
-    const res = await fetch("https://yuedu.miaogongzi.net/gx.html", {
+    const res = await fetch(targetUrl, {
       headers: { "User-Agent": "Mozilla/5.0 Legado-Subscription-Bot" }
     });
     const html = await res.text();
     
-    // 匹配类似 <a href="legado://import/importSource?src=URL">Title</a>
-    // 或者直接含有 src=...json 的链接
     const results: { name: string; url: string }[] = [];
     
-    // 正则捕获：1. 链接内容（标题） 2. URL
+    // 匹配 yuedu:// 或 legado:// 链接中的 src 参数
+    // 同时也匹配直接的 JSON 链接（如果需要的话，但这里主要针对导入链接）
     // 苗公子的页面通常结构：<a href="yuedu://import/importSource?src=https://...json" ...>标题</a>
     const regex = /<a[^>]+href="[^"]*src=([^"&]+)"[^>]*>([^<]+)<\/a>/g;
     let match;
