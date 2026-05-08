@@ -13,14 +13,16 @@ persist = true
 invocation_logs = true
 
 [[kv_namespaces]]
-binding = "ATTACHMENTS_KV"
+binding = "KV"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "legado-subscription"
 
-[site]
-bucket = "./dist"
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 [triggers]
 crons = [ "*/30 * * * *" ]
