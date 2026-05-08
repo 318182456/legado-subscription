@@ -3,14 +3,22 @@ main = "worker/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-[observability]
-enabled = false
-
 [observability.logs]
 enabled = true
 head_sampling_rate = 1
 persist = true
 invocation_logs = true
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[build]
+command = "npm run build"
+
+[triggers]
+crons = [ "*/30 * * * *" ]
 
 [[kv_namespaces]]
 binding = "KV"
@@ -18,11 +26,3 @@ binding = "KV"
 [[d1_databases]]
 binding = "DB"
 database_name = "legado-subscription"
-
-[assets]
-directory = "./dist"
-binding = "ASSETS"
-not_found_handling = "single-page-application"
-
-[triggers]
-crons = [ "*/30 * * * *" ]
