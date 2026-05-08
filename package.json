@@ -1,0 +1,48 @@
+{
+  "name": "legado-subscription",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+
+    "worker:dev": "wrangler dev worker/index.ts --local --persist-to .wrangler/state",
+    "worker:deploy": "wrangler deploy worker/index.ts",
+    "worker:tail": "wrangler tail legado-subscription",
+
+    "db:init": "wrangler d1 execute legado-subscription --file=worker/schema.sql",
+    "db:init:local": "wrangler d1 execute legado-subscription --local --file=worker/schema.sql",
+    "db:query": "wrangler d1 execute legado-subscription --command",
+    "db:query:local": "wrangler d1 execute legado-subscription --local --command",
+
+    "kv:create": "wrangler kv namespace create LEGADO_CACHE",
+    "secret:put": "wrangler secret put API_SECRET",
+
+    "deploy": "npm run build && wrangler deploy worker/index.ts"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3",
+    "motion": "^12.23.24",
+    "@simplewebauthn/browser": "^10.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260422.0",
+    "@simplewebauthn/server": "^10.0.0",
+    "@simplewebauthn/types": "^10.0.0",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "wrangler": "^3.112.0"
+  }
+}
