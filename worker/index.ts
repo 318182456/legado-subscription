@@ -70,6 +70,7 @@ export default {
       // ── /subscribe/* (公开) ───────────────────────────────────────
       if (path === "/subscribe/sources" && method === "GET") return handleSubscribeOutput(env, "sources");
       if (path === "/subscribe/rules" && method === "GET") return handleSubscribeOutput(env, "rules");
+      if (path === "/subscribe/index" && method === "GET") return handleSubscribeIndex(request, env);
 
       // ── /api/auth (公开) ──────────────────────────────────────────
       if (path === "/api/auth/login" && method === "POST") return handleLogin(request, env);
@@ -115,6 +116,9 @@ export default {
       // ── /api/sources / rules ──────────────────────────────────────
       if (path === "/api/sources" && method === "GET") return handleListSources(env, url);
       if (path === "/api/rules" && method === "GET") return handleListRules(env, url);
+
+      // ── /api/miaogongzi ───────────────────────────────────────────
+      if (path === "/api/miaogongzi" && method === "GET") return handleMiaogongzi(env);
 
       return err("Not Found", 404);
     } catch (e) {
@@ -170,7 +174,7 @@ async function handlePasskeyRegisterBegin(request: Request, env: Env): Promise<R
       id: p.id as string,
       transports: JSON.parse((p.transports as string) || "[]") as AuthenticatorTransportFuture[],
     })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
   });
 
   await env.KV.put("passkey:reg_challenge", options.challenge, { expirationTtl: 300 });
@@ -226,7 +230,7 @@ async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Resp
       id: p.id as string,
       transports: JSON.parse((p.transports as string) || "[]") as AuthenticatorTransportFuture[],
     })),
-    userVerification: "preferred",
+    userVerification: "required",
   });
 
   await env.KV.put("passkey:auth_challenge", options.challenge, { expirationTtl: 300 });
@@ -273,14 +277,35 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
 
 // ─── 其他处理器 (与之前相同) ────────────────────────────────────────
 
-/** 输出订阅内容 */
+/** 输出订阅内容 (直接从 D1 读取，不使用 KV 缓存) */
 async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
-  const cached = await env.KV.get(type);
-  if (cached) return new Response(cached, { headers: { "Content-Type": "application/json; charset=utf-8", "X-Cache": "HIT", "Access-Control-Allow-Origin": "*" } });
   const dbType = type === "sources" ? "source" : "rule";
-  await rebuildCache(env, dbType);
-  const fresh = await env.KV.get(type);
-  return new Response(fresh ?? "[]", { headers: { "Content-Type": "application/json; charset=utf-8", "X-Cache": "MISS", "Access-Control-Allow-Origin": "*" } });
+  const table = type === "sources" ? "sources" : "rules";
+  const rows = await env.DB.prepare(
+    `SELECT raw_json FROM ${table} WHERE enabled=1 ORDER BY id`
+  ).all();
+  const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
+  return new Response(JSON.stringify(merged), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+/** 输出整合订阅索引 JSON */
+async function handleSubscribeIndex(request: Request, env: Env): Promise<Response> {
+  const origin = new URL(request.url).origin;
+  const index = [
+    { name: "📚 整合书源订阅", url: `${origin}/subscribe/sources` },
+    { name: "✨ 整合净化规则订阅", url: `${origin}/subscribe/rules` },
+  ];
+  return new Response(JSON.stringify(index), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
 }
 
 async function handleListSubscriptions(env: Env): Promise<Response> {
@@ -344,12 +369,51 @@ async function handleStats(env: Env): Promise<Response> {
 
 async function handleListSources(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
-  const { results } = await env.DB.prepare(`SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
+  const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
+  const limit = 50;
+  const offset = (page - 1) * limit;
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT ? OFFSET ?`
+  ).bind(`%${q}%`, limit, offset).all();
   return ok(results);
 }
 
 async function handleListRules(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
-  const { results } = await env.DB.prepare(`SELECT * FROM rules WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
+  const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
+  const limit = 50;
+  const offset = (page - 1) * limit;
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM rules WHERE name LIKE ? AND enabled=1 LIMIT ? OFFSET ?`
+  ).bind(`%${q}%`, limit, offset).all();
   return ok(results);
+}
+
+async function handleMiaogongzi(env: Env): Promise<Response> {
+  try {
+    const res = await fetch("https://yuedu.miaogongzi.net/gx.html", {
+      headers: { "User-Agent": "Mozilla/5.0 Legado-Subscription-Bot" }
+    });
+    const html = await res.text();
+    
+    // 匹配类似 <a href="legado://import/importSource?src=URL">Title</a>
+    // 或者直接含有 src=...json 的链接
+    const results: { name: string; url: string }[] = [];
+    
+    // 正则捕获：1. 链接内容（标题） 2. URL
+    // 苗公子的页面通常结构：<a href="yuedu://import/importSource?src=https://...json" ...>标题</a>
+    const regex = /<a[^>]+href="[^"]*src=([^"&]+)"[^>]*>([^<]+)<\/a>/g;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      let url = decodeURIComponent(match[1]);
+      let name = match[2].trim();
+      if (url && name) {
+        results.push({ name, url });
+      }
+    }
+
+    return ok(results);
+  } catch (e) {
+    return err(`Fetch Failed: ${(e as Error).message}`, 500);
+  }
 }

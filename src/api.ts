@@ -137,5 +137,7 @@ export const toggleSubscription = (id: number, enabled: boolean) =>
 export const syncAll = () => apiFetch<any>("/api/sync", { method: "POST" });
 export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method: "POST" });
 
-export const getSources = (q = "") => apiFetch<any[]>(`/api/sources?q=${q}`);
-export const getRules = (q = "") => apiFetch<any[]>(`/api/rules?q=${q}`);
+export const getSources = (q = "", page = 1) => apiFetch<any[]>(`/api/sources?q=${q}&page=${page}`);
+export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}&page=${page}`);
+
+export const getMiaogongziSources = () => apiFetch<{ name: string; url: string }[]>("/api/miaogongzi");

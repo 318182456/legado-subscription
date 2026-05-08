@@ -44,6 +44,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!api.getToken());
   const [authChecking, setAuthChecking] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isMiaogongziModalOpen, setIsMiaogongziModalOpen] = useState(false);
 
   useEffect(() => {
     const handleUnauthorized = () => setIsLoggedIn(false);
@@ -187,10 +188,16 @@ export default function App() {
         onClose={() => setIsAddModalOpen(false)} 
         onAdded={() => {
           setIsAddModalOpen(false);
-          // Optional: refresh data or switch page
-          if (currentPage === 'subscriptions' || currentPage === 'dashboard') {
-            window.dispatchEvent(new CustomEvent('refresh-data'));
-          }
+          window.dispatchEvent(new CustomEvent('refresh-data'));
+        }}
+      />
+
+      <MiaogongziPickerModal
+        isOpen={isMiaogongziModalOpen}
+        onClose={() => setIsMiaogongziModalOpen(false)}
+        onAdded={() => {
+          setIsMiaogongziModalOpen(false);
+          window.dispatchEvent(new CustomEvent('refresh-data'));
         }}
       />
     </div>
@@ -291,24 +298,45 @@ function DashboardView({ onImport }: { onImport: () => void }) {
               使用此链接在您的阅读应用中直接导入所有已启用的书源和净化规则。链接会自动保持最新状态。
             </p>
           </div>
-          <div className="relative z-10 space-y-2">
-            <label className="text-xs font-semibold text-primary-container">专属订阅地址</label>
-            <div className="flex gap-3">
-              <input 
-                readOnly 
-                value={`${window.location.origin}/subscribe/sources`}
-                className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2.5 text-sm outline-none"
-              />
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/subscribe/sources`);
-                  alert('复制成功');
-                }}
-                className="bg-surface-container-lowest text-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-2 border border-outline-variant shadow-sm shrink-0"
-              >
-                <Copy size={16} />
-                复制链接
-              </button>
+          <div className="relative z-10 grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-primary-container">整合书源地址 (Legado 导入)</label>
+              <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value={`${window.location.origin}/subscribe/sources`}
+                  className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2 text-sm outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/subscribe/sources`);
+                    alert('复制成功');
+                  }}
+                  className="bg-surface-container-lowest text-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-primary-container">整合索引地址 (仿苗公子订阅页面)</label>
+              <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value={`${window.location.origin}/subscribe/index`}
+                  className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2 text-sm outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/subscribe/index`);
+                    alert('复制成功');
+                  }}
+                  className="bg-surface-container-lowest text-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0"
+                >
+                  <Copy size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -378,17 +406,30 @@ function StatCard({ icon, label, value, color, isSmallValue }: { icon: React.Rea
 function SourceListView({ onImport }: { onImport: () => void }) {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [query, setQuery] = useState('');
+  const [activeMenu, setActiveMenu] = useState<number | null>(null);
 
-  const fetchSources = async () => {
-    setLoading(true);
+  const fetchSources = async (q = '', p = 1, append = false) => {
+    if (p === 1) setLoading(true);
+    else setLoadingMore(true);
+    
     try {
-      const data = await api.getSources();
-      setSources(data);
+      const data = await api.getSources(q, p);
+      if (append) {
+        setSources(prev => [...prev, ...data]);
+      } else {
+        setSources(data);
+      }
+      setHasMore(data.length === 50);
+      setPage(p);
     } catch (e) {
       console.error('获取书源失败', e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -396,29 +437,20 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     fetchSources();
   }, []);
 
-  const handleToggle = async (id: number, current: boolean) => {
-    try {
-      await api.toggleSubscription(id, !current); // 注意：这里 API 可能需要的是订阅 ID
-      fetchSources();
-    } catch (e) {
-      alert('切换状态失败');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSources(query, 1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const loadMore = () => {
+    if (!loading && !loadingMore && hasMore) {
+      fetchSources(query, page + 1, true);
     }
   };
 
-  const handleSync = async (id: number) => {
-    setSyncing(id);
-    try {
-      await api.syncOne(id);
-      alert('同步成功');
-      fetchSources();
-    } catch (e) {
-      alert('同步失败: ' + String(e));
-    } finally {
-      setSyncing(null);
-    }
-  };
-
-  if (loading) {
+  if (loading && page === 1) {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="animate-spin text-primary" size={32} />
@@ -438,12 +470,14 @@ function SourceListView({ onImport }: { onImport: () => void }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={18} />
             <input 
               type="text" 
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索书源名称或 URL..."
               className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-outline"
             />
           </div>
           <button 
-            onClick={fetchSources}
+            onClick={() => fetchSources(query, 1)}
             className="p-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors shadow-sm"
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
@@ -459,15 +493,15 @@ function SourceListView({ onImport }: { onImport: () => void }) {
       </div>
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto min-h-[400px]">
+          <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-surface text-secondary text-xs font-semibold uppercase tracking-wider border-b border-outline-variant">
                 <th className="py-3 px-6 w-12"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></th>
                 <th className="py-3 px-6">源名称</th>
                 <th className="py-3 px-6">URL / 分组</th>
                 <th className="py-3 px-6">状态</th>
-                <th className="py-3 px-6 text-right">操作</th>
+                <th className="py-3 px-6 text-right w-24">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-outline-variant/30">
@@ -477,7 +511,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                 </tr>
               ) : (
                 sources.map((source, idx) => (
-                  <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors group">
+                  <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors group relative">
                     <td className="py-4 px-6"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
@@ -491,40 +525,61 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                       <div className="text-secondary truncate max-w-xs">{source.book_source_url}</div>
                       <div className="mt-1 flex gap-1">
                         {source.group_name && (
-                          <span className="px-1.5 py-0.5 rounded-sm bg-surface-container text-on-surface-variant text-[10px] font-bold">
-                            {source.group_name}
-                          </span>
+                          <span className="text-[10px] bg-secondary-container/30 text-secondary px-1.5 py-0.5 rounded">{source.group_name}</span>
                         )}
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <button 
-                        onClick={() => handleToggle(source.subscription_id, !!source.enabled)}
-                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${source.enabled ? 'bg-primary' : 'bg-secondary-container'}`}
-                      >
-                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${source.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </button>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        source.enabled ? 'bg-surface-container-high text-primary' : 'bg-secondary-container text-secondary'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
+                        {source.enabled ? '已启用' : '已禁用'}
+                      </span>
                     </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleSync(source.subscription_id)}
-                          disabled={syncing === source.subscription_id}
-                          className="p-1 text-secondary hover:text-primary transition-colors hover:bg-surface-container rounded disabled:opacity-50"
-                        >
-                          <RefreshCw size={16} className={syncing === source.subscription_id ? 'animate-spin' : ''} />
-                        </button>
-                        <button className="p-1 text-secondary hover:text-error transition-colors hover:bg-error-container/50 rounded"><MoreVertical size={16} /></button>
-                      </div>
+                    <td className="py-4 px-6 text-right relative">
+                      <button 
+                        onClick={() => setActiveMenu(activeMenu === idx ? null : idx)}
+                        className="p-1 text-secondary hover:text-primary transition-colors"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      
+                      {activeMenu === idx && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
+                          <div className="absolute right-6 top-10 w-32 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden text-left">
+                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                              <Eye size={14} /> 查看详情
+                            </button>
+                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                              <Copy size={14} /> 复制 URL
+                            </button>
+                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1">
+                              <Trash2 size={14} /> 删除
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-        </div>
-        <div className="bg-surface px-6 py-4 border-t border-outline-variant flex items-center justify-between text-secondary text-sm">
-          <span>共 {sources.length} 个书源</span>
+          
+          {hasMore && (
+            <div className="p-4 flex justify-center border-t border-outline-variant/30">
+              <button 
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-2"
+              >
+                {loadingMore ? <RefreshCw className="animate-spin" size={14} /> : null}
+                加载更多书源...
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -534,16 +589,30 @@ function SourceListView({ onImport }: { onImport: () => void }) {
 function RulesView({ onImport }: { onImport: () => void }) {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [query, setQuery] = useState('');
+  const [activeMenu, setActiveMenu] = useState<number | null>(null);
 
-  const fetchRules = async () => {
-    setLoading(true);
+  const fetchRules = async (q = '', p = 1, append = false) => {
+    if (p === 1) setLoading(true);
+    else setLoadingMore(true);
+    
     try {
-      const data = await api.getRules();
-      setRules(data);
+      const data = await api.getRules(q, p);
+      if (append) {
+        setRules(prev => [...prev, ...data]);
+      } else {
+        setRules(data);
+      }
+      setHasMore(data.length === 50);
+      setPage(p);
     } catch (e) {
       console.error('获取规则失败', e);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -551,7 +620,20 @@ function RulesView({ onImport }: { onImport: () => void }) {
     fetchRules();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchRules(query, 1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const loadMore = () => {
+    if (!loading && !loadingMore && hasMore) {
+      fetchRules(query, page + 1, true);
+    }
+  };
+
+  if (loading && page === 1) {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="animate-spin text-primary" size={32} />
@@ -567,6 +649,16 @@ function RulesView({ onImport }: { onImport: () => void }) {
           <p className="text-sm text-secondary mt-1">管理并配置全局文本过滤与替换规则，提升阅读体验。</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
+            <input 
+              type="text" 
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索规则名称..."
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            />
+          </div>
           <button 
             onClick={onImport}
             className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-low transition-colors text-sm font-medium shadow-sm"
@@ -604,10 +696,10 @@ function RulesView({ onImport }: { onImport: () => void }) {
             <thead>
               <tr className="bg-surface-container-low text-on-surface-variant text-xs font-semibold border-b border-outline-variant">
                 <th className="py-3 px-6 w-12 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></th>
-                <th className="py-3 px-6">规则名称</th>
-                <th className="py-3 px-6">匹配模式 (Regex)</th>
+                <th className="py-3 px-6 w-1/4">规则名称</th>
+                <th className="py-3 px-6 w-1/3">匹配模式 (Regex)</th>
                 <th className="py-3 px-6">替换内容</th>
-                <th className="py-3 px-6 text-center">状态</th>
+                <th className="py-3 px-6 text-center w-20">状态</th>
                 <th className="py-3 px-6 text-center w-24">操作</th>
               </tr>
             </thead>
@@ -620,29 +712,63 @@ function RulesView({ onImport }: { onImport: () => void }) {
                 rules.map((rule, idx) => (
                   <tr key={idx} className={`hover:bg-surface-container-low transition-colors group ${!rule.enabled ? 'opacity-60 bg-surface-bright/50' : ''}`}>
                     <td className="py-4 px-6 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></td>
-                    <td className="py-4 px-6 font-semibold">{rule.name}</td>
+                    <td className="py-4 px-6 font-semibold break-words min-w-[120px]">{rule.name}</td>
                     <td className="py-4 px-6">
-                      <code className="px-1.5 py-0.5 bg-surface-container text-secondary font-mono text-[11px] rounded border border-outline-variant/40 whitespace-nowrap">
-                        {rule.pattern}
-                      </code>
+                      <div className="max-h-24 overflow-y-auto scrollbar-hide">
+                        <code className="px-1.5 py-0.5 bg-surface-container text-secondary font-mono text-[11px] rounded border border-outline-variant/40 break-all block leading-relaxed">
+                          {rule.pattern}
+                        </code>
+                      </div>
                     </td>
-                    <td className="py-4 px-6 italic text-secondary">{rule.replacement || '(删除)'}</td>
+                    <td className="py-4 px-6 italic text-secondary break-all">{rule.replacement || '(删除)'}</td>
                     <td className="py-4 px-6 text-center">
-                      <button className={`mx-auto relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${rule.enabled ? 'bg-primary' : 'bg-secondary-container'}`}>
+                      <button 
+                        onClick={() => {/* TODO: Toggle rule status if needed */}}
+                        className={`mx-auto relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${rule.enabled ? 'bg-primary' : 'bg-secondary-container'}`}
+                      >
                         <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
                       </button>
                     </td>
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="text-secondary hover:text-primary transition-colors"><SettingsIcon size={16} /></button>
-                        <button className="text-secondary hover:text-error transition-colors"><MoreVertical size={16} /></button>
-                      </div>
+                    <td className="py-4 px-6 text-center relative">
+                      <button 
+                        onClick={() => setActiveMenu(activeMenu === idx ? null : idx)}
+                        className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      
+                      {activeMenu === idx && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
+                          <div className="absolute right-6 top-10 w-32 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden text-left">
+                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                              <Info size={14} /> 详情
+                            </button>
+                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1">
+                              <Trash2 size={14} /> 删除
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          
+          {hasMore && (
+            <div className="p-4 flex justify-center border-t border-outline-variant/30">
+              <button 
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-2"
+              >
+                {loadingMore ? <RefreshCw className="animate-spin" size={14} /> : null}
+                加载更多规则...
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -721,6 +847,12 @@ function SubscriptionView({ onImport }: { onImport: () => void }) {
           <p className="text-sm text-secondary mt-1">管理您的 URL 订阅源，支持书源和净化规则。</p>
         </div>
         <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setIsMiaogongziModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-tertiary-container/20 text-tertiary rounded-lg hover:bg-tertiary-container/30 transition-all text-sm font-medium shadow-sm"
+          >
+            <Sparkles size={18} /> 从苗公子导入
+          </button>
           <button 
             onClick={onImport}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm"
@@ -914,6 +1046,92 @@ function AddSubscriptionModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
             </button>
           </div>
         </form>
+      </motion.div>
+    </div>
+  );
+}
+
+function MiaogongziPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
+  const [list, setList] = useState<{ name: string; url: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      api.getMiaogongziSources()
+        .then(setList)
+        .catch(e => alert('加载失败: ' + String(e)))
+        .finally(() => setLoading(false));
+    }
+  }, [isOpen]);
+
+  const handleAdd = async (item: { name: string; url: string }) => {
+    setAdding(item.url);
+    try {
+      await api.addSubscription({ name: item.name, url: item.url, type: 'source' });
+      alert('添加成功: ' + item.name);
+      onAdded();
+    } catch (e) {
+      alert('添加失败: ' + String(e));
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]"
+      >
+        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright shrink-0">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Sparkles size={20} className="text-tertiary" />
+            从苗公子源库导入
+          </h3>
+          <button onClick={onClose} className="p-1 text-secondary hover:text-on-surface transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {loading ? (
+            <div className="py-12 text-center">
+              <RefreshCw className="animate-spin mx-auto text-primary mb-4" size={32} />
+              <p className="text-secondary">正在解析苗公子源库...</p>
+            </div>
+          ) : list.length === 0 ? (
+            <div className="py-12 text-center">
+              <Info className="mx-auto text-secondary mb-4" size={32} />
+              <p className="text-secondary">未找到任何有效的订阅链接</p>
+            </div>
+          ) : (
+            list.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold truncate text-sm">{item.name}</h4>
+                  <p className="text-[10px] text-secondary truncate mt-1 font-mono">{item.url}</p>
+                </div>
+                <button 
+                  onClick={() => handleAdd(item)}
+                  disabled={!!adding}
+                  className="ml-4 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                >
+                  {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
+                  添加
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="p-4 border-t border-outline-variant bg-surface shrink-0 text-center">
+          <p className="text-[10px] text-secondary">数据来源：https://yuedu.miaogongzi.net/gx.html</p>
+        </div>
       </motion.div>
     </div>
   );
