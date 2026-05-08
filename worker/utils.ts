@@ -1,4 +1,5 @@
 import { Env, CACHE_TTL } from "./types";
+import { SCHEMA_STATEMENTS } from "./schema-statements";
 
 // ─── 工具函数 ─────────────────────────────────────────────────────
 
@@ -212,4 +213,31 @@ export function b64urlToU8(s: string): Uint8Array {
       .split("")
       .map((c) => c.charCodeAt(0))
   );
+}
+
+// ─── 数据库初始化 (参照 NodeWarden) ───────────────────────────────
+
+let schemaVerified = false;
+
+/**
+ * 确保数据库表结构已初始化
+ * 采用 NodeWarden 的运行时校验模式，每个 Isolate 仅运行一次
+ */
+export async function ensureDatabase(env: Env): Promise<void> {
+  if (schemaVerified) return;
+
+  try {
+    // 开启外键支持
+    await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+
+    // 批量执行初始化语句 (IF NOT EXISTS)
+    // 注意：D1 的 batch 限制 100 条，这里一共不到 10 条，安全
+    const stmts = SCHEMA_STATEMENTS.map((sql) => env.DB.prepare(sql));
+    await env.DB.batch(stmts);
+
+    schemaVerified = true;
+  } catch (e) {
+    console.error("数据库初始化失败:", e);
+    throw e;
+  }
 }

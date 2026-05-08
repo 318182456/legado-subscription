@@ -9,20 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-
-    "worker:dev": "wrangler dev worker/index.ts --local --persist-to .wrangler/state",
-    "worker:deploy": "wrangler deploy worker/index.ts",
-    "worker:tail": "wrangler tail legado-subscription",
-
-    "db:init": "npx tsx worker/init-db.ts",
-    "db:init:local": "npx tsx worker/init-db.ts --local",
-    "db:query": "wrangler d1 execute legado-subscription --remote --command",
-    "db:query:local": "wrangler d1 execute legado-subscription --local --command",
-
-    "kv:create": "wrangler kv namespace create KV",
-    "secret:put": "wrangler secret put API_SECRET",
-
-    "deploy": "npm run build && npm run db:init && wrangler deploy worker/index.ts"
+    "deploy": "npm run build && wrangler deploy worker/index.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

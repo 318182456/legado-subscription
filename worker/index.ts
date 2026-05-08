@@ -36,6 +36,7 @@ import {
   rebuildCache,
   u8ToB64url,
   b64urlToU8,
+  ensureDatabase,
 } from "./utils";
 
 export default {
@@ -43,6 +44,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
+
+    // ─── 数据库运行时初始化 (参照 NodeWarden 模式) ───────────────
+    // 只有非静态资源/订阅输出请求才需要检查 DB（优化性能）
+    if (path.startsWith("/api/")) {
+      try {
+        await ensureDatabase(env);
+      } catch (e) {
+        return err(`Database Init Failed: ${(e as Error).message}`, 500);
+      }
+    }
 
     // OPTIONS 预检
     if (method === "OPTIONS") {
