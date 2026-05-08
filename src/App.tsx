@@ -29,16 +29,21 @@ import {
   CheckCircle2,
   AlertCircle,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Globe,
+  Trash2,
+  Link as LinkIcon,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-type Page = 'dashboard' | 'sources' | 'rules' | 'settings';
+type Page = 'dashboard' | 'subscriptions' | 'sources' | 'rules' | 'settings';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!api.getToken());
   const [authChecking, setAuthChecking] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   useEffect(() => {
     const handleUnauthorized = () => setIsLoggedIn(false);
@@ -70,9 +75,12 @@ export default function App() {
         </div>
 
         <div className="px-3 mb-6">
-          <button className="w-full bg-primary text-on-primary px-4 py-2.5 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-sm">
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-full bg-primary text-on-primary px-4 py-2.5 rounded-lg font-medium hover:opacity-90 transition-all flex items-center justify-center gap-2 shadow-sm"
+          >
             <Plus size={18} />
-            导入新书源
+            导入新订阅
           </button>
         </div>
 
@@ -82,6 +90,12 @@ export default function App() {
             onClick={() => setCurrentPage('dashboard')}
             icon={<LayoutDashboard size={20} />}
             label="控制台"
+          />
+          <NavItem 
+            active={currentPage === 'subscriptions'} 
+            onClick={() => setCurrentPage('subscriptions')}
+            icon={<Globe size={20} />}
+            label="订阅管理"
           />
           <NavItem 
             active={currentPage === 'sources'} 
@@ -158,14 +172,27 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {currentPage === 'dashboard' && <DashboardView />}
-              {currentPage === 'sources' && <SourceListView />}
-              {currentPage === 'rules' && <RulesView />}
+              {currentPage === 'dashboard' && <DashboardView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'subscriptions' && <SubscriptionView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'sources' && <SourceListView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'rules' && <RulesView onImport={() => setIsAddModalOpen(true)} />}
               {currentPage === 'settings' && <SettingsView />}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
+
+      <AddSubscriptionModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        onAdded={() => {
+          setIsAddModalOpen(false);
+          // Optional: refresh data or switch page
+          if (currentPage === 'subscriptions' || currentPage === 'dashboard') {
+            window.dispatchEvent(new CustomEvent('refresh-data'));
+          }
+        }}
+      />
     </div>
   );
 }
@@ -194,7 +221,7 @@ function IconButton({ icon }: { icon: React.ReactNode }) {
   );
 }
 
-function DashboardView() {
+function DashboardView({ onImport }: { onImport: () => void }) {
   const [stats, setStats] = useState<api.Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [recentSources, setRecentSources] = useState<any[]>([]);
@@ -348,7 +375,7 @@ function StatCard({ icon, label, value, color, isSmallValue }: { icon: React.Rea
   );
 }
 
-function SourceListView() {
+function SourceListView({ onImport }: { onImport: () => void }) {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<number | null>(null);
@@ -421,7 +448,10 @@ function SourceListView() {
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all flex items-center gap-2 shadow-sm shrink-0">
+          <button 
+            onClick={onImport}
+            className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all flex items-center gap-2 shadow-sm shrink-0"
+          >
             <Upload size={18} />
             导入阅读源
           </button>
@@ -501,7 +531,7 @@ function SourceListView() {
   );
 }
 
-function RulesView() {
+function RulesView({ onImport }: { onImport: () => void }) {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -537,8 +567,11 @@ function RulesView() {
           <p className="text-sm text-secondary mt-1">管理并配置全局文本过滤与替换规则，提升阅读体验。</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-low transition-colors text-sm font-medium shadow-sm">
-            <Upload size={16} /> 导入规则文件
+          <button 
+            onClick={onImport}
+            className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-low transition-colors text-sm font-medium shadow-sm"
+          >
+            <Upload size={16} /> 导入规则订阅
           </button>
           <button className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm">
             <Plus size={16} /> 手动添加
@@ -612,6 +645,276 @@ function RulesView() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SubscriptionView({ onImport }: { onImport: () => void }) {
+  const [subs, setSubs] = useState<api.Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<number | null>(null);
+
+  const fetchSubs = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getSubscriptions();
+      setSubs(data);
+    } catch (e) {
+      console.error('获取订阅失败', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubs();
+    const handleRefresh = () => fetchSubs();
+    window.addEventListener('refresh-data', handleRefresh);
+    return () => window.removeEventListener('refresh-data', handleRefresh);
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('确定删除此订阅吗？其下的所有内容也将被移除。')) return;
+    try {
+      await api.deleteSubscription(id);
+      fetchSubs();
+    } catch (e) {
+      alert('删除失败');
+    }
+  };
+
+  const handleToggle = async (id: number, current: boolean) => {
+    try {
+      await api.toggleSubscription(id, !current);
+      fetchSubs();
+    } catch (e) {
+      alert('切换状态失败');
+    }
+  };
+
+  const handleSync = async (id: number) => {
+    setSyncing(id);
+    try {
+      await api.syncOne(id);
+      alert('同步成功');
+      fetchSubs();
+    } catch (e) {
+      alert('同步失败: ' + String(e));
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">订阅管理</h2>
+          <p className="text-sm text-secondary mt-1">管理您的 URL 订阅源，支持书源和净化规则。</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={onImport}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm"
+          >
+            <Plus size={18} /> 添加订阅
+          </button>
+          <button 
+            onClick={fetchSubs}
+            className="p-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors shadow-sm"
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {subs.length === 0 ? (
+          <div className="bg-surface-container-lowest border border-outline-variant border-dashed rounded-xl p-12 text-center">
+            <Globe className="mx-auto text-secondary mb-4" size={48} />
+            <p className="text-secondary">尚未添加任何订阅 URL</p>
+          </div>
+        ) : (
+          subs.map((sub) => (
+            <div key={sub.id} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex items-center justify-between group">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                  sub.type === 'source' ? 'bg-primary-container/20 text-primary' : 'bg-tertiary-container/20 text-tertiary'
+                }`}>
+                  {sub.type === 'source' ? <ListRestart size={24} /> : <Sparkles size={24} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold truncate">{sub.name || '未命名订阅'}</h4>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                      sub.type === 'source' ? 'bg-primary text-on-primary' : 'bg-tertiary text-on-tertiary'
+                    }`}>
+                      {sub.type === 'source' ? '书源' : '规则'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-secondary truncate font-mono mt-1">{sub.url}</p>
+                  <div className="flex items-center gap-4 mt-2 text-[10px] text-secondary font-medium">
+                    <span className="flex items-center gap-1"><Book size={12} /> {sub.item_count} 条项目</span>
+                    <span className="flex items-center gap-1"><RefreshCw size={12} /> {sub.last_synced ? new Date(sub.last_synced).toLocaleString() : '从未同步'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 ml-6">
+                <button 
+                  onClick={() => handleToggle(sub.id, !!sub.enabled)}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${sub.enabled ? 'bg-primary' : 'bg-secondary-container'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${sub.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <button 
+                    onClick={() => handleSync(sub.id)}
+                    disabled={syncing === sub.id}
+                    title="立即同步"
+                    className="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={18} className={syncing === sub.id ? 'animate-spin' : ''} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(sub.id)}
+                    title="删除"
+                    className="p-2 text-secondary hover:text-error hover:bg-error-container/20 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddSubscriptionModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'source' | 'rule'>('source');
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url) return;
+    setLoading(true);
+    try {
+      await api.addSubscription({ name, url, type });
+      setUrl('');
+      setName('');
+      onAdded();
+    } catch (e) {
+      alert('添加失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+      >
+        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Plus size={20} className="text-primary" />
+            导入新订阅 (URL)
+          </h3>
+          <button onClick={onClose} className="p-1 text-secondary hover:text-on-surface transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-secondary uppercase tracking-wider ml-1">订阅类型</label>
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  onClick={() => setType('source')}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold border transition-all flex items-center justify-center gap-2 ${
+                    type === 'source' ? 'bg-primary/10 border-primary text-primary' : 'bg-surface border-outline-variant text-secondary'
+                  }`}
+                >
+                  <ListRestart size={16} /> 书源
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setType('rule')}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold border transition-all flex items-center justify-center gap-2 ${
+                    type === 'rule' ? 'bg-tertiary/10 border-tertiary text-tertiary' : 'bg-surface border-outline-variant text-secondary'
+                  }`}
+                >
+                  <Sparkles size={16} /> 规则
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-secondary uppercase tracking-wider ml-1">订阅名称 (可选)</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例如：我的聚合书源"
+                className="w-full bg-surface border border-outline-variant rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-secondary uppercase tracking-wider ml-1">订阅链接 (URL)</label>
+              <div className="relative">
+                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={18} />
+                <input 
+                  type="url" 
+                  required
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://example.com/sources.json"
+                  className="w-full bg-surface border border-outline-variant rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2 flex gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-secondary hover:bg-surface-container transition-colors"
+            >
+              取消
+            </button>
+            <button 
+              type="submit"
+              disabled={loading || !url}
+              className="flex-[2] bg-primary text-on-primary px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? <RefreshCw className="animate-spin" size={18} /> : <Plus size={18} />}
+              添加订阅
+            </button>
+          </div>
+        </form>
+      </motion.div>
     </div>
   );
 }
