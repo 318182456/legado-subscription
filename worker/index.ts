@@ -131,22 +131,22 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 // ─── Passkey 处理器 ────────────────────────────────────────────────
 
 async function handlePasskeyStatus(env: Env): Promise<Response> {
-  const { results } = await env.LEGADO_DB.prepare("SELECT COUNT(*) as count FROM passkeys").all();
+  const { results } = await env.DB.prepare("SELECT COUNT(*) as count FROM passkeys").all();
   return ok({ count: results[0]?.count ?? 0 });
 }
 
 async function handlePasskeyList(env: Env): Promise<Response> {
-  const { results } = await env.LEGADO_DB.prepare("SELECT id, name, created_at FROM passkeys").all();
+  const { results } = await env.DB.prepare("SELECT id, name, created_at FROM passkeys").all();
   return ok(results);
 }
 
 async function handlePasskeyDelete(id: string, env: Env): Promise<Response> {
-  await env.LEGADO_DB.prepare("DELETE FROM passkeys WHERE id = ?").bind(id).run();
+  await env.DB.prepare("DELETE FROM passkeys WHERE id = ?").bind(id).run();
   return ok();
 }
 
 async function handlePasskeyRegisterBegin(request: Request, env: Env): Promise<Response> {
-  const { results } = await env.LEGADO_DB.prepare("SELECT id, transports FROM passkeys").all();
+  const { results } = await env.DB.prepare("SELECT id, transports FROM passkeys").all();
   const rpID = new URL(request.url).hostname;
 
   const options = await generateRegistrationOptions({
@@ -162,12 +162,12 @@ async function handlePasskeyRegisterBegin(request: Request, env: Env): Promise<R
     authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
   });
 
-  await env.LEGADO_CACHE.put("passkey:reg_challenge", options.challenge, { expirationTtl: 300 });
+  await env.KV.put("passkey:reg_challenge", options.challenge, { expirationTtl: 300 });
   return ok(options);
 }
 
 async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<Response> {
-  const expectedChallenge = await env.LEGADO_CACHE.get("passkey:reg_challenge");
+  const expectedChallenge = await env.KV.get("passkey:reg_challenge");
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
   const body = await request.json<RegistrationResponseJSON>();
@@ -192,13 +192,13 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
       created_at: new Date().toISOString(),
     };
 
-    await env.LEGADO_DB.prepare(
+    await env.DB.prepare(
       "INSERT INTO passkeys (id, public_key, counter, transports, name, created_at) VALUES (?, ?, ?, ?, ?, ?)"
     )
       .bind(stored.id, stored.public_key, stored.counter, JSON.stringify(stored.transports), stored.name, stored.created_at)
       .run();
 
-    await env.LEGADO_CACHE.delete("passkey:reg_challenge");
+    await env.KV.delete("passkey:reg_challenge");
     return ok({ name: stored.name });
   }
 
@@ -206,7 +206,7 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
 }
 
 async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Response> {
-  const { results } = await env.LEGADO_DB.prepare("SELECT id, transports FROM passkeys").all();
+  const { results } = await env.DB.prepare("SELECT id, transports FROM passkeys").all();
   const rpID = new URL(request.url).hostname;
 
   const options = await generateAuthenticationOptions({
@@ -218,16 +218,16 @@ async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Resp
     userVerification: "preferred",
   });
 
-  await env.LEGADO_CACHE.put("passkey:auth_challenge", options.challenge, { expirationTtl: 300 });
+  await env.KV.put("passkey:auth_challenge", options.challenge, { expirationTtl: 300 });
   return ok(options);
 }
 
 async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Response> {
-  const expectedChallenge = await env.LEGADO_CACHE.get("passkey:auth_challenge");
+  const expectedChallenge = await env.KV.get("passkey:auth_challenge");
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
   const body = await request.json<AuthenticationResponseJSON>();
-  const passkey = (await env.LEGADO_DB.prepare("SELECT * FROM passkeys WHERE id = ?").bind(body.id).first()) as any;
+  const passkey = (await env.DB.prepare("SELECT * FROM passkeys WHERE id = ?").bind(body.id).first()) as any;
 
   if (!passkey) return err("找不到凭证", 404);
 
@@ -248,11 +248,11 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
   });
 
   if (verification.verified) {
-    await env.LEGADO_DB.prepare("UPDATE passkeys SET counter = ? WHERE id = ?")
+    await env.DB.prepare("UPDATE passkeys SET counter = ? WHERE id = ?")
       .bind(verification.authenticationInfo.newCounter, passkey.id)
       .run();
 
-    await env.LEGADO_CACHE.delete("passkey:auth_challenge");
+    await env.KV.delete("passkey:auth_challenge");
     const pwd = env.ADMIN_PASSWORD || env.API_SECRET || "admin888";
     return ok({ token: pwd });
   }
@@ -264,37 +264,37 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
 
 /** 输出订阅内容 */
 async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
-  const cached = await env.LEGADO_CACHE.get(type);
+  const cached = await env.KV.get(type);
   if (cached) return new Response(cached, { headers: { "Content-Type": "application/json; charset=utf-8", "X-Cache": "HIT", "Access-Control-Allow-Origin": "*" } });
   const dbType = type === "sources" ? "source" : "rule";
   await rebuildCache(env, dbType);
-  const fresh = await env.LEGADO_CACHE.get(type);
+  const fresh = await env.KV.get(type);
   return new Response(fresh ?? "[]", { headers: { "Content-Type": "application/json; charset=utf-8", "X-Cache": "MISS", "Access-Control-Allow-Origin": "*" } });
 }
 
 async function handleListSubscriptions(env: Env): Promise<Response> {
-  const { results } = await env.LEGADO_DB.prepare("SELECT * FROM subscriptions ORDER BY created_at DESC").all();
+  const { results } = await env.DB.prepare("SELECT * FROM subscriptions ORDER BY created_at DESC").all();
   return ok(results);
 }
 
 async function handleAddSubscription(request: Request, env: Env): Promise<Response> {
   const body = await parseBody<{ name?: string; url: string; type: "source" | "rule" }>(request);
   if (!body?.url) return err("url 不能为空");
-  const { meta } = await env.LEGADO_DB.prepare("INSERT INTO subscriptions (name, url, type) VALUES (?, ?, ?)").bind(body.name ?? "", body.url, body.type).run();
+  const { meta } = await env.DB.prepare("INSERT INTO subscriptions (name, url, type) VALUES (?, ?, ?)").bind(body.name ?? "", body.url, body.type).run();
   const newId = Number(meta.last_row_id);
   try {
     if (body.type === "source") await syncSourceSubscription(env, newId, body.url);
     else await syncRuleSubscription(env, newId, body.url);
     await rebuildCache(env, body.type);
   } catch (e) { console.warn("首次同步失败:", e); }
-  const sub = await env.LEGADO_DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(newId).first();
+  const sub = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(newId).first();
   return ok(sub);
 }
 
 async function handleDeleteSubscription(env: Env, id: number): Promise<Response> {
-  const sub = (await env.LEGADO_DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
+  const sub = (await env.DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
   if (!sub) return err("不存在", 404);
-  await env.LEGADO_DB.prepare("DELETE FROM subscriptions WHERE id=?").bind(id).run();
+  await env.DB.prepare("DELETE FROM subscriptions WHERE id=?").bind(id).run();
   await rebuildCache(env, sub.type);
   return ok();
 }
@@ -302,18 +302,18 @@ async function handleDeleteSubscription(env: Env, id: number): Promise<Response>
 async function handleToggleSubscription(request: Request, env: Env, id: number): Promise<Response> {
   const body = await parseBody<{ enabled: boolean }>(request);
   const enabled = body?.enabled ? 1 : 0;
-  await env.LEGADO_DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=?").bind(enabled, id).run();
-  const sub = (await env.LEGADO_DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
+  await env.DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=?").bind(enabled, id).run();
+  const sub = (await env.DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
   if (sub) {
     const table = sub.type === "source" ? "sources" : "rules";
-    await env.LEGADO_DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=?`).bind(enabled, id).run();
+    await env.DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=?`).bind(enabled, id).run();
     await rebuildCache(env, sub.type);
   }
   return ok();
 }
 
 async function handleSync(env: Env, id: number | null): Promise<Response> {
-  const subs = id ? [await env.LEGADO_DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] : (await env.LEGADO_DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
+  const subs = id ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
   for (const sub of subs as any[]) {
     try {
       if (sub.type === "source") await syncSourceSubscription(env, sub.id, sub.url);
@@ -325,20 +325,20 @@ async function handleSync(env: Env, id: number | null): Promise<Response> {
 }
 
 async function handleStats(env: Env): Promise<Response> {
-  const subRow = (await env.LEGADO_DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN type='source' THEN 1 ELSE 0 END) as sources, SUM(CASE WHEN type='rule' THEN 1 ELSE 0 END) as rules FROM subscriptions WHERE enabled=1").first()) as any;
-  const srcRow = (await env.LEGADO_DB.prepare("SELECT COUNT(*) as total FROM sources WHERE enabled=1").first()) as any;
-  const ruleRow = (await env.LEGADO_DB.prepare("SELECT COUNT(*) as total FROM rules WHERE enabled=1").first()) as any;
+  const subRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN type='source' THEN 1 ELSE 0 END) as sources, SUM(CASE WHEN type='rule' THEN 1 ELSE 0 END) as rules FROM subscriptions WHERE enabled=1").first()) as any;
+  const srcRow = (await env.DB.prepare("SELECT COUNT(*) as total FROM sources WHERE enabled=1").first()) as any;
+  const ruleRow = (await env.DB.prepare("SELECT COUNT(*) as total FROM rules WHERE enabled=1").first()) as any;
   return ok({ subscriptions: subRow, sources: srcRow, rules: ruleRow });
 }
 
 async function handleListSources(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
-  const { results } = await env.LEGADO_DB.prepare(`SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
+  const { results } = await env.DB.prepare(`SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
   return ok(results);
 }
 
 async function handleListRules(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
-  const { results } = await env.LEGADO_DB.prepare(`SELECT * FROM rules WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
+  const { results } = await env.DB.prepare(`SELECT * FROM rules WHERE name LIKE ? AND enabled=1 LIMIT 50`).bind(`%${q}%`).all();
   return ok(results);
 }

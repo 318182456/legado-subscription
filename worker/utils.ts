@@ -97,7 +97,7 @@ export async function syncSourceSubscription(
         const name = String(src["bookSourceName"] ?? src["name"] ?? "未知书源");
         const group = String(src["bookSourceGroup"] ?? src["group"] ?? "");
         const rawJson = JSON.stringify(src);
-        return env.LEGADO_DB.prepare(
+        return env.DB.prepare(
           `INSERT INTO sources (subscription_id, book_source_url, name, group_name, raw_json, updated_at)
            VALUES (?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(subscription_id, book_source_url)
@@ -106,13 +106,13 @@ export async function syncSourceSubscription(
         ).bind(subId, bsUrl, name, group, rawJson);
       });
     if (stmts.length > 0) {
-      await env.LEGADO_DB.batch(stmts);
+      await env.DB.batch(stmts);
       count += stmts.length;
     }
   }
 
   // 更新订阅状态
-  await env.LEGADO_DB.prepare(
+  await env.DB.prepare(
     `UPDATE subscriptions SET last_synced=datetime('now'), item_count=? WHERE id=?`
   )
     .bind(count, subId)
@@ -143,7 +143,7 @@ export async function syncRuleSubscription(
         const pattern = String(rule["regex"] ?? rule["pattern"] ?? "");
         const replacement = String(rule["replacement"] ?? rule["replace"] ?? "");
         const rawJson = JSON.stringify(rule);
-        return env.LEGADO_DB.prepare(
+        return env.DB.prepare(
           `INSERT INTO rules (subscription_id, name, pattern, replacement, raw_json, updated_at)
            VALUES (?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(subscription_id, name, pattern)
@@ -152,12 +152,12 @@ export async function syncRuleSubscription(
         ).bind(subId, name, pattern, replacement, rawJson);
       });
     if (stmts.length > 0) {
-      await env.LEGADO_DB.batch(stmts);
+      await env.DB.batch(stmts);
       count += stmts.length;
     }
   }
 
-  await env.LEGADO_DB.prepare(
+  await env.DB.prepare(
     `UPDATE subscriptions SET last_synced=datetime('now'), item_count=? WHERE id=?`
   )
     .bind(count, subId)
@@ -171,19 +171,19 @@ export async function syncRuleSubscription(
  */
 export async function rebuildCache(env: Env, type: "source" | "rule") {
   if (type === "source") {
-    const rows = await env.LEGADO_DB.prepare(
+    const rows = await env.DB.prepare(
       `SELECT raw_json FROM sources WHERE enabled=1 ORDER BY id`
     ).all();
     const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
-    await env.LEGADO_CACHE.put("sources", JSON.stringify(merged), {
+    await env.KV.put("sources", JSON.stringify(merged), {
       expirationTtl: CACHE_TTL,
     });
   } else {
-    const rows = await env.LEGADO_DB.prepare(
+    const rows = await env.DB.prepare(
       `SELECT raw_json FROM rules WHERE enabled=1 ORDER BY id`
     ).all();
     const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
-    await env.LEGADO_CACHE.put("rules", JSON.stringify(merged), {
+    await env.KV.put("rules", JSON.stringify(merged), {
       expirationTtl: CACHE_TTL,
     });
   }

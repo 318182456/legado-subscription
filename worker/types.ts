@@ -6,10 +6,10 @@ import type {
 
 // ─── 环境绑定 ────────────────────────────────────────────────────
 export interface Env {
-  /** KV: 订阅输出缓存 (key: "sources" | "rules") */
-  LEGADO_CACHE: KVNamespace;
+  /** KV: 订阅输出缓存 */
+  KV: KVNamespace;
   /** D1: 持久化存储 */
-  LEGADO_DB: D1Database;
+  DB: D1Database;
   /** 管理 API 鉴权密钥（备用） */
   API_SECRET: string;
   /** 管理员密码（首次登录用） */
