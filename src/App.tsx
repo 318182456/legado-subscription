@@ -195,12 +195,40 @@ function IconButton({ icon }: { icon: React.ReactNode }) {
 }
 
 function DashboardView() {
-  const recentSources = [
-    { name: '起点中文网优化版', status: 'normal', latency: '120ms' },
-    { name: '笔趣阁聚合搜索', status: 'normal', latency: '345ms' },
-    { name: '搜书大师源库整理', status: 'error', latency: '超时' },
-    { name: '番茄小说API直连', status: 'normal', latency: '85ms' },
-  ];
+  const [stats, setStats] = useState<api.Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [recentSources, setRecentSources] = useState<any[]>([]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [s, sources] = await Promise.all([
+        api.getStats(),
+        api.getSources()
+      ]);
+      setStats(s);
+      setRecentSources(sources.slice(0, 4));
+    } catch (e) {
+      console.error('获取统计数据失败', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="animate-spin text-primary" size={32} />
+          <p className="text-secondary text-sm">加载统计信息中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -209,17 +237,20 @@ function DashboardView() {
           <h2 className="text-2xl font-bold tracking-tight">控制台摘要</h2>
           <p className="text-sm text-secondary mt-1">系统当前运行状态概览</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors">
+        <button 
+          onClick={fetchData}
+          className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors"
+        >
           <RefreshCw size={16} />
-          强制同步
+          刷新数据
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="flex flex-col gap-6">
-          <StatCard icon={<Book size={24} />} label="已启用阅读源" value="1,204" color="bg-surface-container text-primary" />
-          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value="342" color="bg-tertiary-container/10 text-tertiary" />
-          <StatCard icon={<RefreshCw size={24} />} label="上次同步时间" value="今天 10:42" color="bg-secondary-container text-on-surface" isSmallValue />
+          <StatCard icon={<Book size={24} />} label="已启用阅读源" value={stats?.sources.enabled.toLocaleString() || '0'} color="bg-surface-container text-primary" />
+          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value={stats?.rules.enabled.toLocaleString() || '0'} color="bg-tertiary-container/10 text-tertiary" />
+          <StatCard icon={<RefreshCw size={24} />} label="启用订阅总数" value={stats?.subscriptions.total.toLocaleString() || '0'} color="bg-secondary-container text-on-surface" />
         </div>
 
         <div className="md:col-span-2 bg-primary text-on-primary rounded-xl p-8 relative overflow-hidden flex flex-col justify-between">
@@ -238,10 +269,16 @@ function DashboardView() {
             <div className="flex gap-3">
               <input 
                 readOnly 
-                value="https://api.legado.example.com/v1/subscribe/user_88a9f2"
+                value={`${window.location.origin}/subscribe/sources`}
                 className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2.5 text-sm outline-none"
               />
-              <button className="bg-surface-container-lowest text-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-2 border border-outline-variant shadow-sm shrink-0">
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/subscribe/sources`);
+                  alert('复制成功');
+                }}
+                className="bg-surface-container-lowest text-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-2 border border-outline-variant shadow-sm shrink-0"
+              >
                 <Copy size={16} />
                 复制链接
               </button>
@@ -252,7 +289,7 @@ function DashboardView() {
 
       <section className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
         <div className="px-6 py-5 border-b border-outline-variant flex justify-between items-center">
-          <h3 className="font-semibold text-lg">最近添加书源</h3>
+          <h3 className="font-semibold text-lg">最近同步书源</h3>
           <button className="text-sm font-medium text-primary hover:underline">查看全部</button>
         </div>
         <div className="overflow-x-auto">
@@ -260,29 +297,35 @@ function DashboardView() {
             <thead>
               <tr className="bg-surface text-secondary text-xs font-medium uppercase tracking-wider border-b border-outline-variant">
                 <th className="py-3 px-6">源名称</th>
+                <th className="py-3 px-6">最后更新</th>
                 <th className="py-3 px-6">状态</th>
-                <th className="py-3 px-6">响应时间</th>
                 <th className="py-3 px-6 text-right">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm">
-              {recentSources.map((source, idx) => (
-                <tr key={idx} className="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
-                  <td className="py-4 px-6 font-medium">{source.name}</td>
-                  <td className="py-4 px-6">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                      source.status === 'normal' ? 'bg-surface-container-high text-primary' : 'bg-error-container text-error'
-                    }`}>
-                      <span className={`w-2 h-2 rounded-full ${source.status === 'normal' ? 'bg-primary' : 'bg-error'}`} />
-                      {source.status === 'normal' ? '正常' : '失败'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-secondary">{source.latency}</td>
-                  <td className="py-4 px-6 text-right">
-                    <button className="p-1 text-secondary hover:text-primary transition-colors"><MoreVertical size={18} /></button>
-                  </td>
+              {recentSources.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-secondary">暂无书源数据</td>
                 </tr>
-              ))}
+              ) : (
+                recentSources.map((source, idx) => (
+                  <tr key={idx} className="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
+                    <td className="py-4 px-6 font-medium">{source.name}</td>
+                    <td className="py-4 px-6 text-secondary">{new Date(source.updated_at).toLocaleString()}</td>
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        source.enabled ? 'bg-surface-container-high text-primary' : 'bg-secondary-container text-secondary'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
+                        {source.enabled ? '已启用' : '已禁用'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <button className="p-1 text-secondary hover:text-primary transition-colors"><MoreVertical size={18} /></button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -306,11 +349,55 @@ function StatCard({ icon, label, value, color, isSmallValue }: { icon: React.Rea
 }
 
 function SourceListView() {
-  const sources = [
-    { name: '笔趣阁 (优质版)', url: 'https://www.biquge.com.cn', category: '玄幻', active: true, icon: '笔' },
-    { name: '起点中文网 (解析)', url: 'api.qidian.com/parser/v2', category: '官方解析', active: false, icon: '起' },
-    { name: '知轩藏书', url: 'https://www.zxcs.info', category: '精校, 全本', active: true, icon: '知' },
-  ];
+  const [sources, setSources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<number | null>(null);
+
+  const fetchSources = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getSources();
+      setSources(data);
+    } catch (e) {
+      console.error('获取书源失败', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSources();
+  }, []);
+
+  const handleToggle = async (id: number, current: boolean) => {
+    try {
+      await api.toggleSubscription(id, !current); // 注意：这里 API 可能需要的是订阅 ID
+      fetchSources();
+    } catch (e) {
+      alert('切换状态失败');
+    }
+  };
+
+  const handleSync = async (id: number) => {
+    setSyncing(id);
+    try {
+      await api.syncOne(id);
+      alert('同步成功');
+      fetchSources();
+    } catch (e) {
+      alert('同步失败: ' + String(e));
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -328,8 +415,11 @@ function SourceListView() {
               className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-outline"
             />
           </div>
-          <button className="p-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors shadow-sm">
-            <MoreVertical size={20} />
+          <button 
+            onClick={fetchSources}
+            className="p-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors shadow-sm"
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
           <button className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all flex items-center gap-2 shadow-sm shrink-0">
             <Upload size={18} />
@@ -351,50 +441,60 @@ function SourceListView() {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-outline-variant/30">
-              {sources.map((source, idx) => (
-                <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors group">
-                  <td className="py-4 px-6"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-sm">
-                        {source.icon}
-                      </div>
-                      <span className="font-semibold">{source.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="text-secondary truncate max-w-xs">{source.url}</div>
-                    <div className="mt-1 flex gap-1">
-                      {source.category.split(', ').map((cat, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded-sm bg-surface-container text-on-surface-variant text-[10px] font-bold">
-                          {cat}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <button className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${source.active ? 'bg-primary' : 'bg-secondary-container'}`}>
-                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${source.active ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1 text-secondary hover:text-primary transition-colors hover:bg-surface-container rounded"><SettingsIcon size={16} /></button>
-                      <button className="p-1 text-secondary hover:text-error transition-colors hover:bg-error-container/50 rounded"><MoreVertical size={16} /></button>
-                    </div>
-                  </td>
+              {sources.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-secondary">暂无数据</td>
                 </tr>
-              ))}
+              ) : (
+                sources.map((source, idx) => (
+                  <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors group">
+                    <td className="py-4 px-6"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></td>
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-sm">
+                          {source.name.charAt(0)}
+                        </div>
+                        <span className="font-semibold">{source.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="text-secondary truncate max-w-xs">{source.book_source_url}</div>
+                      <div className="mt-1 flex gap-1">
+                        {source.group_name && (
+                          <span className="px-1.5 py-0.5 rounded-sm bg-surface-container text-on-surface-variant text-[10px] font-bold">
+                            {source.group_name}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <button 
+                        onClick={() => handleToggle(source.subscription_id, !!source.enabled)}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${source.enabled ? 'bg-primary' : 'bg-secondary-container'}`}
+                      >
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${source.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </button>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleSync(source.subscription_id)}
+                          disabled={syncing === source.subscription_id}
+                          className="p-1 text-secondary hover:text-primary transition-colors hover:bg-surface-container rounded disabled:opacity-50"
+                        >
+                          <RefreshCw size={16} className={syncing === source.subscription_id ? 'animate-spin' : ''} />
+                        </button>
+                        <button className="p-1 text-secondary hover:text-error transition-colors hover:bg-error-container/50 rounded"><MoreVertical size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
         <div className="bg-surface px-6 py-4 border-t border-outline-variant flex items-center justify-between text-secondary text-sm">
           <span>共 {sources.length} 个书源</span>
-          <div className="flex items-center gap-4">
-            <button className="p-1 rounded border border-outline-variant disabled:opacity-50" disabled><ChevronLeft size={18} /></button>
-            <span className="font-medium">1 / 1</span>
-            <button className="p-1 rounded border border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low transition-colors"><ChevronRight size={18} /></button>
-          </div>
         </div>
       </div>
     </div>
@@ -402,13 +502,32 @@ function SourceListView() {
 }
 
 function RulesView() {
-  const rules = [
-    { name: '通用广告过滤 (底部)', regex: '<div id="ad_.*">.*</div>', replacement: '空 (删除)', active: true },
-    { name: '移除站长统计代码', regex: '<script.*cnzz.com.*</script>', replacement: '空 (删除)', active: false },
-    { name: '修正: 的地得混用 (粗略)', regex: '(?<=[他她它])地(?=说|道)', replacement: '的', active: true },
-    { name: '清理多余空行 (超过两行)', regex: '\\n\\s*\\n\\s*\\n+', replacement: '\\n\\n', active: true },
-    { name: '过滤内嵌求收藏文案', regex: '【求收藏.*求推荐.*】', replacement: '空 (删除)', active: true },
-  ];
+  const [rules, setRules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRules = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getRules();
+      setRules(data);
+    } catch (e) {
+      console.error('获取规则失败', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRules();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -428,9 +547,9 @@ function RulesView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <SummaryIconCard icon={<Sparkles size={24} />} label="总规则数量" value="1,248" />
-        <SummaryIconCard icon={<CheckCircle2 size={24} />} label="已启用规则" value="982" />
-        <SummaryIconCard icon={<RefreshCw size={24} />} label="最近更新" value="今天 10:42" />
+        <SummaryIconCard icon={<Sparkles size={24} />} label="总规则数量" value={rules.length.toLocaleString()} />
+        <SummaryIconCard icon={<CheckCircle2 size={24} />} label="已启用规则" value={rules.filter(r => r.enabled).length.toLocaleString()} />
+        <SummaryIconCard icon={<RefreshCw size={24} />} label="最近更新" value="刚刚" />
       </div>
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
@@ -438,7 +557,12 @@ function RulesView() {
           <h3 className="font-semibold text-on-surface text-sm">规则列表</h3>
           <div className="flex items-center gap-2">
             <button className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"><Plus size={18} /></button>
-            <button className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"><RefreshCw size={18} /></button>
+            <button 
+              onClick={fetchRules}
+              className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
             <button className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"><Search size={18} /></button>
           </div>
         </div>
@@ -455,42 +579,37 @@ function RulesView() {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-outline-variant/30">
-              {rules.map((rule, idx) => (
-                <tr key={idx} className={`hover:bg-surface-container-low transition-colors group ${!rule.active ? 'opacity-60 bg-surface-bright/50' : ''}`}>
-                  <td className="py-4 px-6 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></td>
-                  <td className="py-4 px-6 font-semibold">{rule.name}</td>
-                  <td className="py-4 px-6">
-                    <code className="px-1.5 py-0.5 bg-surface-container text-secondary font-mono text-[11px] rounded border border-outline-variant/40 whitespace-nowrap">
-                      {rule.regex}
-                    </code>
-                  </td>
-                  <td className="py-4 px-6 italic text-secondary">{rule.replacement}</td>
-                  <td className="py-4 px-6 text-center">
-                    <button className={`mx-auto relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${rule.active ? 'bg-primary' : 'bg-secondary-container'}`}>
-                      <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${rule.active ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="text-secondary hover:text-primary transition-colors"><SettingsIcon size={16} /></button>
-                      <button className="text-secondary hover:text-error transition-colors"><MoreVertical size={16} /></button>
-                    </div>
-                  </td>
+              {rules.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-secondary">暂无数据</td>
                 </tr>
-              ))}
+              ) : (
+                rules.map((rule, idx) => (
+                  <tr key={idx} className={`hover:bg-surface-container-low transition-colors group ${!rule.enabled ? 'opacity-60 bg-surface-bright/50' : ''}`}>
+                    <td className="py-4 px-6 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></td>
+                    <td className="py-4 px-6 font-semibold">{rule.name}</td>
+                    <td className="py-4 px-6">
+                      <code className="px-1.5 py-0.5 bg-surface-container text-secondary font-mono text-[11px] rounded border border-outline-variant/40 whitespace-nowrap">
+                        {rule.pattern}
+                      </code>
+                    </td>
+                    <td className="py-4 px-6 italic text-secondary">{rule.replacement || '(删除)'}</td>
+                    <td className="py-4 px-6 text-center">
+                      <button className={`mx-auto relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${rule.enabled ? 'bg-primary' : 'bg-secondary-container'}`}>
+                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="text-secondary hover:text-primary transition-colors"><SettingsIcon size={16} /></button>
+                        <button className="text-secondary hover:text-error transition-colors"><MoreVertical size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        </div>
-        <div className="px-6 py-4 border-t border-outline-variant bg-surface flex justify-between items-center text-secondary text-xs">
-          <span>显示 1 - {rules.length}，共 1,248 条规则</span>
-          <div className="flex items-center gap-1.5">
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant disabled:opacity-50" disabled><ChevronLeft size={16} /></button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-primary bg-primary-container/10 text-primary font-bold">1</button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container-low transition-colors">2</button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container-low transition-colors">3</button>
-            <span className="px-1 text-[10px]">...</span>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant hover:bg-surface-container-low transition-colors"><ChevronRight size={16} /></button>
-          </div>
         </div>
       </div>
     </div>

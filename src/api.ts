@@ -50,19 +50,24 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(path, { ...options, headers });
+  
+  // 提前解析 JSON 以便统一处理 ok 字段
+  const body = await res.json().catch(() => ({ ok: false, error: res.statusText }));
+
   if (res.status === 401) {
-    // 只有在非登录页面才清理并重定向
     if (!path.includes("/api/auth/login")) {
       clearToken();
       window.dispatchEvent(new CustomEvent("unauthorized"));
     }
     throw new Error("认证失败");
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((body as { error: string }).error || res.statusText);
+
+  if (!res.ok || body.ok === false) {
+    throw new Error(body.error || res.statusText);
   }
-  return res.json() as Promise<T>;
+
+  // 自动解包 Worker 的 { ok: true, data: T } 结构
+  return body.data as T;
 }
 
 // ---------- Auth ----------
@@ -82,8 +87,7 @@ export async function getPasskeyStatus(): Promise<number> {
 }
 
 export async function getPasskeyList(): Promise<PasskeyItem[]> {
-  const data = await apiFetch<{ ok: boolean; data: PasskeyItem[] }>("/api/auth/passkey/list");
-  return data.data;
+  return apiFetch<PasskeyItem[]>("/api/auth/passkey/list");
 }
 
 export async function deletePasskey(id: string): Promise<void> {
@@ -94,32 +98,32 @@ export async function registerPasskey(): Promise<string> {
   const options = await apiFetch<any>("/api/auth/passkey/register/begin", {
     method: "POST",
   });
-  const response = await startRegistration(options.data);
-  const result = await apiFetch<{ ok: boolean; data: { name: string } }>(
+  const response = await startRegistration(options);
+  const result = await apiFetch<{ name: string }>(
     "/api/auth/passkey/register/finish",
     { method: "POST", body: JSON.stringify(response) }
   );
-  return result.data.name;
+  return result.name;
 }
 
 export async function loginWithPasskey(): Promise<string> {
   const options = await apiFetch<any>("/api/auth/passkey/login/begin", {
     method: "POST",
   });
-  const response = await startAuthentication(options.data);
-  const data = await apiFetch<{ ok: boolean; data: { token: string } }>(
+  const response = await startAuthentication(options);
+  const data = await apiFetch<{ token: string }>(
     "/api/auth/passkey/login/finish",
     { method: "POST", body: JSON.stringify(response) }
   );
-  setToken(data.data.token);
-  return data.data.token;
+  setToken(data.token);
+  return data.token;
 }
 
 // ---------- API ----------
 
-export const getStats = () => apiFetch<{ ok: boolean; data: Stats }>("/api/stats").then(r => r.data);
+export const getStats = () => apiFetch<Stats>("/api/stats");
 
-export const getSubscriptions = () => apiFetch<{ ok: boolean; data: Subscription[] }>("/api/subscriptions").then(r => r.data);
+export const getSubscriptions = () => apiFetch<Subscription[]>("/api/subscriptions");
 
 export const addSubscription = (data: { name: string; url: string; type: "source" | "rule" }) =>
   apiFetch<any>("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
@@ -133,5 +137,5 @@ export const toggleSubscription = (id: number, enabled: boolean) =>
 export const syncAll = () => apiFetch<any>("/api/sync", { method: "POST" });
 export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method: "POST" });
 
-export const getSources = (q = "") => apiFetch<{ ok: boolean; data: any[] }>(`/api/sources?q=${q}`).then(r => r.data);
-export const getRules = (q = "") => apiFetch<{ ok: boolean; data: any[] }>(`/api/rules?q=${q}`).then(r => r.data);
+export const getSources = (q = "") => apiFetch<any[]>(`/api/sources?q=${q}`);
+export const getRules = (q = "") => apiFetch<any[]>(`/api/rules?q=${q}`);
