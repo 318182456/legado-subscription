@@ -12,16 +12,13 @@ head_sampling_rate = 1
 persist = true
 invocation_logs = true
 
-# ─── KV 绑定（订阅输出缓存）────────────────────────────────────────
 [[kv_namespaces]]
-binding = "KV"
+binding = "ATTACHMENTS_KV"
 
-# ─── D1 绑定（持久化存储）─────────────────────────────────────────
 [[d1_databases]]
 binding = "DB"
 database_name = "legado-subscription"
 
-# ─── 构建（前端 Vite 站点）────────────────────────────────────────
 [site]
 bucket = "./dist"
 
