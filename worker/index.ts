@@ -539,34 +539,82 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
   const ids = body?.ids || [];
   if (!ids.length) return ok({});
 
-  // 1. 一次性查出所有 URL
+  // 1. 一次性查出所有数据 (包含 raw_json 以便分析 searchUrl)
   const { results: rawSources } = await env.DB.prepare(
-    `SELECT id, book_source_url FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
+    `SELECT id, book_source_url, raw_json FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
   ).bind(...ids).all();
   
-  const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s.book_source_url]));
+  const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
   // 2. 并发测试
-  const chunkSize = 15; // 提高 Worker 内并发
+  const chunkSize = 15; 
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize);
     await Promise.all(chunk.map(async (id) => {
-      const url = sourcesMap.get(id);
-      if (!url) {
+      const sourceData = sourcesMap.get(id);
+      if (!sourceData) {
         testResults[id] = false;
         return;
       }
+
+      let urlToTest = sourceData.book_source_url;
+      let fetchOptions: RequestInit = {
+        method: 'GET',
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+        },
+        signal: AbortSignal.timeout(8000) // 搜索通常比主页慢，增加到 8秒
+      };
+
       try {
-        const res = await fetch(url, { 
-          method: 'GET', // 改为 GET 以获得更好的兼容性
-          headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-          },
-          signal: AbortSignal.timeout(5000) // 失效源可能很多，增加到 5秒
-        });
-        // 只要能通（2xx 或 3xx）就算可用
-        testResults[id] = res.status >= 200 && res.status < 400;
+        const json = JSON.parse(sourceData.raw_json);
+        let searchUrl = json.searchUrl;
+
+        if (searchUrl) {
+          // 处理 Legado 复杂的 searchUrl 格式：url[,options]
+          let urlPart = searchUrl;
+          if (searchUrl.includes(',{')) {
+            const parts = searchUrl.split(',{');
+            urlPart = parts[0];
+            try {
+              const extraOptions = JSON.parse('{' + parts[1]);
+              if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
+              if (extraOptions.body) {
+                fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+              }
+              if (extraOptions.headers) {
+                fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
+              }
+            } catch (e) { /* 忽略解析错误 */ }
+          }
+
+          // 替换 URL 中的关键词
+          urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+
+          // 构建完整 URL
+          if (urlPart.startsWith('http')) {
+            urlToTest = urlPart;
+          } else {
+            const baseUrl = json.bookSourceUrl || sourceData.book_source_url;
+            try {
+              urlToTest = new URL(urlPart, baseUrl).toString();
+            } catch (e) {
+              urlToTest = baseUrl.replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
+            }
+          }
+        }
+      } catch (e) { /* 解析 JSON 失败则回退到基础测试 */ }
+
+      try {
+        const res = await fetch(urlToTest, fetchOptions);
+        // 只要能通且有内容返回就算可用
+        if (res.status >= 200 && res.status < 400) {
+          const text = await res.text();
+          testResults[id] = text.length > 100; // 搜索结果通常应该有一定的长度
+        } else {
+          testResults[id] = false;
+        }
       } catch (e) {
         testResults[id] = false;
       }
