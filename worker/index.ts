@@ -236,7 +236,7 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
     if (verification.verified && verification.registrationInfo) {
     const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
     const stored: StoredPasskey = {
-      id: u8ToB64url(credentialID),
+      id: body.id, // 使用客户端原始 id 确保后续登录能完全匹配
       public_key: u8ToB64url(credentialPublicKey),
       counter,
       transports: body.response.transports || [],
@@ -281,9 +281,30 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
   const body = await request.json<AuthenticationResponseJSON>();
-  const passkey = (await env.DB.prepare("SELECT * FROM passkeys WHERE id = ?").bind(body.id).first()) as any;
+  const allPasskeys = await env.DB.prepare("SELECT * FROM passkeys").all();
+  let passkey = allPasskeys.results.find((p: any) => p.id === body.id);
 
-  if (!passkey) return err("找不到凭证", 404);
+  if (!passkey) {
+    // 尝试字节级匹配，以防 base64url padding 或编码差异
+    try {
+      const bBytes = b64urlToU8(body.id);
+      passkey = allPasskeys.results.find((p: any) => {
+        try {
+          const pBytes = b64urlToU8(p.id);
+          if (pBytes.length !== bBytes.length) return false;
+          for (let i = 0; i < pBytes.length; i++) {
+            if (pBytes[i] !== bBytes[i]) return false;
+          }
+          return true;
+        } catch { return false; }
+      });
+    } catch { /* ignore */ }
+  }
+
+  if (!passkey) {
+    const ids = allPasskeys.results.map((r: any) => r.id.substring(0, 15) + "...");
+    return err(`找不到凭证。收到: ${body.id.substring(0, 15)}... 库中: ${ids.join(', ')}`, 404);
+  }
 
   const rpID = new URL(request.url).hostname;
   const origin = new URL(request.url).origin;
