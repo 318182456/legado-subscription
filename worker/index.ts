@@ -409,7 +409,29 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         .btn-rules { background-color: #7D5260; }
         .btn-info { background-color: #006A6A; }
         .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; }
+        
+        /* 隐藏在阅读内部无用的提示 */
+        .is-legado .footer { display: none; }
     </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const isLegado = navigator.userAgent.includes('Legado') || navigator.userAgent.includes('yuedu');
+            if (isLegado) document.body.classList.add('is-legado');
+            
+            // 智能拦截：如果在阅读内部点击 yuedu:// 链接，自动重定向到 src 目标
+            document.addEventListener('click', (e) => {
+                const a = e.target.closest('a');
+                if (a && a.href.startsWith('yuedu://')) {
+                    const url = new URL(a.href.replace('yuedu://', 'http://unused.com/'));
+                    const src = url.searchParams.get('src');
+                    if (src && isLegado) {
+                        e.preventDefault();
+                        window.location.href = src;
+                    }
+                }
+            });
+        });
+    </script>
 </head>
 <body>
     <div class="card">
@@ -462,7 +484,7 @@ function handleSubscribeInfo(request: Request): Response {
       ],
       "ruleArticles": "a.btn",
       "ruleTitle": "text",
-      "ruleLink": "href",
+      "ruleLink": "attr(href)@js:result.includes('src=') ? decodeURIComponent(result.split('src=')[1]) : result",
       "enabled": true,
       "type": 3
     }
