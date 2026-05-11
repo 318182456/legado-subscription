@@ -138,7 +138,7 @@ export const syncAll = () => apiFetch<any>("/api/sync", { method: "POST" });
 export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method: "POST" });
 
 export const getSources = (q = "", page = 1, filter = "all") => 
-  apiFetch<{ sources: any[], total: number, stats: any, hasMore: boolean }>(`/api/sources?q=${q}&page=${page}&filter=${filter}`);
+  apiFetch<{ sources: any[], total: number, totalPages: number, stats: any, hasMore: boolean }>(`/api/sources?q=${q}&page=${page}&filter=${filter}`);
 export const getAllSourceIds = () => apiFetch<number[]>("/api/sources/ids");
 export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}&page=${page}`);
 

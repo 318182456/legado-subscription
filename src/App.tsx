@@ -417,6 +417,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState({ total: 0, available: 0, unavailable: 0 });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
@@ -430,6 +431,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
       const data = await api.getSources(q, p, f);
       setSources(data.sources);
       setTotal(data.total);
+      setTotalPages(data.totalPages);
       setStats(data.stats);
       setHasMore(data.hasMore);
       setPage(p);
@@ -559,8 +561,8 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   }
 
   return (
-    <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
           <StatCard 
             icon={<BookOpen size={24} />} 
             label="总书源" 
@@ -760,9 +762,9 @@ function SourceListView({ onImport }: { onImport: () => void }) {
             </tbody>
           </table>
           
-          <div className="p-4 flex justify-between items-center border-t border-outline-variant/30 bg-surface-bright shrink-0">
+          <div className="p-3 flex justify-between items-center border-t border-outline-variant/30 bg-surface-bright shrink-0">
             <div className="text-[10px] font-bold text-secondary">
-              共 {total} 条数据，当前第 {page} 页
+              共 {total} 条数据，第 {page} / {totalPages} 页
             </div>
             <div className="flex items-center gap-2">
               <button 

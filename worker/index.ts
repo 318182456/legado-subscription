@@ -414,6 +414,7 @@ async function handleListSources(env: Env, url: URL): Promise<Response> {
   return ok({
     sources,
     total: totalRow.count,
+    totalPages: Math.ceil(totalRow.count / limit),
     stats: {
       total: statsRow.total || 0,
       available: statsRow.available || 0,
@@ -558,11 +559,14 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
       }
       try {
         const res = await fetch(url, { 
-          method: 'HEAD', 
-          headers: { 'User-Agent': 'Mozilla/5.0 Legado/1.0' },
-          signal: AbortSignal.timeout(3000) // 缩短超时到 3秒
+          method: 'GET', // 改为 GET 以获得更好的兼容性
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+          },
+          signal: AbortSignal.timeout(5000) // 失效源可能很多，增加到 5秒
         });
-        testResults[id] = res.ok;
+        // 只要能通（2xx 或 3xx）就算可用
+        testResults[id] = res.status >= 200 && res.status < 400;
       } catch (e) {
         testResults[id] = false;
       }
