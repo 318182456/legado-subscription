@@ -519,7 +519,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 /** 输出发现源定义 JSON (供一键导入) */
 function handleSubscribeInfo(request: Request): Response {
   const origin = new URL(request.url).origin;
-  const icon = "https://files.catbox.moe/p9p3f2.png"; // 使用一个美化的预设图标，或者您之后可以替换
+  const icon = "https://files.catbox.moe/p9p3f2.png";
   
   const source = [
     {
@@ -527,20 +527,19 @@ function handleSubscribeInfo(request: Request): Response {
       "sourceUrl": `${origin}/subscribe/index`,
       "sourceIcon": icon,
       "sourceGroup": "整合",
+      "articleStyle": 0,
+      "enableJs": true,
+      "enabled": true,
+      "enabledCookieJar": false,
+      "loadWithBaseUrl": true,
+      "singleUrl": true,
       "header": JSON.stringify({
         "User-Agent": "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; MI 8 Lite Build/OPM1.171019.019) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.108 UCBrowser/13.2.0.1100 Mobile Safari/537.36"
       }),
-      "ruleExplore": [
-        {
-          "title": "一键导入",
-          "url": `${origin}/subscribe/index`,
-          "style": "layout_t_p_b64"
-        }
-      ],
-      "ruleArticles": "h3",
-      "ruleTitle": "a@text",
+      "sortUrl": `首页::${origin}/subscribe/index`,
+      "ruleArticles": ".container@h3",
+      "ruleTitle": "a@textNodes",
       "ruleLink": "a@href",
-      "enabled": true,
       "type": 0
     }
   ];
