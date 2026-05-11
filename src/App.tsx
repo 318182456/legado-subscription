@@ -820,6 +820,23 @@ function RulesView({ onImport }: { onImport: () => void }) {
   const [hasMore, setHasMore] = useState(true);
   const [query, setQuery] = useState('');
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  const toggleAll = () => {
+    if (selectedIds.size === rules.length && rules.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rules.map(r => r.id)));
+    }
+  };
+
+  const toggleOne = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
 
   const fetchRules = async (q = '', p = 1, append = false) => {
     if (p === 1) setLoading(true);
@@ -868,6 +885,17 @@ function RulesView({ onImport }: { onImport: () => void }) {
     }
   };
 
+  const handleBatchDelete = async () => {
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 条规则吗？`)) return;
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => api.deleteRule(id)));
+      setSelectedIds(new Set());
+      fetchRules();
+    } catch (e) {
+      alert('删除失败: ' + String(e));
+    }
+  };
+
   const handleDeleteRule = async (id: number) => {
     if (!confirm('确定要删除此规则吗？')) return;
     try {
@@ -911,9 +939,21 @@ function RulesView({ onImport }: { onImport: () => void }) {
           >
             <Upload size={16} /> 导入规则订阅
           </button>
-          <button className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm">
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm"
+          >
             <Plus size={16} /> 手动添加
           </button>
+          
+          {selectedIds.size > 0 && (
+            <button 
+              onClick={handleBatchDelete}
+              className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-error text-on-error rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm"
+            >
+              <Trash2 size={16} /> 删除选中 ({selectedIds.size})
+            </button>
+          )}
         </div>
       </div>
 
@@ -941,7 +981,14 @@ function RulesView({ onImport }: { onImport: () => void }) {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-surface-container-low text-on-surface-variant text-xs font-semibold border-b border-outline-variant">
-                <th className="py-3 px-6 w-12 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></th>
+                <th className="py-3 px-6 w-12 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.size === rules.length && rules.length > 0}
+                    onChange={toggleAll}
+                    className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4 cursor-pointer" 
+                  />
+                </th>
                 <th className="py-3 px-6 w-1/4">规则名称</th>
                 <th className="py-3 px-6 w-1/3">匹配模式 (Regex)</th>
                 <th className="py-3 px-6">替换内容</th>
@@ -957,7 +1004,14 @@ function RulesView({ onImport }: { onImport: () => void }) {
               ) : (
                 rules.map((rule, idx) => (
                   <tr key={idx} className={`hover:bg-surface-container-low transition-colors group ${!rule.enabled ? 'opacity-60 bg-surface-bright/50' : ''}`}>
-                    <td className="py-4 px-6 text-center"><input type="checkbox" className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4" /></td>
+                    <td className="py-4 px-6 text-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.has(rule.id)}
+                        onChange={() => toggleOne(rule.id)}
+                        className="rounded-sm border-outline-variant text-primary focus:ring-primary/20 h-4 w-4 cursor-pointer" 
+                      />
+                    </td>
                     <td className="py-4 px-6 font-semibold break-words min-w-[120px]">{rule.name}</td>
                     <td className="py-4 px-6">
                       <div className="max-h-24 overflow-y-auto scrollbar-hide">
@@ -1026,7 +1080,12 @@ function RulesView({ onImport }: { onImport: () => void }) {
             </div>
           )}
         </div>
-      </div>
+        <AddRuleModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        onAdded={() => { setIsAddModalOpen(false); fetchRules(); }} 
+      />
+    </div>
     </div>
   );
 }
@@ -1555,6 +1614,94 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
           )}
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function AddRuleModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
+  const [name, setName] = useState('');
+  const [pattern, setPattern] = useState('');
+  const [replacement, setReplacement] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !pattern) return;
+    setLoading(true);
+    try {
+      await api.addRule({ name, pattern, replacement });
+      setName('');
+      setPattern('');
+      setReplacement('');
+      onAdded();
+    } catch (e) {
+      alert('添加失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-outline-variant animate-in fade-in zoom-in duration-200">
+        <div className="px-6 py-4 border-b border-outline-variant bg-surface-bright flex justify-between items-center">
+          <h3 className="text-lg font-bold text-on-surface">手动添加净化规则</h3>
+          <button onClick={onClose} className="p-1 hover:bg-surface-container rounded-full transition-colors text-secondary hover:text-on-surface"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-secondary ml-1">规则名称</label>
+            <input 
+              autoFocus
+              type="text" 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="例如：去除广告弹窗"
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-secondary ml-1">匹配模式 (Regex)</label>
+            <textarea 
+              value={pattern} 
+              onChange={e => setPattern(e.target.value)} 
+              placeholder="正则表达式，例如：<div id='ad'>.*?</div>"
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all min-h-[100px] font-mono"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-secondary ml-1">替换内容</label>
+            <input 
+              type="text" 
+              value={replacement} 
+              onChange={e => setReplacement(e.target.value)} 
+              placeholder="留空则表示删除匹配内容"
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-mono"
+            />
+          </div>
+          <div className="pt-4 flex gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-outline-variant font-bold text-sm hover:bg-surface-container-low transition-all"
+            >
+              取消
+            </button>
+            <button 
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+            >
+              {loading && <RefreshCw size={16} className="animate-spin" />}
+              保存规则
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

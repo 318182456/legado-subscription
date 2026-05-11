@@ -116,7 +116,10 @@ export default {
       // ── /api/sources / rules ──────────────────────────────────────
       if (path === "/api/sources" && method === "GET") return handleListSources(env, url);
       if (path === "/api/sources/ids" && method === "GET") return handleAllSourceIds(env);
-      if (path === "/api/rules" && method === "GET") return handleListRules(env, url);
+      if (path === "/api/rules") {
+        if (method === "GET") return handleListRules(env, url);
+        if (method === "POST") return handleAddRule(request, env);
+      }
       if (path === "/api/sources/test" && method === "POST") return handleTestSources(env, request);
 
       const srcMatch = path.match(/^\/api\/sources\/(\d+)$/);
@@ -437,9 +440,36 @@ async function handleListRules(env: Env, url: URL): Promise<Response> {
   const limit = 50;
   const offset = (page - 1) * limit;
   const { results } = await env.DB.prepare(
-    `SELECT * FROM rules WHERE name LIKE ? AND enabled=1 LIMIT ? OFFSET ?`
+    `SELECT * FROM rules WHERE name LIKE ? LIMIT ? OFFSET ?`
   ).bind(`%${q}%`, limit, offset).all();
   return ok(results);
+}
+
+async function handleAddRule(request: Request, env: Env): Promise<Response> {
+  const body = await parseBody<{ name: string; pattern: string; replacement: string }>(request);
+  if (!body?.name || !body?.pattern) return err("名称和模式不能为空");
+
+  // 获取或创建手动添加订阅
+  let manualSub = (await env.DB.prepare("SELECT id FROM subscriptions WHERE url = 'manual_rules'").first()) as any;
+  if (!manualSub) {
+    const { meta } = await env.DB.prepare("INSERT INTO subscriptions (name, url, type) VALUES ('手动添加规则', 'manual_rules', 'rule')").run();
+    manualSub = { id: meta.last_row_id };
+  }
+
+  const rawJson = JSON.stringify({
+    name: body.name,
+    ruleName: body.name,
+    regex: body.pattern,
+    replacement: body.replacement || "",
+    enabled: true
+  });
+
+  await env.DB.prepare(
+    "INSERT INTO rules (subscription_id, name, pattern, replacement, raw_json) VALUES (?, ?, ?, ?, ?)"
+  ).bind(manualSub.id, body.name, body.pattern, body.replacement || "", rawJson).run();
+
+  await rebuildCache(env, "rule");
+  return ok();
 }
 
 async function handleParseLinks(url: URL): Promise<Response> {
