@@ -656,29 +656,31 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                         var chunk = sources.slice(i, i + batchSize);
                         var delRes = await fetchWithTimeout(base + '/deleteBookSources', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json; charset=utf-8' },
                             body: JSON.stringify(chunk)
                         }, 8000);
                         if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
+                        
+                        var delJson = null;
                         try {
-                            var delJson = await delRes.json();
-                            if (delJson && delJson.isSuccess === false) {
-                                throw new Error(delJson.errorMsg || '阅读服务内部错误');
-                            }
-                        } catch (je) {
-                            // 忽略非 JSON 响应的解析错误，但如果是明确的业务错误则抛出
-                            if (je.message && je.message.indexOf('阅读服务') !== -1) throw je;
+                            delJson = await delRes.json();
+                        } catch (je) { /* 忽略解析非JSON的错误 */ }
+                        
+                        if (delJson && delJson.isSuccess === false) {
+                            throw new Error('阅读APP内部错误: ' + (delJson.errorMsg || '未知'));
                         }
                     }
 
-                    // 4. 跳转导入
-                    showStatus('✅ 删除完成，正在拉起导入…', 'success');
-                    restore();
-                    setTimeout(function() { 
-                        var a = document.createElement('a');
-                        a.href = importUrl;
-                        a.click();
-                    }, 800);
+                    // 4. 跳转导入（WebView 拦截自定义协议需要真实的用户点击，不能用 setTimeout 自动拉起）
+                    showStatus('✅ 删除完成，请点击下方按钮拉起导入', 'success');
+                    if (btn) {
+                        btn.textContent = '📥 点击拉起导入';
+                        btn.style.pointerEvents = '';
+                        btn.style.background = '#388E3C';
+                        btn.style.color = '#fff';
+                        btn.onclick = function() { location.href = importUrl; return false; };
+                    }
+                    restore = function() {}; // 防止 finally 还原按钮状态
 
                 } catch (e) {
                     restore();
