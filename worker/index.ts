@@ -537,7 +537,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             function showModal(text) {
                 return new Promise(function(resolve) {
                     modalResolve = resolve;
-                    document.getElementById('confirm-text').textContent = text;
+                    document.getElementById('confirm-text').innerHTML = text;
                     var m = document.getElementById('confirm-modal');
                     m.style.display = 'flex';
                 });
@@ -560,7 +560,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                 var c = colors[type] || colors.info;
                 bar.style.background = c.bg;
                 bar.style.color      = c.color;
-                bar.textContent      = msg;
+                bar.innerHTML        = msg;
                 bar.style.display    = 'block';
             }
 
@@ -596,15 +596,15 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                         var isMixed = (window.location.protocol === 'https:');
                         if (isMixed) {
                             showStatus(
-                                '❌ 连接失败（混合内容限制）\n\n' +
-                                '当前页面为 HTTPS，无法直接访问本机 HTTP 服务。\n\n' +
-                                '解决方法：\n' +
-                                '① 在阅读「发现」中打开此页后点击按钮（推荐）\n' +
+                                '❌ 连接失败（混合内容限制）<br><br>' +
+                                '当前页面为 HTTPS，无法直接访问本机 HTTP 服务。<br><br>' +
+                                '解决方法：<br>' +
+                                '① 在阅读「发现」中打开此页后点击按钮（推荐）<br>' +
                                 '② 或用手机浏览器打开 http://172.28.26.162:' + port + ' 中的管理页面手动清除',
                                 'error'
                             );
                         } else {
-                            showStatus('❌ 连接失败：' + e.message + '\n请确认阅读 Web 服务已开启', 'error');
+                            showStatus('❌ 连接失败：' + e.message + '<br>请确认阅读 Web 服务已开启', 'error');
                         }
                         restore();
                         return;
@@ -622,7 +622,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 
                     // 2. 显示确认弹层（替代 confirm()）
                     restore();
-                    var ok = await showModal('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源。\n\n此操作不可恢复，确定继续？');
+                    var ok = await showModal('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源。<br><br>此操作不可恢复，确定继续？');
                     if (!ok) { showStatus('已取消', 'info'); return; }
 
                     if (btn) { btn.textContent = '⏳ 删除中...'; btn.style.pointerEvents = 'none'; }
