@@ -981,14 +981,13 @@ function RulesView({ onImport }: { onImport: () => void }) {
         <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-bright">
           <h3 className="font-semibold text-on-surface text-sm">规则列表</h3>
           <div className="flex items-center gap-2">
-            <button className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"><Plus size={18} /></button>
             <button 
               onClick={fetchRules}
               className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"
+              title="刷新列表"
             >
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             </button>
-            <button className="p-1.5 text-secondary hover:text-primary transition-colors hover:bg-surface-container-low rounded"><Search size={18} /></button>
           </div>
         </div>
         <div className="overflow-x-auto">
