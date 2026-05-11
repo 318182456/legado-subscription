@@ -253,6 +253,10 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
     await env.KV.delete("passkey:reg_challenge");
     return ok({ name: stored.name });
   }
+  } catch (e) {
+    console.error("Passkey 注册验证异常:", e);
+    return err("注册验证过程中发生错误", 500);
+  }
 
   return err("验证失败", 400);
 }
@@ -311,6 +315,10 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
     await env.KV.delete("passkey:auth_challenge");
     const pwd = env.ADMIN_PASSWORD || env.API_SECRET || "admin888";
     return ok({ token: pwd });
+  }
+  } catch (e) {
+    console.error("Passkey 登录验证异常:", e);
+    return err("登录验证过程中发生错误", 500);
   }
 
   return err("验证失败", 401);
