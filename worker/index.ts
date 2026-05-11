@@ -452,8 +452,22 @@ async function handleParseLinks(url: URL): Promise<Response> {
         if (titleAttr) bestName = titleAttr[1];
       }
 
-      // 过滤掉无意义的名称
-      const name = (bestName && bestName !== "一键导入") ? bestName : "未知来源";
+      // 过滤掉无意义的名称并进行精简
+      let name = (bestName && bestName !== "一键导入") ? bestName : "未知来源";
+      
+      // 精简逻辑：去除日期、数量等干扰信息
+      name = name
+        .replace(/\d{4}年\d{1,2}月\d{1,2}日更新/g, '')
+        .replace(/\d{4}年\d{1,2}月\d{1,2}日/g, '')
+        .replace(/\d+个/g, '')
+        .replace(/更新/g, '')
+        .replace(/合集/g, '')
+        .replace(/【[^\]]+】/g, '')
+        .replace(/\[[^\]]+\]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!name) name = "未知来源";
       
       // 避免重复（同一个页面可能有多个按钮指向同一个源）
       if (!results.find(r => r.url === subUrl)) {

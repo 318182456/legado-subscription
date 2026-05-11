@@ -1058,9 +1058,22 @@ function AddSubscriptionModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
 
 function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; onClose: () => void; onAdded: () => void }) {
   const [url, setUrl] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
   const [list, setList] = useState<{ name: string; url: string }[]>([]);
+  const [editingNames, setEditingNames] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('legado_parse_history');
+    if (saved) setHistory(JSON.parse(saved));
+  }, []);
+
+  const saveHistory = (newUrl: string) => {
+    const newHistory = [newUrl, ...history.filter(u => u !== newUrl)].slice(0, 5);
+    setHistory(newHistory);
+    localStorage.setItem('legado_parse_history', JSON.stringify(newHistory));
+  };
 
   const handleParse = async () => {
     if (!url) return;
@@ -1068,6 +1081,8 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
     try {
       const data = await api.parseLinks(url);
       setList(data);
+      setEditingNames({});
+      saveHistory(url);
     } catch (e) {
       alert('解析失败: ' + String(e));
     } finally {
@@ -1131,6 +1146,20 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
               解析
             </button>
           </div>
+          {history.length > 0 && (
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-[10px] text-secondary">历史记录:</span>
+              {history.map((h, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => { setUrl(h); setTimeout(handleParse, 0); }}
+                  className="text-[10px] bg-surface-container text-secondary px-2 py-0.5 rounded hover:bg-primary/10 hover:text-primary transition-all max-w-[150px] truncate"
+                >
+                  {new URL(h).hostname}...{h.split('/').pop()}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="text-[10px] text-secondary">将自动提取页面中 yuedu:// 或 legado:// 协议的导入链接</p>
         </div>
 
@@ -1147,23 +1176,43 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
             </div>
           ) : (
             list.map((item, idx) => {
-              const displayName = item.name === '未知来源' 
+              const baseName = item.name === '未知来源' 
                 ? (item.url.split('/').pop()?.replace('.json', '') || '未知来源')
                 : item.name;
+              const currentName = editingNames[idx] ?? baseName;
+
               return (
-                <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-bold truncate text-sm">{displayName}</h4>
-                    <p className="text-[10px] text-secondary truncate mt-1 font-mono">{item.url}</p>
+                <div key={idx} className="flex flex-col p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1 flex flex-col">
+                      <input 
+                        type="text"
+                        value={currentName}
+                        onChange={(e) => setEditingNames({...editingNames, [idx]: e.target.value})}
+                        className="font-bold text-sm bg-transparent border-b border-transparent hover:border-outline focus:border-primary focus:bg-surface-container-lowest px-1 py-0.5 outline-none transition-all w-full"
+                      />
+                      <p className="text-[10px] text-secondary truncate mt-1 font-mono px-1">{item.url}</p>
+                    </div>
+                    <button 
+                      onClick={() => handleAdd({ ...item, name: currentName })}
+                      disabled={!!adding}
+                      className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                    >
+                      {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
+                      添加
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => handleAdd({ ...item, name: displayName })}
-                    disabled={!!adding}
-                    className="ml-4 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                  >
-                    {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
-                    添加
-                  </button>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {currentName.split(/[\s·\-_]+/).filter(s => s.length > 1).map((word, wi) => (
+                      <button 
+                        key={wi}
+                        onClick={() => setEditingNames({...editingNames, [idx]: word})}
+                        className="text-[10px] bg-secondary-container/20 text-secondary px-1.5 py-0.5 rounded hover:bg-primary hover:text-on-primary transition-all"
+                      >
+                        {word}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               );
             })
