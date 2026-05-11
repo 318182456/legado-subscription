@@ -380,82 +380,140 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             min-height: 100vh;
             color: #1C1B1F;
         }
-        .card {
-            background: white;
-            padding: 2rem;
-            border-radius: 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            width: 90%;
-            max-width: 400px;
+    <style>
+        :root {
+            --primary: #6750A4;
+            --on-primary: #ffffff;
+            --surface: #fef7ff;
+            --surface-container: #f3edf7;
+            --outline: #79747e;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #fef7ff 0%, #f3edf7 100%);
+            color: #1c1b1f;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 32px;
+            padding: 40px 24px;
+            box-shadow: 0 12px 40px var(--shadow);
             text-align: center;
         }
-        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--primary); }
-        p { color: var(--outline); font-size: 0.9rem; margin-bottom: 2rem; }
+        .header { margin-bottom: 28px; }
+        h1 {
+            font-size: 1.6rem;
+            color: var(--primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+            font-weight: 800;
+        }
+        .subtitle {
+            font-size: 0.95rem;
+            color: var(--outline);
+            margin-bottom: 28px;
+        }
+        h3 { margin-bottom: 12px; }
         .btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
-            background-color: var(--primary);
-            color: var(--on-primary);
+            gap: 12px;
+            width: 100%;
+            padding: 16px;
+            border-radius: 18px;
             text-decoration: none;
-            padding: 0.8rem 1.5rem;
-            border-radius: 2rem;
-            font-weight: bold;
-            margin-bottom: 1rem;
-            transition: transform 0.2s, opacity 0.2s;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 8px var(--shadow);
         }
-        .btn:active { transform: scale(0.98); opacity: 0.9; }
-        .btn-rules { background-color: #7D5260; }
-        .btn-info { background-color: #006A6A; }
-        .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem; }
-        h1 { font-size: 1.2rem; border-left: 4px solid var(--primary); padding-left: 0.5rem; margin: 1.5rem 0; }
-        h3 { margin: 1rem 0; }
+        .btn:active { transform: scale(0.96); box-shadow: 0 1px 2px var(--shadow); }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #6750A4 0%, #9580FF 100%);
+            color: var(--on-primary);
+        }
+        .btn-sources {
+            background-color: #EADDFF;
+            color: #21005D;
+        }
+        .btn-rules {
+            background-color: #FFD8E4;
+            color: #31111D;
+        }
+        
+        .icon { font-size: 1.3rem; }
+        .footer {
+            margin-top: 36px;
+            font-size: 0.8rem;
+            color: var(--outline);
+            opacity: 0.7;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            padding-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <h1>📚 订阅中心</h1>
-    
-    <script>
-        function importToLegado(type, path) {
-            const origin = window.location.origin;
-            const srcUrl = origin + path;
-            const protocol = type === 'rss' ? 'yuedu://rsssource/importonline?src=' : 
-                             type === 'book' ? 'yuedu://booksource/importonline?src=' : 
-                             'yuedu://purificationsource/importonline?src=';
-            const fullUrl = protocol + encodeURIComponent(srcUrl);
-            
-            // 尝试静默唤起：创建一个隐藏的 iframe 来触发协议
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = fullUrl;
-            document.body.appendChild(iframe);
-            setTimeout(() => document.body.removeChild(iframe), 1000);
-            
-            // 兼容性回退：如果 iframe 没反应（比如在某些外部浏览器），则尝试直接跳转
-            setTimeout(() => {
-                // 如果是阅读内部，不再进行直接跳转以免报错或显示源码
-                if (!navigator.userAgent.includes('Legado') && !navigator.userAgent.includes('yuedu')) {
-                    window.location.href = fullUrl;
-                }
-            }, 500);
-        }
-    </script>
+    <div class="container">
+        <div class="header">
+            <h1>📚 订阅中心</h1>
+            <p class="subtitle">Legado 资源一键整合导入</p>
+        </div>
+        
+        <script>
+            function importToLegado(type, path) {
+                const origin = window.location.origin;
+                const srcUrl = origin + path;
+                const protocol = type === 'rss' ? 'yuedu://rsssource/importonline?src=' : 
+                                 type === 'book' ? 'yuedu://booksource/importonline?src=' : 
+                                 'yuedu://purificationsource/importonline?src=';
+                const fullUrl = protocol + encodeURIComponent(srcUrl);
+                
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = fullUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+                
+                setTimeout(() => {
+                    if (!navigator.userAgent.includes('Legado') && !navigator.userAgent.includes('yuedu')) {
+                        window.location.href = fullUrl;
+                    }
+                }, 500);
+            }
+        </script>
 
-    <h3><a href="javascript:void(0)" onclick="importToLegado('rss', '/subscribe/info.json')" class="btn btn-info">
-        <span>✨</span> 添加到阅读发现
-    </a></h3>
+        <h3><a href="${origin}/subscribe/info.json" onclick="importToLegado('rss', '/subscribe/info.json'); return false;" class="btn btn-info">
+            <span class="icon">✨</span> 添加到阅读发现
+        </a></h3>
 
-    <h3><a href="javascript:void(0)" onclick="importToLegado('book', '/subscribe/sources')" class="btn">
-        <span>📚</span> 整合书源订阅
-    </a></h3>
-    
-    <h3><a href="javascript:void(0)" onclick="importToLegado('rule', '/subscribe/rules')" class="btn btn-rules">
-        <span>✨</span> 整合净化规则订阅
-    </a></h3>
+        <h3><a href="${origin}/subscribe/sources" onclick="importToLegado('book', '/subscribe/sources'); return false;" class="btn btn-sources">
+            <span class="icon">📚</span> 整合书源订阅
+        </a></h3>
+        
+        <h3><a href="${origin}/subscribe/rules" onclick="importToLegado('rule', '/subscribe/rules'); return false;" class="btn btn-rules">
+            <span class="icon">✨</span> 整合净化规则
+        </a></h3>
 
-    <div class="footer">
-        由 Legado Subscription 系统自动生成
+        <div class="footer">
+            由 Legado Subscription 系统自动生成
+        </div>
     </div>
 </body>
 </html>
