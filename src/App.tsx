@@ -64,7 +64,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 h-full w-[240px] bg-surface-container-lowest border-r border-outline-variant flex flex-col z-40">
         <div className="p-6 mb-4 flex flex-col gap-2">
@@ -143,7 +143,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-[240px] flex flex-col min-h-screen">
+      <main className="flex-1 ml-[240px] flex flex-col h-screen overflow-hidden">
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-6 sticky top-0 bg-surface-container-lowest border-b border-outline-variant z-30">
           <div className="flex-1 max-w-md relative">
@@ -166,7 +166,7 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <div className="p-8 max-w-[1440px] mx-auto w-full">
+        <div className="p-8 max-w-[1440px] mx-auto w-full overflow-y-auto flex-1">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
@@ -575,21 +575,23 @@ function SourceListView({ onImport }: { onImport: () => void }) {
             value={stats.available.toLocaleString()} 
             color="bg-green-500/10 text-green-600"
           />
-          <StatCard 
-            icon={<AlertCircle size={24} />} 
-            label="失效书源" 
-            value={stats.unavailable.toLocaleString()} 
-            color="bg-error/10 text-error"
-          />
-          {stats.unavailable > 0 && (
-            <button 
-              onClick={handleCleanup}
-              className="absolute -top-2 -right-2 bg-error text-white p-1 rounded-full shadow-lg hover:scale-110 transition-transform"
-              title="清理所有失效书源"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
+          <div className="relative">
+            <StatCard 
+              icon={<AlertCircle size={24} />} 
+              label="失效书源" 
+              value={stats.unavailable.toLocaleString()} 
+              color="bg-error/10 text-error"
+            />
+            {stats.unavailable > 0 && (
+              <button 
+                onClick={handleCleanup}
+                className="absolute -top-1 -right-1 bg-error text-white p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform z-10"
+                title="清理所有失效书源"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
