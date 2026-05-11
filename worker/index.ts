@@ -115,7 +115,9 @@ export default {
 
       // ── /api/sources / rules ──────────────────────────────────────
       if (path === "/api/sources" && method === "GET") return handleListSources(env, url);
+      if (path === "/api/sources/ids" && method === "GET") return handleAllSourceIds(env);
       if (path === "/api/rules" && method === "GET") return handleListRules(env, url);
+      if (path === "/api/sources/test" && method === "POST") return handleTestSources(env, request);
 
       // ── /api/parse-links ──────────────────────────────────────────
       if (path === "/api/parse-links" && method === "GET") return handleParseLinks(url);
@@ -375,12 +377,17 @@ async function handleStats(env: Env): Promise<Response> {
 async function handleListSources(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
-  const limit = 50;
+  const limit = 200;
   const offset = (page - 1) * limit;
   const { results } = await env.DB.prepare(
     `SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT ? OFFSET ?`
   ).bind(`%${q}%`, limit, offset).all();
   return ok(results);
+}
+
+async function handleAllSourceIds(env: Env): Promise<Response> {
+  const { results } = await env.DB.prepare("SELECT id FROM sources WHERE enabled = 1").all();
+  return ok(results.map((r: any) => r.id));
 }
 
 async function handleListRules(env: Env, url: URL): Promise<Response> {
@@ -485,6 +492,50 @@ async function handleParseLinks(url: URL): Promise<Response> {
     const isTimeout = (e as Error).name === 'AbortError';
     return err(isTimeout ? "请求超时，目标网站响应过慢" : `解析失败: ${(e as Error).message}`, 500);
   }
+}
+async function handleTestSources(env: Env, request: Request): Promise<Response> {
+  const { ids } = await parseBody<{ ids: number[] }>(request);
+  if (!ids || !ids.length) return err("ids 不能为空");
+
+  const results: Record<number, boolean> = {};
+  
+  // 并发测试，限制 5 个
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 5) {
+    chunks.push(ids.slice(i, i + 5));
+  }
+
+  for (const chunk of chunks) {
+    const tests = chunk.map(async (id) => {
+      const src = await env.DB.prepare("SELECT book_source_url FROM sources WHERE id = ?").bind(id).first() as any;
+      if (!src) {
+        results[id] = false;
+        return;
+      }
+      try {
+        const res = await fetch(src.book_source_url, { 
+          method: 'HEAD', 
+          headers: { 'User-Agent': 'Mozilla/5.0 Legado-Check/1.0' },
+          signal: AbortSignal.timeout(5000)
+        });
+        results[id] = res.ok;
+      } catch (e) {
+        results[id] = false;
+      }
+      
+      // 如果测试不通过，自动禁用
+      if (!results[id]) {
+        await env.DB.prepare("UPDATE sources SET enabled = 0, is_available = 0, last_checked = datetime('now') WHERE id = ?")
+          .bind(id).run();
+      } else {
+        await env.DB.prepare("UPDATE sources SET is_available = 1, last_checked = datetime('now') WHERE id = ?")
+          .bind(id).run();
+      }
+    });
+    await Promise.all(tests);
+  }
+
+  return ok(results);
 }
 
 async function handleScheduled(env: Env) {

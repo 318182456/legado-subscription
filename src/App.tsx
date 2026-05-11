@@ -416,6 +416,8 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   const [hasMore, setHasMore] = useState(true);
   const [query, setQuery] = useState('');
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
 
   const fetchSources = async (q = '', p = 1, append = false) => {
     if (p === 1) setLoading(true);
@@ -449,10 +451,56 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const loadMore = () => {
-    if (!loading && !loadingMore && hasMore) {
-      fetchSources(query, page + 1, true);
+  const handleTest = async (ids: number[]) => {
+    if (!ids.length) return;
+    const nextTesting = new Set(testingIds);
+    ids.forEach(id => nextTesting.add(id));
+    setTestingIds(nextTesting);
+
+    try {
+      // 如果数量很大，分片发送
+      const chunkSize = 20;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        await api.testSources(chunk);
+      }
+      fetchSources(query, 1);
+    } catch (e) {
+      alert('测试执行失败: ' + String(e));
+    } finally {
+      setTestingIds(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => next.delete(id));
+        return next;
+      });
     }
+  };
+
+  const handleTestAll = async () => {
+    try {
+      setLoading(true);
+      const allIds = await api.getAllSourceIds();
+      await handleTest(allIds);
+    } catch (e) {
+      alert('获取全部 ID 失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === sources.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sources.map(s => s.id)));
+    }
+  };
+
+  const toggleOne = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
   };
 
   if (loading && page === 1) {
@@ -470,29 +518,46 @@ function SourceListView({ onImport }: { onImport: () => void }) {
           <h2 className="text-2xl font-bold tracking-tight">书源管理</h2>
           <p className="text-sm text-secondary mt-1">管理并配置您的所有阅读源站点。</p>
         </div>
-        <div className="flex w-full md:w-auto items-center gap-3">
-          <div className="relative flex-1 md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={18} />
+        <div className="flex w-full md:w-auto items-center gap-2">
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
             <input 
               type="text" 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索书源名称或 URL..."
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-outline"
+              placeholder="搜索书源..."
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none focus:border-primary transition-all"
             />
           </div>
+          
+          {selectedIds.size > 0 && (
+            <button 
+              onClick={() => handleTest(Array.from(selectedIds))}
+              className="bg-tertiary text-on-tertiary px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 flex items-center gap-1.5"
+            >
+              <Zap size={14} /> 测试选中 ({selectedIds.size})
+            </button>
+          )}
+
+          <button 
+            onClick={handleTestAll}
+            disabled={loading && testingIds.size > 0}
+            className="border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <ShieldCheck size={14} /> {loading && testingIds.size > 0 ? `测试中 (${testingIds.size})...` : '全部测试 (库)'}
+          </button>
+
           <button 
             onClick={() => fetchSources(query, 1)}
-            className="p-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low transition-colors shadow-sm"
+            className="p-1.5 border border-outline-variant rounded-lg bg-surface-container-lowest hover:bg-surface-container-low transition-colors"
           >
-            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={loading && testingIds.size === 0 ? 'animate-spin' : ''} />
           </button>
           <button 
             onClick={onImport}
-            className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all flex items-center gap-2 shadow-sm shrink-0"
+            className="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1.5 shadow-sm"
           >
-            <Upload size={18} />
-            导入阅读源
+            <Upload size={16} /> 导入书源
           </button>
         </div>
       </div>
@@ -501,12 +566,19 @@ function SourceListView({ onImport }: { onImport: () => void }) {
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface text-secondary text-xs font-semibold uppercase tracking-wider border-b border-outline-variant">
-                <th className="py-3 px-6 w-12"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></th>
-                <th className="py-3 px-6">源名称</th>
-                <th className="py-3 px-6">URL / 分组</th>
-                <th className="py-3 px-6">状态</th>
-                <th className="py-3 px-6 text-right w-24">操作</th>
+              <tr className="bg-surface text-secondary text-[10px] font-bold uppercase tracking-wider border-b border-outline-variant">
+                <th className="py-2 px-4 w-10 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.size === sources.length && sources.length > 0}
+                    onChange={toggleAll}
+                    className="rounded border-outline text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer" 
+                  />
+                </th>
+                <th className="py-2 px-4">源名称</th>
+                <th className="py-2 px-4">URL / 分组</th>
+                <th className="py-2 px-4 text-center">状态 / 可用性</th>
+                <th className="py-2 px-4 text-right w-24">操作</th>
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-outline-variant/30">
@@ -516,33 +588,49 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                 </tr>
               ) : (
                 sources.map((source, idx) => (
-                  <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors group relative">
-                    <td className="py-4 px-6"><input type="checkbox" className="rounded-sm border-outline text-primary focus:ring-primary h-4 w-4" /></td>
-                    <td className="py-4 px-6">
+                  <tr key={source.id} className={`hover:bg-surface-container-low/50 transition-colors group relative ${!source.enabled ? 'opacity-60' : ''}`}>
+                    <td className="py-3 px-4 text-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.has(source.id)}
+                        onChange={() => toggleOne(source.id)}
+                        className="rounded border-outline text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer" 
+                      />
+                    </td>
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-sm">
+                        <div className="w-7 h-7 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-xs shrink-0">
                           {source.name.charAt(0)}
                         </div>
-                        <span className="font-semibold">{source.name}</span>
+                        <span className="font-bold text-sm truncate">{source.name}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-6">
-                      <div className="text-secondary truncate max-w-xs">{source.book_source_url}</div>
-                      <div className="mt-1 flex gap-1">
+                    <td className="py-3 px-4">
+                      <div className="text-[10px] text-secondary truncate max-w-[200px] font-mono">{source.book_source_url}</div>
+                      <div className="mt-0.5 flex gap-1">
                         {source.group_name && (
-                          <span className="text-[10px] bg-secondary-container/30 text-secondary px-1.5 py-0.5 rounded">{source.group_name}</span>
+                          <span className="text-[9px] bg-secondary-container/30 text-secondary px-1.5 py-0.5 rounded">{source.group_name}</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        source.enabled ? 'bg-surface-container-high text-primary' : 'bg-secondary-container text-secondary'
-                      }`}>
-                        <span className={`w-2 h-2 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
-                        {source.enabled ? '已启用' : '已禁用'}
-                      </span>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          source.enabled ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-secondary'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
+                          {source.enabled ? '已启用' : '已禁用'}
+                        </span>
+                        {testingIds.has(source.id) ? (
+                          <span className="text-[9px] text-tertiary animate-pulse font-bold">测试中...</span>
+                        ) : source.last_checked && (
+                          <span className={`text-[9px] font-bold ${source.is_available ? 'text-green-500' : 'text-error'}`}>
+                            {source.is_available ? '正常' : '不可用'}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-4 px-6 text-right relative">
+                    <td className="py-3 px-4 text-right relative">
                       <button 
                         onClick={() => setActiveMenu(activeMenu === idx ? null : idx)}
                         className="p-1 text-secondary hover:text-primary transition-colors"
@@ -554,8 +642,11 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
                           <div className="absolute right-6 top-10 w-32 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden text-left">
-                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
-                              <Eye size={14} /> 查看详情
+                            <button 
+                              onClick={() => { handleTest([source.id]); setActiveMenu(null); }}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2"
+                            >
+                              <Zap size={14} /> 立即测试
                             </button>
                             <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
                               <Copy size={14} /> 复制 URL

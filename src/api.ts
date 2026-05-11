@@ -138,6 +138,8 @@ export const syncAll = () => apiFetch<any>("/api/sync", { method: "POST" });
 export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method: "POST" });
 
 export const getSources = (q = "", page = 1) => apiFetch<any[]>(`/api/sources?q=${q}&page=${page}`);
+export const getAllSourceIds = () => apiFetch<number[]>("/api/sources/ids");
 export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}&page=${page}`);
 
+export const testSources = (ids: number[]) => apiFetch<Record<number, boolean>>("/api/sources/test", { method: "POST", body: JSON.stringify({ ids }) });
 export const parseLinks = (url: string) => apiFetch<{ name: string; url: string }[]>(`/api/parse-links?url=${encodeURIComponent(url)}`);
