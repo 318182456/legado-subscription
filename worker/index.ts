@@ -409,45 +409,24 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         .btn-rules { background-color: #7D5260; }
         .btn-info { background-color: #006A6A; }
         .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; }
-        
-        /* 隐藏在阅读内部无用的提示 */
-        .is-legado .footer { display: none; }
     </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const isLegado = navigator.userAgent.includes('Legado') || navigator.userAgent.includes('yuedu');
-            if (isLegado) document.body.classList.add('is-legado');
-            
-            // 智能拦截：如果在阅读内部点击 yuedu:// 链接，自动重定向到 src 目标
-            document.addEventListener('click', (e) => {
-                const a = e.target.closest('a');
-                if (a && a.href.startsWith('yuedu://')) {
-                    const url = new URL(a.href.replace('yuedu://', 'http://unused.com/'));
-                    const src = url.searchParams.get('src');
-                    if (src && isLegado) {
-                        e.preventDefault();
-                        window.location.href = src;
-                    }
-                }
-            });
-        });
-    </script>
 </head>
 <body>
     <div class="card">
         <h1>📚 书源整合订阅</h1>
         <p>点击下方按钮一键导入阅读 APP</p>
-        <a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
-            <span>✨</span> 添加到阅读发现
-        </a>
-
-        <a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
-            <span>📚</span> 整合书源订阅
-        </a>
         
-        <a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
+        <h3><a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
+            <span>✨</span> 添加到阅读发现
+        </a></h3>
+
+        <h3><a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
+            <span>📚</span> 整合书源订阅
+        </a></h3>
+        
+        <h3><a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
             <span>✨</span> 整合净化规则订阅
-        </a>
+        </a></h3>
 
         <div class="footer">
             由 Legado Subscription 系统自动生成
@@ -475,16 +454,19 @@ function handleSubscribeInfo(request: Request): Response {
       "sourceUrl": `${origin}/subscribe/index`,
       "sourceIcon": icon,
       "sourceGroup": "整合",
+      "header": JSON.stringify({
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile Safari/537.36) Legado/3.0"
+      }),
       "ruleExplore": [
         {
-          "title": "整合中心",
+          "title": "订阅中心",
           "url": `${origin}/subscribe/index`,
           "style": "layout_t_p_b64"
         }
       ],
-      "ruleArticles": "a.btn",
-      "ruleTitle": "text",
-      "ruleLink": "attr(href)@js:result.includes('src=') ? decodeURIComponent(result.split('src=')[1]) : result",
+      "ruleArticles": "h3",
+      "ruleTitle": "a@text",
+      "ruleLink": "a@href",
       "enabled": true,
       "type": 3
     }
