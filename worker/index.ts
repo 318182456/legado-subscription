@@ -427,7 +427,7 @@ async function handleListSources(env: Env, url: URL): Promise<Response> {
 }
 
 async function handleAllSourceIds(env: Env): Promise<Response> {
-  const { results } = await env.DB.prepare("SELECT id FROM sources WHERE enabled = 1").all();
+  const { results } = await env.DB.prepare("SELECT id FROM sources").all();
   return ok(results.map((r: any) => r.id));
 }
 
@@ -577,7 +577,7 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
   const statements = ids.map(id => {
     const isAvail = testResults[id] ? 1 : 0;
     return env.DB.prepare(
-      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = CASE WHEN ? = 0 THEN 0 ELSE enabled END WHERE id = ?"
+      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = ? WHERE id = ?"
     ).bind(isAvail, isAvail, id);
   });
   

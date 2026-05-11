@@ -41,6 +41,25 @@ import { motion, AnimatePresence } from 'motion/react';
 
 type Page = 'dashboard' | 'subscriptions' | 'sources' | 'rules' | 'settings';
 
+const formatDate = (dateInput: string | number | Date) => {
+  if (!dateInput) return '-';
+  try {
+    const date = new Date(dateInput);
+    return new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(date).replace(/\//g, '-');
+  } catch (e) {
+    return String(dateInput);
+  }
+};
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(!!api.getToken());
@@ -376,7 +395,7 @@ function DashboardView({ onImport }: { onImport: () => void }) {
                 recentSources.map((source, idx) => (
                   <tr key={idx} className="border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors">
                     <td className="py-4 px-6 font-medium">{source.name}</td>
-                    <td className="py-4 px-6 text-secondary">{new Date(source.updated_at).toLocaleString()}</td>
+                    <td className="py-4 px-6 text-secondary">{formatDate(source.updated_at)}</td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                         source.enabled ? 'bg-surface-container-high text-primary' : 'bg-secondary-container text-secondary'
@@ -659,7 +678,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
         <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface text-secondary text-[10px] font-bold uppercase tracking-wider border-b border-outline-variant">
+              <tr className="bg-surface text-secondary text-xs font-bold uppercase tracking-wider border-b border-outline-variant">
                 <th className="py-2 px-4 w-10 text-center">
                   <input 
                     type="checkbox" 
@@ -692,17 +711,17 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                     </td>
                     <td className="py-2 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-[10px] shrink-0">
+                        <div className="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-xs shrink-0">
                           {Array.from(source.name || "?")[0]}
                         </div>
-                        <span className="font-bold text-xs truncate">{source.name}</span>
+                        <span className="font-bold text-sm truncate">{source.name}</span>
                       </div>
                     </td>
                     <td className="py-2 px-4">
-                      <div className="text-[10px] text-secondary truncate max-w-[200px] font-mono">{source.book_source_url}</div>
+                      <div className="text-xs text-secondary truncate max-w-[200px] font-mono">{source.book_source_url}</div>
                       <div className="mt-0.5 flex gap-1">
                         {source.group_name && (
-                          <span className="text-[9px] bg-secondary-container/30 text-secondary px-1.5 py-0.2 rounded">{source.group_name}</span>
+                          <span className="text-[11px] bg-secondary-container/30 text-secondary px-1.5 py-0.2 rounded">{source.group_name}</span>
                         )}
                       </div>
                     </td>
@@ -710,7 +729,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                       <div className="flex flex-col items-center gap-0.5">
                         <button 
                           onClick={() => handleToggleSource(source.id, !!source.enabled)}
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold transition-colors ${
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[11px] font-bold transition-colors ${
                             source.enabled ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
                           }`}
                         >
@@ -718,9 +737,9 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                           {source.enabled ? '已启用' : '已禁用'}
                         </button>
                         {testingIds.has(source.id) ? (
-                          <span className="text-[9px] text-tertiary animate-pulse font-bold">测试中...</span>
+                          <span className="text-[11px] text-tertiary animate-pulse font-bold">测试中...</span>
                         ) : source.last_checked && (
-                          <span className={`text-[9px] font-bold ${source.is_available ? 'text-green-500' : 'text-error'}`}>
+                          <span className={`text-[11px] font-bold ${source.is_available ? 'text-green-500' : 'text-error'}`}>
                             {source.is_available ? '正常' : '不可用'}
                           </span>
                         )}
@@ -767,7 +786,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
           </table>
           
           <div className="p-3 flex justify-between items-center border-t border-outline-variant/30 bg-surface-bright shrink-0">
-            <div className="text-[10px] font-bold text-secondary">
+            <div className="text-xs font-bold text-secondary">
               共 {total} 条数据，第 {page} / {totalPages} 页
             </div>
             <div className="flex items-center gap-2">
@@ -947,7 +966,11 @@ function RulesView({ onImport }: { onImport: () => void }) {
                         </code>
                       </div>
                     </td>
-                    <td className="py-4 px-6 italic text-secondary break-all">{rule.replacement || '(删除)'}</td>
+                    <td className="py-4 px-6 italic text-secondary">
+                      <div className="max-h-16 overflow-y-auto scrollbar-hide text-[11px] break-all leading-relaxed">
+                        {rule.replacement || '(删除)'}
+                      </div>
+                    </td>
                     <td className="py-4 px-6 text-center">
                       <button 
                         onClick={() => handleToggleRule(rule.id, !!rule.enabled)}
@@ -1128,7 +1151,7 @@ function SubscriptionView({ onImport, onExplore }: { onImport: () => void; onExp
                   <p className="text-xs text-secondary truncate font-mono mt-1">{sub.url}</p>
                   <div className="flex items-center gap-4 mt-2 text-[10px] text-secondary font-medium">
                     <span className="flex items-center gap-1"><Book size={12} /> {sub.item_count} 条项目</span>
-                    <span className="flex items-center gap-1"><RefreshCw size={12} /> {sub.last_synced ? new Date(sub.last_synced).toLocaleString() : '从未同步'}</span>
+                    <span className="flex items-center gap-1"><RefreshCw size={12} /> {sub.last_synced ? formatDate(sub.last_synced) : '从未同步'}</span>
                   </div>
                 </div>
               </div>
@@ -1636,7 +1659,7 @@ function SettingsView() {
                           <ShieldCheck className="text-primary" size={20} />
                           <div>
                             <p className="text-sm font-medium">{pk.name}</p>
-                            <p className="text-xs text-secondary">注册于 {new Date(pk.created_at).toLocaleString()}</p>
+                            <p className="text-xs text-secondary">注册于 {formatDate(pk.created_at)}</p>
                           </div>
                         </div>
                         <button 
