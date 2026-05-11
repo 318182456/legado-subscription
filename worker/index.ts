@@ -392,7 +392,7 @@ async function handleListSources(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
   const filter = url.searchParams.get("filter") || "all";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
-  const limit = Math.max(10, Number(url.searchParams.get("limit") || "20"));
+  const limit = Math.max(5, Number(url.searchParams.get("limit") || "10"));
   const offset = (page - 1) * limit;
 
   let where = "name LIKE ?";
@@ -534,48 +534,52 @@ async function handleParseLinks(url: URL): Promise<Response> {
   }
 }
 async function handleTestSources(env: Env, request: Request): Promise<Response> {
-  const { ids } = await parseBody<{ ids: number[] }>(request);
-  if (!ids || !ids.length) return err("ids 不能为空");
+  const body = await parseBody<{ ids: number[] }>(request);
+  const ids = body?.ids || [];
+  if (!ids.length) return ok({});
 
-  const results: Record<number, boolean> = {};
+  // 1. 一次性查出所有 URL
+  const { results: rawSources } = await env.DB.prepare(
+    `SELECT id, book_source_url FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
+  ).bind(...ids).all();
   
-  // 并发测试，限制 5 个
-  const chunks = [];
-  for (let i = 0; i < ids.length; i += 5) {
-    chunks.push(ids.slice(i, i + 5));
-  }
+  const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s.book_source_url]));
+  const testResults: Record<number, boolean> = {};
 
-  for (const chunk of chunks) {
-    const tests = chunk.map(async (id) => {
-      const src = await env.DB.prepare("SELECT book_source_url FROM sources WHERE id = ?").bind(id).first() as any;
-      if (!src) {
-        results[id] = false;
+  // 2. 并发测试
+  const chunkSize = 15; // 提高 Worker 内并发
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    await Promise.all(chunk.map(async (id) => {
+      const url = sourcesMap.get(id);
+      if (!url) {
+        testResults[id] = false;
         return;
       }
       try {
-        const res = await fetch(src.book_source_url, { 
+        const res = await fetch(url, { 
           method: 'HEAD', 
-          headers: { 'User-Agent': 'Mozilla/5.0 Legado-Check/1.0' },
-          signal: AbortSignal.timeout(5000)
+          headers: { 'User-Agent': 'Mozilla/5.0 Legado/1.0' },
+          signal: AbortSignal.timeout(3000) // 缩短超时到 3秒
         });
-        results[id] = res.ok;
+        testResults[id] = res.ok;
       } catch (e) {
-        results[id] = false;
+        testResults[id] = false;
       }
-      
-      // 如果测试不通过，自动禁用
-      if (!results[id]) {
-        await env.DB.prepare("UPDATE sources SET enabled = 0, is_available = 0, last_checked = datetime('now') WHERE id = ?")
-          .bind(id).run();
-      } else {
-        await env.DB.prepare("UPDATE sources SET is_available = 1, last_checked = datetime('now') WHERE id = ?")
-          .bind(id).run();
-      }
-    });
-    await Promise.all(tests);
+    }));
   }
 
-  return ok(results);
+  // 3. 批量更新数据库 (Cloudflare D1 batch)
+  const statements = ids.map(id => {
+    const isAvail = testResults[id] ? 1 : 0;
+    return env.DB.prepare(
+      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = CASE WHEN ? = 0 THEN 0 ELSE enabled END WHERE id = ?"
+    ).bind(isAvail, isAvail, id);
+  });
+  
+  await env.DB.batch(statements);
+
+  return ok(testResults);
 }
 
 async function handleSourceAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {

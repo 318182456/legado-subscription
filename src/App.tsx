@@ -455,15 +455,15 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     setTestingIds(nextTesting);
 
     try {
-      // 提高并发度，同时处理多个分片
-      const chunkSize = 20;
+      // 提高并发度，同时处理更多分片
+      const chunkSize = 30;
       const chunks = [];
       for (let i = 0; i < ids.length; i += chunkSize) {
         chunks.push(ids.slice(i, i + chunkSize));
       }
 
-      // 限制同时进行的请求批次，避免 Worker 超载
-      const batchSize = 3; 
+      // 同时进行 5 个请求批次，显著提升速度
+      const batchSize = 5; 
       for (let i = 0; i < chunks.length; i += batchSize) {
         const batch = chunks.slice(i, i + batchSize);
         await Promise.all(batch.map(chunk => api.testSources(chunk)));
@@ -676,7 +676,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
               ) : (
                 sources.map((source, idx) => (
                   <tr key={source.id} className={`hover:bg-surface-container-low/50 transition-colors group relative ${!source.enabled ? 'opacity-60' : ''}`}>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-2 px-4 text-center">
                       <input 
                         type="checkbox" 
                         checked={selectedIds.has(source.id)}
@@ -684,31 +684,31 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                         className="rounded border-outline text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer" 
                       />
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                        <div className="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-[10px] shrink-0">
                           {source.name.charAt(0)}
                         </div>
-                        <span className="font-bold text-sm truncate">{source.name}</span>
+                        <span className="font-bold text-xs truncate">{source.name}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-4">
                       <div className="text-[10px] text-secondary truncate max-w-[200px] font-mono">{source.book_source_url}</div>
                       <div className="mt-0.5 flex gap-1">
                         {source.group_name && (
-                          <span className="text-[9px] bg-secondary-container/30 text-secondary px-1.5 py-0.5 rounded">{source.group_name}</span>
+                          <span className="text-[9px] bg-secondary-container/30 text-secondary px-1.5 py-0.2 rounded">{source.group_name}</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex flex-col items-center gap-1">
+                    <td className="py-2 px-4 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
                         <button 
                           onClick={() => handleToggleSource(source.id, !!source.enabled)}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold transition-colors ${
                             source.enabled ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
                           }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
+                          <span className={`w-1 h-1 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
                           {source.enabled ? '已启用' : '已禁用'}
                         </button>
                         {testingIds.has(source.id) ? (
@@ -720,7 +720,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right relative">
+                    <td className="py-2 px-4 text-right relative">
                       <button 
                         onClick={() => setActiveMenu(activeMenu === idx ? null : idx)}
                         className="p-1 text-secondary hover:text-primary transition-colors"
