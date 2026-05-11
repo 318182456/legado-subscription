@@ -476,6 +476,17 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             color: var(--outline);
             line-height: 1.6;
         }
+        .btn-danger {
+            background-color: #FFDAD6;
+            color: #410002;
+            margin-top: 8px;
+        }
+        .btn-danger:active { background-color: #FFBAB1; }
+        .divider {
+            margin: 16px 0;
+            border: none;
+            border-top: 1px dashed rgba(0,0,0,0.12);
+        }
     </style>
 </head>
 <body>
@@ -484,22 +495,67 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             <h1>📚 订阅中心</h1>
             <p class="subtitle">Legado 资源一键整合导入</p>
         </div>
-        
-        <h3><a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-sources">
-            📚 整合书源订阅
-        </a></h3>
-        
+
         <h3><a href="legado://import/rssSource?src=${encodeURIComponent(origin + '/subscribe/info.json')}" class="btn btn-info">
             ✨ 添加到阅读发现
+        </a></h3>
+
+        <h3><a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-sources">
+            📚 整合书源订阅
         </a></h3>
 
         <h3><a href="legado://import/replaceRule?src=${encodeURIComponent(origin + '/subscribe/rules')}" class="btn btn-rules">
             ✨ 整合净化规则
         </a></h3>
 
+        <hr class="divider">
+
+        <h3><a href="#" onclick="clearAndImport(); return false;" class="btn btn-danger">
+            🗑️ 清除本地书源并重新订阅
+        </a></h3>
+
         <div class="tip">
-            💡 <strong>使用说明</strong>：请直接点击上方按钮导入。
+            💡 <strong>使用说明</strong>：请在阅读 App 的发现列表中点击导入。<br>
+            ⚠️ <strong>清除功能</strong>：需先在阅读设置中开启 <strong>Web 服务</strong>，清除操作<strong>不可恢复</strong>。
         </div>
+
+        <script>
+            async function clearAndImport() {
+                // 阅读 App 本地 Web API 默认端口
+                const port = 1234;
+                const base = 'http://127.0.0.1:' + port;
+                const importUrl = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
+
+                try {
+                    // 1. 获取所有本地书源
+                    const res = await fetch(base + '/getBookSources', { signal: AbortSignal.timeout(3000) });
+                    if (!res.ok) throw new Error('无法连接到阅读 Web 服务');
+                    const sources = await res.json();
+
+                    if (!Array.isArray(sources) || sources.length === 0) {
+                        // 本地没有书源，直接跳转导入
+                        location.href = importUrl;
+                        return;
+                    }
+
+                    const confirmed = confirm('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源，确定？');
+                    if (!confirmed) return;
+
+                    // 2. 批量删除所有本地书源
+                    const delRes = await fetch(base + '/deleteBookSources', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sources)
+                    });
+                    if (!delRes.ok) throw new Error('删除书源失败');
+
+                    // 3. 跳转导入新书源
+                    location.href = importUrl;
+                } catch (e) {
+                    alert('操作失败：' + e.message + '\n\n请在阅读「设置 → Web 服务」中开启 Web 服务后重试。');
+                }
+            }
+        </script>
 
         <div class="footer">
             由 Legado Subscription 系统自动生成
