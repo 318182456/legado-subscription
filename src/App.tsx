@@ -570,22 +570,6 @@ function SourceListView({
     }
   };
 
-  const handleCleanup = async () => {
-    if (!confirm(`确定要删除所有 ${stats.unavailable} 个失效书源吗？此操作不可恢复。`)) return;
-    try {
-      setLoading(true);
-      const data = await api.getSources("", 1, "unavailable");
-      // 注意：这里删除当前页能看到的失效源
-      await Promise.all(data.sources.map((s: any) => api.deleteSource(s.id)));
-      alert('清理完成 (当前页)');
-      fetchSources(query, 1, filter);
-    } catch (e) {
-      alert('清理失败: ' + String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCopyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
     alert('已复制到剪贴板');
@@ -622,15 +606,6 @@ function SourceListView({
               value={stats.unavailable.toLocaleString()} 
               color="bg-error/10 text-error"
             />
-            {stats.unavailable > 0 && (
-              <button 
-                onClick={handleCleanup}
-                className="absolute -top-1 -right-1 bg-error text-white p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform z-10"
-                title="清理所有失效书源"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
           </div>
         </div>
 
