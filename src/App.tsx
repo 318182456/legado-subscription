@@ -143,7 +143,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-[240px] flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 ml-[240px] flex flex-col overflow-hidden relative">
         {/* Header */}
         <header className="h-16 flex items-center justify-between px-6 sticky top-0 bg-surface-container-lowest border-b border-outline-variant z-30">
           <div className="flex-1 max-w-md relative">
@@ -166,7 +166,8 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <div className="p-8 max-w-[1440px] mx-auto w-full overflow-y-auto flex-1">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-8">
+          <div className="max-w-[1440px] mx-auto w-full">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
@@ -1551,6 +1552,7 @@ function SummaryIconCard({ icon, label, value }: { icon: React.ReactNode; label:
 function SettingsView() {
   const [passkeys, setPasskeys] = useState<api.PasskeyItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncingAll, setSyncingAll] = useState(false);
 
   const fetchPasskeys = async () => {
     try {
@@ -1584,6 +1586,19 @@ function SettingsView() {
       fetchPasskeys();
     } catch (e) {
       alert(`删除失败: ${String(e)}`);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    if (syncingAll) return;
+    setSyncingAll(true);
+    try {
+      await api.syncAll();
+      alert('同步成功');
+    } catch (e) {
+      alert(`同步失败: ${String(e)}`);
+    } finally {
+      setSyncingAll(false);
     }
   };
 
@@ -1662,11 +1677,12 @@ function SettingsView() {
                 <p className="text-xs text-secondary">立即从所有上游订阅源更新数据</p>
               </div>
               <button 
-                onClick={() => api.syncAll().then(() => alert('同步成功')).catch(e => alert(e))}
-                className="bg-surface-container-high px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-highest transition-colors flex items-center gap-2"
+                onClick={handleSyncAll}
+                disabled={syncingAll}
+                className="bg-surface-container-high px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-highest transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                <RefreshCw size={16} />
-                立即同步
+                <RefreshCw size={16} className={syncingAll ? 'animate-spin' : ''} />
+                {syncingAll ? '同步中...' : '立即同步'}
               </button>
             </div>
           </div>
