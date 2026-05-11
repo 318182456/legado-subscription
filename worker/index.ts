@@ -508,7 +508,21 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 
         <hr class="divider">
 
-        <h3><a href="#" onclick="clearAndImport(); return false;" class="btn btn-danger">
+        <!-- 状态提示条 -->
+        <div id="status-bar" style="display:none;margin-bottom:12px;padding:12px 16px;border-radius:14px;font-size:0.85rem;line-height:1.5;text-align:left;word-break:break-all"></div>
+
+        <!-- 确认弹层 -->
+        <div id="confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:none;align-items:center;justify-content:center">
+          <div style="background:#fff;border-radius:20px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+            <p id="confirm-text" style="margin:0 0 20px;font-size:0.95rem;line-height:1.6;color:#1c1b1f"></p>
+            <div style="display:flex;gap:10px">
+              <button onclick="modalResolve(false)" style="flex:1;padding:10px;border-radius:12px;border:1px solid #79747e;background:#fff;font-size:0.9rem;cursor:pointer">取消</button>
+              <button onclick="modalResolve(true)" style="flex:1;padding:10px;border-radius:12px;border:none;background:#B3261E;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer">确定清除</button>
+            </div>
+          </div>
+        </div>
+
+        <h3><a href="#" onclick="clearAndImport(this); return false;" class="btn btn-danger">
             🗑️ 清除本地书源并重新订阅
         </a></h3>
 
@@ -518,39 +532,118 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         </div>
 
         <script>
-            async function clearAndImport() {
-                // 阅读 App 本地 Web API 默认端口
-                const port = 1122;
-                const base = 'http://127.0.0.1:' + port;
-                const importUrl = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
+            var modalResolve = null;
+
+            function showModal(text) {
+                return new Promise(function(resolve) {
+                    modalResolve = resolve;
+                    document.getElementById('confirm-text').textContent = text;
+                    var m = document.getElementById('confirm-modal');
+                    m.style.display = 'flex';
+                });
+            }
+
+            // 关闭弹层并 resolve
+            window.modalResolve = function(val) {
+                document.getElementById('confirm-modal').style.display = 'none';
+                if (modalResolve) { modalResolve(val); modalResolve = null; }
+            };
+
+            function showStatus(msg, type) {
+                // type: 'info' | 'error' | 'success'
+                var bar = document.getElementById('status-bar');
+                var colors = {
+                    info:    { bg: 'rgba(103,80,164,0.10)', color: '#4a3780' },
+                    error:   { bg: 'rgba(179,38,30,0.10)',  color: '#B3261E' },
+                    success: { bg: 'rgba(0,128,0,0.10)',    color: '#1a7f1a' }
+                };
+                var c = colors[type] || colors.info;
+                bar.style.background = c.bg;
+                bar.style.color      = c.color;
+                bar.textContent      = msg;
+                bar.style.display    = 'block';
+            }
+
+            // AbortController + setTimeout（兼容旧版 WebView，不用 AbortSignal.timeout）
+            function fetchWithTimeout(url, opts, ms) {
+                var ctrl = new AbortController();
+                var tid = setTimeout(function() { ctrl.abort(); }, ms);
+                return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+                    .finally(function() { clearTimeout(tid); });
+            }
+
+            async function clearAndImport(btn) {
+                var port      = 1122;
+                var base      = 'http://127.0.0.1:' + port;
+                var importUrl = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
+
+                // 立刻给按钮视觉反馈
+                var origText = btn ? btn.textContent : '';
+                if (btn) { btn.textContent = '⏳ 连接中...'; btn.style.pointerEvents = 'none'; }
+                showStatus('正在连接阅读 Web 服务（端口 ' + port + '）…', 'info');
+
+                var restore = function() {
+                    if (btn) { btn.textContent = origText; btn.style.pointerEvents = ''; }
+                };
 
                 try {
-                    // 1. 获取所有本地书源
-                    const res = await fetch(base + '/getBookSources', { signal: AbortSignal.timeout(3000) });
-                    if (!res.ok) throw new Error('无法连接到阅读 Web 服务');
-                    const sources = await res.json();
-
-                    if (!Array.isArray(sources) || sources.length === 0) {
-                        // 本地没有书源，直接跳转导入
-                        location.href = importUrl;
+                    // 1. 获取本地书源列表
+                    var res;
+                    try {
+                        res = await fetchWithTimeout(base + '/getBookSources', {}, 4000);
+                    } catch (e) {
+                        // 混合内容或网络错误
+                        var isMixed = (window.location.protocol === 'https:');
+                        if (isMixed) {
+                            showStatus(
+                                '❌ 连接失败（混合内容限制）\n\n' +
+                                '当前页面为 HTTPS，无法直接访问本机 HTTP 服务。\n\n' +
+                                '解决方法：\n' +
+                                '① 在阅读「发现」中打开此页后点击按钮（推荐）\n' +
+                                '② 或用手机浏览器打开 http://172.28.26.162:' + port + ' 中的管理页面手动清除',
+                                'error'
+                            );
+                        } else {
+                            showStatus('❌ 连接失败：' + e.message + '\n请确认阅读 Web 服务已开启', 'error');
+                        }
+                        restore();
                         return;
                     }
 
-                    const confirmed = confirm('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源，确定？');
-                    if (!confirmed) return;
+                    if (!res.ok) throw new Error('服务返回 ' + res.status);
+                    var sources = await res.json();
 
-                    // 2. 批量删除所有本地书源
-                    const delRes = await fetch(base + '/deleteBookSources', {
+                    if (!Array.isArray(sources) || sources.length === 0) {
+                        showStatus('本地无书源，直接导入订阅…', 'info');
+                        restore();
+                        setTimeout(function() { location.href = importUrl; }, 800);
+                        return;
+                    }
+
+                    // 2. 显示确认弹层（替代 confirm()）
+                    restore();
+                    var ok = await showModal('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源。\n\n此操作不可恢复，确定继续？');
+                    if (!ok) { showStatus('已取消', 'info'); return; }
+
+                    if (btn) { btn.textContent = '⏳ 删除中...'; btn.style.pointerEvents = 'none'; }
+                    showStatus('正在删除 ' + sources.length + ' 个本地书源…', 'info');
+
+                    // 3. 批量删除
+                    var delRes = await fetchWithTimeout(base + '/deleteBookSources', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(sources)
-                    });
-                    if (!delRes.ok) throw new Error('删除书源失败');
+                    }, 8000);
+                    if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
 
-                    // 3. 跳转导入新书源
-                    location.href = importUrl;
+                    // 4. 跳转导入
+                    showStatus('✅ 删除完成，正在跳转导入…', 'success');
+                    restore();
+                    setTimeout(function() { location.href = importUrl; }, 800);
+
                 } catch (e) {
-                    alert('操作失败：' + e.message + '\n\n请在阅读「设置 → Web 服务」中开启 Web 服务后重试。');
+                    restore();
+                    showStatus('❌ 操作失败：' + e.message, 'error');
                 }
             }
         </script>
