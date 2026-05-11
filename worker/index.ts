@@ -485,21 +485,32 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             <p class="subtitle">Legado 资源一键整合导入</p>
         </div>
         
-        <h3><a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
+        <script>
+            function importToLegado(fullUrl) {
+                // 尝试静默唤起：创建一个隐藏的 iframe 来触发协议
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = fullUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+            }
+        </script>
+
+        <h3><a href="yuedu://rsssource/importonline?src=${encodeURIComponent(origin + '/subscribe/info.json')}" onclick="importToLegado(this.href); return false;" class="btn btn-info">
             <span class="icon">✨</span> 添加到阅读发现
         </a></h3>
 
-        <h3><a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn btn-sources">
+        <h3><a href="yuedu://booksource/importonline?src=${encodeURIComponent(origin + '/subscribe/sources')}" onclick="importToLegado(this.href); return false;" class="btn btn-sources">
             <span class="icon">📚</span> 整合书源订阅
         </a></h3>
         
-        <h3><a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
+        <h3><a href="yuedu://purificationsource/importonline?src=${encodeURIComponent(origin + '/subscribe/rules')}" onclick="importToLegado(this.href); return false;" class="btn btn-rules">
             <span class="icon">✨</span> 整合净化规则
         </a></h3>
 
         <div class="tip">
-            💡 请在阅读 App 的<strong>发现列表</strong>中点击以上按钮导入<br>
-            外部浏览器可使用 <a href="${origin}/subscribe/sources" style="color:var(--primary)">书源JSON</a> 链接
+            💡 <strong>发现页用户</strong>：直接点击上方按钮即可导入<br>
+            💡 <strong>网页用户</strong>：点击按钮唤起阅读 App
         </div>
 
         <div class="footer">
