@@ -119,6 +119,20 @@ export default {
       if (path === "/api/rules" && method === "GET") return handleListRules(env, url);
       if (path === "/api/sources/test" && method === "POST") return handleTestSources(env, request);
 
+      const srcMatch = path.match(/^\/api\/sources\/(\d+)$/);
+      if (srcMatch) {
+        const id = Number(srcMatch[1]);
+        if (method === "DELETE") return handleSourceAction(env, id, "delete");
+        if (method === "PATCH") return handleSourceAction(env, id, "toggle", request);
+      }
+
+      const ruleMatch = path.match(/^\/api\/rules\/(\d+)$/);
+      if (ruleMatch) {
+        const id = Number(ruleMatch[1]);
+        if (method === "DELETE") return handleRuleAction(env, id, "delete");
+        if (method === "PATCH") return handleRuleAction(env, id, "toggle", request);
+      }
+
       // ── /api/parse-links ──────────────────────────────────────────
       if (path === "/api/parse-links" && method === "GET") return handleParseLinks(url);
 
@@ -376,13 +390,39 @@ async function handleStats(env: Env): Promise<Response> {
 
 async function handleListSources(env: Env, url: URL): Promise<Response> {
   const q = url.searchParams.get("q") || "";
+  const filter = url.searchParams.get("filter") || "all";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
-  const limit = 200;
+  const limit = Math.max(10, Number(url.searchParams.get("limit") || "20"));
   const offset = (page - 1) * limit;
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM sources WHERE name LIKE ? AND enabled=1 LIMIT ? OFFSET ?`
-  ).bind(`%${q}%`, limit, offset).all();
-  return ok(results);
+
+  let where = "name LIKE ?";
+  const params: any[] = [`%${q}%`];
+
+  if (filter === "available") {
+    where += " AND is_available = 1";
+  } else if (filter === "unavailable") {
+    where += " AND is_available = 0";
+  }
+
+  const { results: sources } = await env.DB.prepare(
+    `SELECT * FROM sources WHERE ${where} LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all();
+
+  const totalRow = (await env.DB.prepare(`SELECT COUNT(*) as count FROM sources WHERE ${where}`).bind(...params).first()) as any;
+  const statsRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_available=1 THEN 1 ELSE 0 END) as available FROM sources").first()) as any;
+
+  return ok({
+    sources,
+    total: totalRow.count,
+    stats: {
+      total: statsRow.total || 0,
+      available: statsRow.available || 0,
+      unavailable: (statsRow.total || 0) - (statsRow.available || 0)
+    },
+    page,
+    limit,
+    hasMore: offset + sources.length < totalRow.count
+  });
 }
 
 async function handleAllSourceIds(env: Env): Promise<Response> {
@@ -536,6 +576,26 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
   }
 
   return ok(results);
+}
+
+async function handleSourceAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {
+  if (action === "delete") {
+    await env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(id).run();
+  } else if (action === "toggle" && request) {
+    const { enabled } = await request.json() as { enabled: number };
+    await env.DB.prepare("UPDATE sources SET enabled = ? WHERE id = ?").bind(enabled, id).run();
+  }
+  return ok();
+}
+
+async function handleRuleAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {
+  if (action === "delete") {
+    await env.DB.prepare("DELETE FROM rules WHERE id = ?").bind(id).run();
+  } else if (action === "toggle" && request) {
+    const { enabled } = await request.json() as { enabled: number };
+    await env.DB.prepare("UPDATE rules SET enabled = ? WHERE id = ?").bind(enabled, id).run();
+  }
+  return ok();
 }
 
 async function handleScheduled(env: Env) {

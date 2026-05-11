@@ -137,9 +137,14 @@ export const toggleSubscription = (id: number, enabled: boolean) =>
 export const syncAll = () => apiFetch<any>("/api/sync", { method: "POST" });
 export const syncOne = (id: number) => apiFetch<any>(`/api/sync/${id}`, { method: "POST" });
 
-export const getSources = (q = "", page = 1) => apiFetch<any[]>(`/api/sources?q=${q}&page=${page}`);
+export const getSources = (q = "", page = 1, filter = "all") => 
+  apiFetch<{ sources: any[], total: number, stats: any, hasMore: boolean }>(`/api/sources?q=${q}&page=${page}&filter=${filter}`);
 export const getAllSourceIds = () => apiFetch<number[]>("/api/sources/ids");
 export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}&page=${page}`);
 
 export const testSources = (ids: number[]) => apiFetch<Record<number, boolean>>("/api/sources/test", { method: "POST", body: JSON.stringify({ ids }) });
+export const toggleSource = (id: number, enabled: boolean) => apiFetch<any>(`/api/sources/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
+export const deleteSource = (id: number) => apiFetch<any>(`/api/sources/${id}`, { method: "DELETE" });
+export const toggleRule = (id: number, enabled: boolean) => apiFetch<any>(`/api/rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
+export const deleteRule = (id: number) => apiFetch<any>(`/api/rules/${id}`, { method: "DELETE" });
 export const parseLinks = (url: string) => apiFetch<{ name: string; url: string }[]>(`/api/parse-links?url=${encodeURIComponent(url)}`);

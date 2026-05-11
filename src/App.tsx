@@ -411,45 +411,38 @@ function StatCard({ icon, label, value, color, isSmallValue }: { icon: React.Rea
 function SourceListView({ onImport }: { onImport: () => void }) {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ total: 0, available: 0, unavailable: 0 });
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
 
-  const fetchSources = async (q = '', p = 1, append = false) => {
-    if (p === 1) setLoading(true);
-    else setLoadingMore(true);
-    
+  const fetchSources = async (q = '', p = 1, f = 'all') => {
+    setLoading(true);
     try {
-      const data = await api.getSources(q, p);
-      if (append) {
-        setSources(prev => [...prev, ...data]);
-      } else {
-        setSources(data);
-      }
-      setHasMore(data.length === 50);
+      const data = await api.getSources(q, p, f);
+      setSources(data.sources);
+      setTotal(data.total);
+      setStats(data.stats);
+      setHasMore(data.hasMore);
       setPage(p);
     } catch (e) {
       console.error('获取书源失败', e);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchSources();
-  }, []);
-
-  useEffect(() => {
     const timer = setTimeout(() => {
-      fetchSources(query, 1);
+      fetchSources(query, 1, filter);
     }, 500);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, filter]);
 
   const handleTest = async (ids: number[]) => {
     if (!ids.length) return;
@@ -458,13 +451,21 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     setTestingIds(nextTesting);
 
     try {
-      // 如果数量很大，分片发送
+      // 提高并发度，同时处理多个分片
       const chunkSize = 20;
+      const chunks = [];
       for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize);
-        await api.testSources(chunk);
+        chunks.push(ids.slice(i, i + chunkSize));
       }
-      fetchSources(query, 1);
+
+      // 限制同时进行的请求批次，避免 Worker 超载
+      const batchSize = 3; 
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        await Promise.all(batch.map(chunk => api.testSources(chunk)));
+      }
+      
+      fetchSources(query, page, filter);
     } catch (e) {
       alert('测试执行失败: ' + String(e));
     } finally {
@@ -503,6 +504,32 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     setSelectedIds(next);
   };
 
+  const handleToggleSource = async (id: number, enabled: boolean) => {
+    try {
+      await api.toggleSource(id, !enabled);
+      setSources(prev => prev.map(s => s.id === id ? { ...s, enabled: !enabled ? 1 : 0 } : s));
+    } catch (e) {
+      alert('操作失败: ' + String(e));
+    }
+  };
+
+  const handleDeleteSource = async (id: number) => {
+    if (!confirm('确定要删除此书源吗？')) return;
+    try {
+      await api.deleteSource(id);
+      setSources(prev => prev.filter(s => s.id !== id));
+      setActiveMenu(null);
+    } catch (e) {
+      alert('删除失败: ' + String(e));
+    }
+  };
+
+  const handleCopyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    alert('已复制到剪贴板');
+    setActiveMenu(null);
+  };
+
   if (loading && page === 1) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -512,23 +539,53 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">书源管理</h2>
-          <p className="text-sm text-secondary mt-1">管理并配置您的所有阅读源站点。</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <SummaryIconCard 
+            icon={<BookOpen size={24} />} 
+            label="总书源" 
+            value={stats.total.toLocaleString()} 
+            color="bg-primary/10 text-primary"
+          />
+          <SummaryIconCard 
+            icon={<CheckCircle2 size={24} />} 
+            label="正常书源" 
+            value={stats.available.toLocaleString()} 
+            color="bg-green-500/10 text-green-600"
+          />
+          <SummaryIconCard 
+            icon={<AlertCircle size={24} />} 
+            label="失效书源" 
+            value={stats.unavailable.toLocaleString()} 
+            color="bg-error/10 text-error"
+          />
         </div>
-        <div className="flex w-full md:w-auto items-center gap-2">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
-            <input 
-              type="text" 
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索书源..."
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none focus:border-primary transition-all"
-            />
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">书源管理</h2>
+            <p className="text-sm text-secondary mt-1">管理并配置您的所有阅读源站点。</p>
           </div>
+          <div className="flex w-full md:w-auto items-center gap-2">
+            <select 
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-primary transition-all cursor-pointer"
+            >
+              <option value="all">全部书源</option>
+              <option value="available">仅看正常</option>
+              <option value="unavailable">仅看不可用</option>
+            </select>
+
+            <div className="relative flex-1 md:w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={14} />
+              <input 
+                type="text" 
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="搜索..."
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-1.5 text-xs outline-none focus:border-primary transition-all"
+              />
+            </div>
           
           {selectedIds.size > 0 && (
             <button 
@@ -615,12 +672,15 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex flex-col items-center gap-1">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          source.enabled ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-secondary'
-                        }`}>
+                        <button 
+                          onClick={() => handleToggleSource(source.id, !!source.enabled)}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                            source.enabled ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-secondary/10 text-secondary hover:bg-secondary/20'
+                          }`}
+                        >
                           <span className={`w-1.5 h-1.5 rounded-full ${source.enabled ? 'bg-primary' : 'bg-secondary'}`} />
                           {source.enabled ? '已启用' : '已禁用'}
-                        </span>
+                        </button>
                         {testingIds.has(source.id) ? (
                           <span className="text-[9px] text-tertiary animate-pulse font-bold">测试中...</span>
                         ) : source.last_checked && (
@@ -648,10 +708,16 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                             >
                               <Zap size={14} /> 立即测试
                             </button>
-                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                            <button 
+                              onClick={() => handleCopyUrl(source.book_source_url)}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2"
+                            >
                               <Copy size={14} /> 复制 URL
                             </button>
-                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1">
+                            <button 
+                              onClick={() => handleDeleteSource(source.id)}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1"
+                            >
                               <Trash2 size={14} /> 删除
                             </button>
                           </div>
@@ -664,18 +730,27 @@ function SourceListView({ onImport }: { onImport: () => void }) {
             </tbody>
           </table>
           
-          {hasMore && (
-            <div className="p-4 flex justify-center border-t border-outline-variant/30">
+          <div className="p-4 flex justify-between items-center border-t border-outline-variant/30 bg-surface-bright shrink-0">
+            <div className="text-[10px] font-bold text-secondary">
+              共 {total} 条数据，当前第 {page} 页
+            </div>
+            <div className="flex items-center gap-2">
               <button 
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="text-xs font-bold text-primary hover:underline flex items-center gap-2"
+                onClick={() => fetchSources(query, page - 1, filter)}
+                disabled={page <= 1 || loading}
+                className="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container-low disabled:opacity-30 transition-all"
               >
-                {loadingMore ? <RefreshCw className="animate-spin" size={14} /> : null}
-                加载更多书源...
+                <ChevronLeft size={16} />
+              </button>
+              <button 
+                onClick={() => fetchSources(query, page + 1, filter)}
+                disabled={!hasMore || loading}
+                className="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container-low disabled:opacity-30 transition-all"
+              >
+                <ChevronRight size={16} />
               </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
@@ -726,6 +801,26 @@ function RulesView({ onImport }: { onImport: () => void }) {
   const loadMore = () => {
     if (!loading && !loadingMore && hasMore) {
       fetchRules(query, page + 1, true);
+    }
+  };
+
+  const handleToggleRule = async (id: number, enabled: boolean) => {
+    try {
+      await api.toggleRule(id, !enabled);
+      setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !enabled ? 1 : 0 } : r));
+    } catch (e) {
+      alert('操作失败: ' + String(e));
+    }
+  };
+
+  const handleDeleteRule = async (id: number) => {
+    if (!confirm('确定要删除此规则吗？')) return;
+    try {
+      await api.deleteRule(id);
+      setRules(prev => prev.filter(r => r.id !== id));
+      setActiveMenu(null);
+    } catch (e) {
+      alert('删除失败: ' + String(e));
     }
   };
 
@@ -819,7 +914,7 @@ function RulesView({ onImport }: { onImport: () => void }) {
                     <td className="py-4 px-6 italic text-secondary break-all">{rule.replacement || '(删除)'}</td>
                     <td className="py-4 px-6 text-center">
                       <button 
-                        onClick={() => {/* TODO: Toggle rule status if needed */}}
+                        onClick={() => handleToggleRule(rule.id, !!rule.enabled)}
                         className={`mx-auto relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${rule.enabled ? 'bg-primary' : 'bg-secondary-container'}`}
                       >
                         <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5 ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -837,10 +932,16 @@ function RulesView({ onImport }: { onImport: () => void }) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
                           <div className="absolute right-6 top-10 w-32 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden text-left">
-                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                            <button 
+                              onClick={() => { alert('规则详情: ' + JSON.stringify(rule, null, 2)); setActiveMenu(null); }}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2"
+                            >
                               <Info size={14} /> 详情
                             </button>
-                            <button className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1">
+                            <button 
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2 border-t border-outline-variant/30 mt-1"
+                            >
                               <Trash2 size={14} /> 删除
                             </button>
                           </div>
