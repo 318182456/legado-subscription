@@ -456,11 +456,14 @@ function handleSubscribeInfo(request: Request): Response {
       "sourceGroup": "整合",
       "ruleExplore": [
         {
-          "title": "订阅列表",
+          "title": "整合中心",
           "url": `${origin}/subscribe/index`,
           "style": "layout_t_p_b64"
         }
       ],
+      "ruleArticles": "a.btn",
+      "ruleTitle": "text",
+      "ruleLink": "href",
       "enabled": true,
       "type": 3
     }
