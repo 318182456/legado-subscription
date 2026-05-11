@@ -687,7 +687,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
                     <td className="py-2 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center text-primary font-bold text-[10px] shrink-0">
-                          {source.name.charAt(0)}
+                          {Array.from(source.name || "?")[0]}
                         </div>
                         <span className="font-bold text-xs truncate">{source.name}</span>
                       </div>
