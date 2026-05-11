@@ -486,25 +486,42 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         </div>
         
         <script>
-            function importToLegado(fullUrl) {
+            function importToLegado(e, fullUrl) {
+                // 彻底阻止浏览器默认跳转行为
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                
                 // 尝试静默唤起：创建一个隐藏的 iframe 来触发协议
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
                 iframe.src = fullUrl;
                 document.body.appendChild(iframe);
-                setTimeout(() => document.body.removeChild(iframe), 1000);
+                
+                // 点击反馈：改变按钮透明度
+                const btn = e.currentTarget;
+                const oldOpacity = btn.style.opacity;
+                btn.style.opacity = '0.5';
+                
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    btn.style.opacity = oldOpacity || '1';
+                }, 1000);
+                
+                return false;
             }
         </script>
 
-        <h3><a href="yuedu://rsssource/importonline?src=${encodeURIComponent(origin + '/subscribe/info.json')}" onclick="importToLegado(this.href); return false;" class="btn btn-info">
+        <h3><a href="yuedu://rsssource/importonline?src=${encodeURIComponent(origin + '/subscribe/info.json')}" onclick="return importToLegado(event, this.href)" class="btn btn-info">
             <span class="icon">✨</span> 添加到阅读发现
         </a></h3>
 
-        <h3><a href="yuedu://booksource/importonline?src=${encodeURIComponent(origin + '/subscribe/sources')}" onclick="importToLegado(this.href); return false;" class="btn btn-sources">
+        <h3><a href="yuedu://booksource/importonline?src=${encodeURIComponent(origin + '/subscribe/sources')}" onclick="return importToLegado(event, this.href)" class="btn btn-sources">
             <span class="icon">📚</span> 整合书源订阅
         </a></h3>
         
-        <h3><a href="yuedu://purificationsource/importonline?src=${encodeURIComponent(origin + '/subscribe/rules')}" onclick="importToLegado(this.href); return false;" class="btn btn-rules">
+        <h3><a href="yuedu://purificationsource/importonline?src=${encodeURIComponent(origin + '/subscribe/rules')}" onclick="return importToLegado(event, this.href)" class="btn btn-rules">
             <span class="icon">✨</span> 整合净化规则
         </a></h3>
 
