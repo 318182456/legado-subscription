@@ -262,15 +262,13 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
 }
 
 async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Response> {
-  const { results } = await env.DB.prepare("SELECT id, transports FROM passkeys").all();
   const rpID = new URL(request.url).hostname;
 
+  // 使用 discoverable credential 流程：不传 allowCredentials
+  // 让浏览器/Bitwarden 根据 rpId 自动发现可用 passkey
+  // 若传入具体 ID 列表，Bitwarden 会做字节级精确匹配，编码稍有差异即失败
   const options = await generateAuthenticationOptions({
     rpID,
-    allowCredentials: results.map((p) => ({
-      id: p.id as string,
-      transports: JSON.parse((p.transports as string) || "[]") as AuthenticatorTransportFuture[],
-    })),
     userVerification: "preferred",
   });
 
