@@ -394,21 +394,33 @@ async function handleParseLinks(url: URL): Promise<Response> {
   if (!targetUrl) return err("url 不能为空");
 
   try {
+    // 设置 15 秒超时，避免 Worker 挂起
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const res = await fetch(targetUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 Legado-Subscription-Bot" }
+      headers: { 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
+      },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return err(`目标网页返回错误: ${res.status}`);
     const html = await res.text();
     
     const results: { name: string; url: string }[] = [];
     
+    // 增强的正则：兼容多种 HTML 属性顺序，提取 src= 后面的内容
     // 匹配 yuedu:// 或 legado:// 链接中的 src 参数
-    // 同时也匹配直接的 JSON 链接（如果需要的话，但这里主要针对导入链接）
-    // 苗公子的页面通常结构：<a href="yuedu://import/importSource?src=https://...json" ...>标题</a>
-    const regex = /<a[^>]+href="[^"]*src=([^"&]+)"[^>]*>([^<]+)<\/a>/g;
+    const regex = /<a[^>]+href="[^"]*src=([^"& ]+)[^>]*>([\s\S]*?)<\/a>/g;
     let match;
     while ((match = regex.exec(html)) !== null) {
       let url = decodeURIComponent(match[1]);
-      let name = match[2].trim();
+      let name = match[2].replace(/<[^>]+>/g, '').trim(); // 移除内部 HTML 标签
       if (url && name) {
         results.push({ name, url });
       }
@@ -416,6 +428,7 @@ async function handleParseLinks(url: URL): Promise<Response> {
 
     return ok(results);
   } catch (e) {
-    return err(`Fetch Failed: ${(e as Error).message}`, 500);
+    const isTimeout = (e as Error).name === 'AbortError';
+    return err(isTimeout ? "请求超时，目标网站响应过慢" : `解析失败: ${(e as Error).message}`, 500);
   }
 }
