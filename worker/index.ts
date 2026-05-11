@@ -528,7 +528,7 @@ function handleSubscribeInfo(request: Request): Response {
       "sourceIcon": icon,
       "sourceGroup": "整合",
       "header": JSON.stringify({
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile Safari/537.36) Legado/3.0"
+        "User-Agent": "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; MI 8 Lite Build/OPM1.171019.019) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.108 UCBrowser/13.2.0.1100 Mobile Safari/537.36"
       }),
       "ruleExplore": [
         {
@@ -539,7 +539,7 @@ function handleSubscribeInfo(request: Request): Response {
       ],
       "ruleArticles": "h3",
       "ruleTitle": "a@text",
-      "ruleLink": "a@href@js:if(result.includes('info.json')) return 'legado://import/rssSource?src=' + encodeURIComponent(result); if(result.includes('sources')) return 'legado://import/bookSource?src=' + encodeURIComponent(result); if(result.includes('rules')) return 'legado://import/replaceRule?src=' + encodeURIComponent(result); return result;",
+      "ruleLink": "a@href",
       "enabled": true,
       "type": 0
     }
