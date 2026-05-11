@@ -485,20 +485,20 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             <p class="subtitle">Legado 资源一键整合导入</p>
         </div>
         
-        <h3><a href="${origin}/subscribe/info.json" class="btn btn-info">
-            ✨ 添加到阅读发现
-        </a></h3>
-
-        <h3><a href="${origin}/subscribe/sources" class="btn btn-sources">
+        <h3><a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-sources">
             📚 整合书源订阅
         </a></h3>
         
-        <h3><a href="${origin}/subscribe/rules" class="btn btn-rules">
+        <h3><a href="legado://import/rssSource?src=${encodeURIComponent(origin + '/subscribe/info.json')}" class="btn btn-info">
+            ✨ 添加到阅读发现
+        </a></h3>
+
+        <h3><a href="legado://import/replaceRule?src=${encodeURIComponent(origin + '/subscribe/rules')}" class="btn btn-rules">
             ✨ 整合净化规则
         </a></h3>
 
         <div class="tip">
-            💡 <strong>使用说明</strong>：请直接点击上方按钮。如果在阅读内部无法呼出，请确保已将此页添加为“发现源”并从发现列表中点击。
+            💡 <strong>使用说明</strong>：请直接点击上方按钮导入。
         </div>
 
         <div class="footer">
@@ -539,7 +539,7 @@ function handleSubscribeInfo(request: Request): Response {
       ],
       "ruleArticles": "h3",
       "ruleTitle": "a@text",
-      "ruleLink": "a@href@js:if(result.includes('info.json')) return 'yuedu://rsssource/importonline?src=' + encodeURIComponent(result); if(result.includes('sources')) return 'yuedu://booksource/importonline?src=' + encodeURIComponent(result); if(result.includes('rules')) return 'yuedu://purificationsource/importonline?src=' + encodeURIComponent(result); return result;",
+      "ruleLink": "a@href@js:if(result.includes('info.json')) return 'legado://import/rssSource?src=' + encodeURIComponent(result); if(result.includes('sources')) return 'legado://import/bookSource?src=' + encodeURIComponent(result); if(result.includes('rules')) return 'legado://import/replaceRule?src=' + encodeURIComponent(result); return result;",
       "enabled": true,
       "type": 0
     }
