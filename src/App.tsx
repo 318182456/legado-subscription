@@ -390,60 +390,6 @@ function DashboardView({ onImport }: { onImport: () => void }) {
           </div>
           <div className="relative z-10 grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-primary-container">整合书源地址 (Legado 订阅)</label>
-              <div className="flex gap-2">
-                <input 
-                  readOnly 
-                  value={`${window.location.origin}/subscribe/sources`}
-                  className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2 text-sm outline-none"
-                />
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/subscribe/sources`);
-                    alert('复制成功');
-                  }}
-                  title="复制链接"
-                  className="bg-surface-container-lowest text-primary px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0"
-                >
-                  <Copy size={16} />
-                </button>
-                <a 
-                  href={`yuedu://booksource/importonline?src=${window.location.origin}/subscribe/sources`}
-                  className="bg-surface-container-lowest text-tertiary px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0 flex items-center gap-1.5"
-                >
-                  <Zap size={16} /> 导入阅读
-                </a>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-primary-container">整合净化规则 (Legado 订阅)</label>
-              <div className="flex gap-2">
-                <input 
-                  readOnly 
-                  value={`${window.location.origin}/subscribe/rules`}
-                  className="flex-1 bg-surface-container-lowest text-on-background border border-outline-variant rounded-lg px-4 py-2 text-sm outline-none"
-                />
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/subscribe/rules`);
-                    alert('复制成功');
-                  }}
-                  title="复制链接"
-                  className="bg-surface-container-lowest text-primary px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0"
-                >
-                  <Copy size={16} />
-                </button>
-                <a 
-                  href={`yuedu://purificationsource/importonline?src=${window.location.origin}/subscribe/rules`}
-                  className="bg-surface-container-lowest text-tertiary px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0 flex items-center gap-1.5"
-                >
-                  <Zap size={16} /> 导入阅读
-                </a>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
               <label className="text-xs font-semibold text-primary-container">整合索引地址 (仿苗公子订阅页面)</label>
               <div className="flex gap-2">
                 <input 
