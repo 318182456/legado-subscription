@@ -71,6 +71,7 @@ export default {
       if (path === "/subscribe/sources" && method === "GET") return handleSubscribeOutput(env, "sources");
       if (path === "/subscribe/rules" && method === "GET") return handleSubscribeOutput(env, "rules");
       if (path === "/subscribe/index" && method === "GET") return handleSubscribeIndex(request, env);
+      if (path === "/subscribe/info.json" && method === "GET") return handleSubscribeInfo(request);
 
       // ── /api/auth (公开) ──────────────────────────────────────────
       if (path === "/api/auth/login" && method === "POST") return handleLogin(request, env);
@@ -221,14 +222,18 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
   const rpID = new URL(request.url).hostname;
   const origin = new URL(request.url).origin;
 
-  const verification = await verifyRegistrationResponse({
-    response: body,
-    expectedChallenge,
-    expectedOrigin: getOrigins(request),
-    expectedRPID: rpID,
-  });
+  const expectedOrigin = getOrigins(request);
+  const expectedRPID = rpID;
 
-  if (verification.verified && verification.registrationInfo) {
+  try {
+    const verification = await verifyRegistrationResponse({
+      response: body,
+      expectedChallenge,
+      expectedOrigin,
+      expectedRPID,
+    });
+
+    if (verification.verified && verification.registrationInfo) {
     const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
     const stored: StoredPasskey = {
       id: u8ToB64url(credentialID),
@@ -281,18 +286,22 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
   const rpID = new URL(request.url).hostname;
   const origin = new URL(request.url).origin;
 
-  const verification = await verifyAuthenticationResponse({
-    response: body,
-    expectedChallenge,
-    expectedOrigin: getOrigins(request),
-    expectedRPID: rpID,
-    authenticator: {
-      credentialID: b64urlToU8(passkey.id),
-      credentialPublicKey: b64urlToU8(passkey.public_key),
-      counter: passkey.counter,
-      transports: JSON.parse(passkey.transports || "[]"),
-    },
-  });
+  const expectedOrigin = getOrigins(request);
+  const expectedRPID = rpID;
+
+  try {
+    const verification = await verifyAuthenticationResponse({
+      response: body,
+      expectedChallenge,
+      expectedOrigin,
+      expectedRPID,
+      authenticator: {
+        credentialID: b64urlToU8(passkey.id),
+        credentialPublicKey: b64urlToU8(passkey.public_key),
+        counter: passkey.counter,
+        transports: JSON.parse(passkey.transports || "[]"),
+      },
+    });
 
   if (verification.verified) {
     await env.DB.prepare("UPDATE passkeys SET counter = ? WHERE id = ?")
@@ -311,18 +320,28 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
 
 /** 输出订阅内容 (直接从 D1 读取，不使用 KV 缓存) */
 async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
-  const dbType = type === "sources" ? "source" : "rule";
-  const table = type === "sources" ? "sources" : "rules";
-  const rows = await env.DB.prepare(
-    `SELECT raw_json FROM ${table} WHERE enabled=1 ORDER BY id`
-  ).all();
-  const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
-  return new Response(JSON.stringify(merged), {
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+  try {
+    const table = type === "sources" ? "sources" : "rules";
+    const { results } = await env.DB.prepare(
+      `SELECT raw_json FROM ${table} WHERE enabled=1 ORDER BY id`
+    ).all();
+    
+    // 优化：直接拼接 JSON 字符串，避免大规模 JSON.parse / JSON.stringify 导致的内存和性能问题
+    const jsonArray = "[" + results.map(r => r.raw_json).join(",") + "]";
+    
+    return new Response(jsonArray, {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (e) {
+    console.error(`输出订阅失败 (${type}):`, e);
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
 }
 
 /** 输出整合订阅索引 HTML (仿苗公子页面) */
@@ -380,6 +399,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         }
         .btn:active { transform: scale(0.98); opacity: 0.9; }
         .btn-rules { background-color: #7D5260; }
+        .btn-info { background-color: #006A6A; }
         .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; }
     </style>
 </head>
@@ -388,6 +408,10 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         <h1>📚 书源整合订阅</h1>
         <p>点击下方按钮一键导入阅读 APP</p>
         
+        <a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
+            <span>✨</span> 添加到阅读发现
+        </a>
+
         <a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
             <span>📚</span> 整合书源订阅
         </a>
@@ -406,6 +430,37 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
   return new Response(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+/** 输出发现源定义 JSON (供一键导入) */
+function handleSubscribeInfo(request: Request): Response {
+  const origin = new URL(request.url).origin;
+  const icon = "https://files.catbox.moe/p9p3f2.png"; // 使用一个美化的预设图标，或者您之后可以替换
+  
+  const source = [
+    {
+      "sourceName": "✨ Legado 订阅中心",
+      "sourceUrl": `${origin}/subscribe/index`,
+      "sourceIcon": icon,
+      "sourceGroup": "整合",
+      "ruleExplore": [
+        {
+          "title": "订阅列表",
+          "url": `${origin}/subscribe/index`,
+          "style": "layout_t_p_b64"
+        }
+      ],
+      "enabled": true,
+      "type": 3
+    }
+  ];
+
+  return new Response(JSON.stringify(source), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
     },
   });

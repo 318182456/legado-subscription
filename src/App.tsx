@@ -408,7 +408,7 @@ function DashboardView({ onImport }: { onImport: () => void }) {
                   <Copy size={16} />
                 </button>
                 <a 
-                  href={`yuedu://rsssource/importonline?src=${window.location.origin}/subscribe/index`}
+                  href={`yuedu://rsssource/importonline?src=${window.location.origin}/subscribe/info.json`}
                   className="bg-surface-container-lowest text-tertiary px-3 py-2 rounded-lg text-sm font-semibold hover:bg-surface-container-low transition-colors shadow-sm shrink-0 flex items-center gap-1.5"
                 >
                   <Zap size={16} /> 导入阅读
