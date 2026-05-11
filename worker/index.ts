@@ -674,17 +674,10 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                         }
                     }
 
-                    // 4. 跳转导入（WebView 拦截自定义协议需要真实的用户点击，改成原生 a 标签链接最稳定）
-                    showStatus('✅ 删除完成，请点击下方按钮拉起导入', 'success');
-                    if (btn) {
-                        btn.textContent = '📥 点击拉起导入';
-                        btn.style.pointerEvents = '';
-                        btn.style.background = '#388E3C';
-                        btn.style.color = '#fff';
-                        btn.href = importUrl;
-                        btn.onclick = null;
-                    }
-                    restore = function() {}; // 防止 finally 还原按钮状态
+                    // 4. 自动拉起导入
+                    showStatus('✅ 删除完成，正在拉起导入…', 'success');
+                    restore();
+                    setTimeout(function() { location.href = importUrl; }, 800);
 
                 } catch (e) {
                     restore();

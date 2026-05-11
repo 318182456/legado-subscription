@@ -83,7 +83,24 @@ export async function syncSourceSubscription(
   subId: number,
   url: string
 ): Promise<number> {
-  const items = await fetchSources(url);
+  const rawItems = await fetchSources(url);
+  
+  // 1. 过滤无效书源并按 URL 去重 (模拟阅读 App 底层机制)
+  const itemsMap = new Map<string, Record<string, unknown>>();
+  for (const s of rawItems) {
+    if (typeof s !== "object" || s === null) continue;
+    const src = s as Record<string, unknown>;
+    const bsUrl = String(src["bookSourceUrl"] ?? src["sourceUrl"] ?? "").trim();
+    const name = String(src["bookSourceName"] ?? src["name"] ?? "").trim();
+    
+    // 剔除空壳书源
+    if (!bsUrl || !name) continue;
+    
+    // Map 自动以后来者覆盖同 URL 的旧书源
+    itemsMap.set(bsUrl, src);
+  }
+  
+  const items = Array.from(itemsMap.values());
   let count = 0;
 
   // 批量 upsert（D1 每批最多 ~100 条以避免超时）
@@ -91,11 +108,9 @@ export async function syncSourceSubscription(
   for (let i = 0; i < items.length; i += BATCH) {
     const chunk = items.slice(i, i + BATCH);
     const stmts = chunk
-      .filter((s) => typeof s === "object" && s !== null)
-      .map((s) => {
-        const src = s as Record<string, unknown>;
-        const bsUrl = String(src["bookSourceUrl"] ?? src["sourceUrl"] ?? "");
-        const name = String(src["bookSourceName"] ?? src["name"] ?? "未知书源");
+      .map((src) => {
+        const bsUrl = String(src["bookSourceUrl"] ?? src["sourceUrl"] ?? "").trim();
+        const name = String(src["bookSourceName"] ?? src["name"] ?? "未知书源").trim();
         const group = String(src["bookSourceGroup"] ?? src["group"] ?? "");
         const rawJson = JSON.stringify(src);
         return env.DB.prepare(
@@ -131,18 +146,29 @@ export async function syncRuleSubscription(
   subId: number,
   url: string
 ): Promise<number> {
-  const items = await fetchRules(url);
+  const rawItems = await fetchRules(url);
+  
+  const itemsMap = new Map<string, Record<string, unknown>>();
+  for (const r of rawItems) {
+    if (typeof r !== "object" || r === null) continue;
+    const rule = r as Record<string, unknown>;
+    const name = String(rule["name"] ?? rule["ruleName"] ?? "").trim();
+    const pattern = String(rule["regex"] ?? rule["pattern"] ?? "").trim();
+    
+    if (!name || !pattern) continue;
+    itemsMap.set(name + "::" + pattern, rule);
+  }
+  
+  const items = Array.from(itemsMap.values());
   let count = 0;
 
   const BATCH = 50;
   for (let i = 0; i < items.length; i += BATCH) {
     const chunk = items.slice(i, i + BATCH);
     const stmts = chunk
-      .filter((r) => typeof r === "object" && r !== null)
-      .map((r) => {
-        const rule = r as Record<string, unknown>;
-        const name = String(rule["name"] ?? rule["ruleName"] ?? "");
-        const pattern = String(rule["regex"] ?? rule["pattern"] ?? "");
+      .map((rule) => {
+        const name = String(rule["name"] ?? rule["ruleName"] ?? "").trim();
+        const pattern = String(rule["regex"] ?? rule["pattern"] ?? "").trim();
         const replacement = String(rule["replacement"] ?? rule["replace"] ?? "");
         const rawJson = JSON.stringify(rule);
         return env.DB.prepare(
@@ -177,16 +203,36 @@ export async function rebuildCache(env: Env, type: "source" | "rule") {
     const rows = await env.DB.prepare(
       `SELECT raw_json FROM sources WHERE enabled=1 ORDER BY id`
     ).all();
-    const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
-    await env.KV.put("sources", JSON.stringify(merged), {
+    
+    // 跨订阅全局去重，防止多个订阅有重复 URL 导致阅读 App 额外计算
+    const map = new Map<string, any>();
+    rows.results.forEach((r) => {
+      try {
+        const obj = JSON.parse(r.raw_json as string);
+        const url = String(obj["bookSourceUrl"] ?? obj["sourceUrl"] ?? "").trim();
+        if (url) map.set(url, obj);
+      } catch (e) {}
+    });
+    
+    await env.KV.put("sources", JSON.stringify(Array.from(map.values())), {
       expirationTtl: CACHE_TTL,
     });
   } else {
     const rows = await env.DB.prepare(
       `SELECT raw_json FROM rules WHERE enabled=1 ORDER BY id`
     ).all();
-    const merged = rows.results.map((r) => JSON.parse(r.raw_json as string));
-    await env.KV.put("rules", JSON.stringify(merged), {
+    
+    const map = new Map<string, any>();
+    rows.results.forEach((r) => {
+      try {
+        const obj = JSON.parse(r.raw_json as string);
+        const name = String(obj["name"] ?? obj["ruleName"] ?? "").trim();
+        const pattern = String(obj["regex"] ?? obj["pattern"] ?? "").trim();
+        if (name && pattern) map.set(name + "::" + pattern, obj);
+      } catch (e) {}
+    });
+
+    await env.KV.put("rules", JSON.stringify(Array.from(map.values())), {
       expirationTtl: CACHE_TTL,
     });
   }
