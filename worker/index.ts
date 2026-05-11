@@ -751,11 +751,11 @@ async function handleDeleteSubscription(env: Env, id: number): Promise<Response>
 async function handleToggleSubscription(request: Request, env: Env, id: number): Promise<Response> {
   const body = await parseBody<{ enabled: boolean }>(request);
   const enabled = body?.enabled ? 1 : 0;
-  await env.DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=?").bind(enabled, id).run();
+  await env.DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=? AND enabled IS NOT ?").bind(enabled, id, enabled).run();
   const sub = (await env.DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
   if (sub) {
     const table = sub.type === "source" ? "sources" : "rules";
-    await env.DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=?`).bind(enabled, id).run();
+    await env.DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=? AND enabled IS NOT ?`).bind(enabled, id, enabled).run();
     await rebuildCache(env, sub.type);
   }
   return ok();
@@ -1039,8 +1039,8 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
   const statements = ids.map(id => {
     const isAvail = testResults[id] ? 1 : 0;
     return env.DB.prepare(
-      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = ? WHERE id = ?"
-    ).bind(isAvail, isAvail, id);
+      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = ? WHERE id = ? AND (is_available IS NOT ? OR enabled IS NOT ? OR last_checked < datetime('now', '-1 hour') OR last_checked IS NULL)"
+    ).bind(isAvail, isAvail, id, isAvail, isAvail);
   });
   
   await env.DB.batch(statements);

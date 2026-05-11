@@ -103,7 +103,8 @@ export async function syncSourceSubscription(
            VALUES (?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(subscription_id, book_source_url)
            DO UPDATE SET name=excluded.name, group_name=excluded.group_name,
-                         raw_json=excluded.raw_json, updated_at=excluded.updated_at`
+                         raw_json=excluded.raw_json, updated_at=excluded.updated_at
+           WHERE sources.raw_json != excluded.raw_json`
         ).bind(subId, bsUrl, name, group, rawJson);
       });
     if (stmts.length > 0) {
@@ -149,7 +150,8 @@ export async function syncRuleSubscription(
            VALUES (?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(subscription_id, name, pattern)
            DO UPDATE SET replacement=excluded.replacement,
-                         raw_json=excluded.raw_json, updated_at=excluded.updated_at`
+                         raw_json=excluded.raw_json, updated_at=excluded.updated_at
+           WHERE rules.raw_json != excluded.raw_json`
         ).bind(subId, name, pattern, replacement, rawJson);
       });
     if (stmts.length > 0) {
