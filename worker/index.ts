@@ -415,11 +415,12 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
     <div class="card">
         <h1>📚 书源整合订阅</h1>
         <p>点击下方按钮一键导入阅读 APP</p>
-        <a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
+        
+        <a href="${origin}/subscribe/sources" onclick="window.location.href='yuedu://booksource/importonline?src=' + encodeURIComponent(this.href); return false;" class="btn">
             <span>📚</span> 整合书源订阅
         </a>
         
-        <a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
+        <a href="${origin}/subscribe/rules" onclick="window.location.href='yuedu://purificationsource/importonline?src=' + encodeURIComponent(this.href); return false;" class="btn btn-rules">
             <span>✨</span> 整合净化规则订阅
         </a>
 
