@@ -26,10 +26,12 @@ import {
   RefreshCw,
   Upload,
   Book,
+  BookOpen,
+  Zap,
+  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   LogOut,
-  ShieldCheck,
   Globe,
   Trash2,
   Link as LinkIcon,
@@ -246,7 +248,8 @@ function DashboardView({ onImport }: { onImport: () => void }) {
         api.getSources()
       ]);
       setStats(s);
-      setRecentSources(sources.slice(0, 4));
+      // getSources 现在返回对象 { sources: [], ... }
+      setRecentSources(sources.sources.slice(0, 4));
     } catch (e) {
       console.error('获取统计数据失败', e);
     } finally {
