@@ -460,12 +460,21 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         
         .icon { font-size: 1.3rem; }
         .footer {
-            margin-top: 36px;
+            margin-top: 24px;
             font-size: 0.8rem;
             color: var(--outline);
             opacity: 0.7;
             border-top: 1px solid rgba(0,0,0,0.05);
             padding-top: 20px;
+        }
+        .tip {
+            margin-top: 20px;
+            padding: 12px 16px;
+            background: rgba(103, 80, 164, 0.08);
+            border-radius: 12px;
+            font-size: 0.82rem;
+            color: var(--outline);
+            line-height: 1.6;
         }
     </style>
 </head>
@@ -476,40 +485,22 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             <p class="subtitle">Legado 资源一键整合导入</p>
         </div>
         
-        <script>
-            function importToLegado(type, path) {
-                const origin = window.location.origin;
-                const srcUrl = origin + path;
-                const protocol = type === 'rss' ? 'yuedu://rsssource/importonline?src=' : 
-                                 type === 'book' ? 'yuedu://booksource/importonline?src=' : 
-                                 'yuedu://purificationsource/importonline?src=';
-                const fullUrl = protocol + encodeURIComponent(srcUrl);
-                
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = fullUrl;
-                document.body.appendChild(iframe);
-                setTimeout(() => document.body.removeChild(iframe), 1000);
-                
-                setTimeout(() => {
-                    if (!navigator.userAgent.includes('Legado') && !navigator.userAgent.includes('yuedu')) {
-                        window.location.href = fullUrl;
-                    }
-                }, 500);
-            }
-        </script>
-
-        <h3><a href="${origin}/subscribe/info.json" onclick="importToLegado('rss', '/subscribe/info.json'); return false;" class="btn btn-info">
+        <h3><a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
             <span class="icon">✨</span> 添加到阅读发现
         </a></h3>
 
-        <h3><a href="${origin}/subscribe/sources" onclick="importToLegado('book', '/subscribe/sources'); return false;" class="btn btn-sources">
+        <h3><a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn btn-sources">
             <span class="icon">📚</span> 整合书源订阅
         </a></h3>
         
-        <h3><a href="${origin}/subscribe/rules" onclick="importToLegado('rule', '/subscribe/rules'); return false;" class="btn btn-rules">
+        <h3><a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
             <span class="icon">✨</span> 整合净化规则
         </a></h3>
+
+        <div class="tip">
+            💡 请在阅读 App 的<strong>发现列表</strong>中点击以上按钮导入<br>
+            外部浏览器可使用 <a href="${origin}/subscribe/sources" style="color:var(--primary)">书源JSON</a> 链接
+        </div>
 
         <div class="footer">
             由 Legado Subscription 系统自动生成
