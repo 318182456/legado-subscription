@@ -416,15 +416,41 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 <body>
     <h1>📚 订阅中心</h1>
     
-    <h3><a href="${origin}/subscribe/info.json" onclick="window.location.href='yuedu://rsssource/importonline?src=' + encodeURIComponent(this.href); return false;" class="btn btn-info">
+    <script>
+        function importToLegado(type, path) {
+            const origin = window.location.origin;
+            const srcUrl = origin + path;
+            const protocol = type === 'rss' ? 'yuedu://rsssource/importonline?src=' : 
+                             type === 'book' ? 'yuedu://booksource/importonline?src=' : 
+                             'yuedu://purificationsource/importonline?src=';
+            const fullUrl = protocol + encodeURIComponent(srcUrl);
+            
+            // 尝试静默唤起：创建一个隐藏的 iframe 来触发协议
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = fullUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => document.body.removeChild(iframe), 1000);
+            
+            // 兼容性回退：如果 iframe 没反应（比如在某些外部浏览器），则尝试直接跳转
+            setTimeout(() => {
+                // 如果是阅读内部，不再进行直接跳转以免报错或显示源码
+                if (!navigator.userAgent.includes('Legado') && !navigator.userAgent.includes('yuedu')) {
+                    window.location.href = fullUrl;
+                }
+            }, 500);
+        }
+    </script>
+
+    <h3><a href="javascript:void(0)" onclick="importToLegado('rss', '/subscribe/info.json')" class="btn btn-info">
         <span>✨</span> 添加到阅读发现
     </a></h3>
 
-    <h3><a href="${origin}/subscribe/sources" onclick="window.location.href='yuedu://booksource/importonline?src=' + encodeURIComponent(this.href); return false;" class="btn">
+    <h3><a href="javascript:void(0)" onclick="importToLegado('book', '/subscribe/sources')" class="btn">
         <span>📚</span> 整合书源订阅
     </a></h3>
     
-    <h3><a href="${origin}/subscribe/rules" onclick="window.location.href='yuedu://purificationsource/importonline?src=' + encodeURIComponent(this.href); return false;" class="btn btn-rules">
+    <h3><a href="javascript:void(0)" onclick="importToLegado('rule', '/subscribe/rules')" class="btn btn-rules">
         <span>✨</span> 整合净化规则订阅
     </a></h3>
 
