@@ -18,6 +18,8 @@ export const SCHEMA_STATEMENTS = [
     enabled         INTEGER NOT NULL DEFAULT 1,
     raw_json        TEXT    NOT NULL,
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    is_available    INTEGER NOT NULL DEFAULT 1,
+    last_checked    TEXT    DEFAULT NULL,
     UNIQUE(subscription_id, book_source_url)
   )`,
   `CREATE TABLE IF NOT EXISTS rules (
@@ -43,5 +45,7 @@ export const SCHEMA_STATEMENTS = [
     transports  TEXT,
     name        TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-  )`
+  )`,
+  `ALTER TABLE sources ADD COLUMN is_available INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE sources ADD COLUMN last_checked TEXT DEFAULT NULL`
 ];

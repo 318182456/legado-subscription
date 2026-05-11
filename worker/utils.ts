@@ -231,9 +231,18 @@ export async function ensureDatabase(env: Env): Promise<void> {
     await env.DB.prepare("PRAGMA foreign_keys = ON").run();
 
     // 批量执行初始化语句 (IF NOT EXISTS)
-    // 注意：D1 的 batch 限制 100 条，这里一共不到 10 条，安全
-    const stmts = SCHEMA_STATEMENTS.map((sql) => env.DB.prepare(sql));
-    await env.DB.batch(stmts);
+    // 分离建表和改表语句，改表语句单独执行并容错
+    for (const sql of SCHEMA_STATEMENTS) {
+      try {
+        await env.DB.prepare(sql).run();
+      } catch (e: any) {
+        // 忽略 "duplicate column" 错误
+        if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
+          continue;
+        }
+        console.error(`SQL Execution Error: ${sql}`, e);
+      }
+    }
 
     schemaVerified = true;
   } catch (e) {

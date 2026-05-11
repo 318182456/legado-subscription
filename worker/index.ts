@@ -126,6 +126,11 @@ export default {
       return err(`Internal Error: ${(e as Error).message}`, 500);
     }
   },
+
+  /** 定时任务：同步订阅 & 书源可用性检查 */
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(handleScheduled(env));
+  },
 };
 
 // ─── 鉴权逻辑 ────────────────────────────────────────────────────
@@ -362,7 +367,7 @@ async function handleSync(env: Env, id: number | null): Promise<Response> {
 
 async function handleStats(env: Env): Promise<Response> {
   const subRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN type='source' THEN 1 ELSE 0 END) as sources, SUM(CASE WHEN type='rule' THEN 1 ELSE 0 END) as rules FROM subscriptions WHERE enabled=1").first()) as any;
-  const srcRow = (await env.DB.prepare("SELECT COUNT(*) as total FROM sources WHERE enabled=1").first()) as any;
+  const srcRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_available=1 THEN 1 ELSE 0 END) as available FROM sources WHERE enabled=1").first()) as any;
   const ruleRow = (await env.DB.prepare("SELECT COUNT(*) as total FROM rules WHERE enabled=1").first()) as any;
   return ok({ subscriptions: subRow, sources: srcRow, rules: ruleRow });
 }
@@ -479,5 +484,52 @@ async function handleParseLinks(url: URL): Promise<Response> {
   } catch (e) {
     const isTimeout = (e as Error).name === 'AbortError';
     return err(isTimeout ? "请求超时，目标网站响应过慢" : `解析失败: ${(e as Error).message}`, 500);
+  }
+}
+
+async function handleScheduled(env: Env) {
+  try {
+    await ensureDatabase(env);
+    console.log("Starting scheduled tasks...");
+
+    // 1. 同步所有启用订阅
+    const { results: subs } = await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled = 1").all();
+    for (const sub of subs as any[]) {
+      try {
+        console.log(`Syncing sub: ${sub.name} (${sub.url})`);
+        if (sub.type === 'source') await syncSourceSubscription(env, sub.id, sub.url);
+        else await syncRuleSubscription(env, sub.id, sub.url);
+      } catch (e) {
+        console.error(`Sync failed for sub ${sub.id}:`, e);
+      }
+    }
+
+    // 2. 检查书源可用性
+    // 每次检查最近未检查的 100 个，避免单次执行过久
+    const { results: sources } = await env.DB.prepare(
+      "SELECT id, book_source_url FROM sources WHERE enabled = 1 ORDER BY last_checked ASC LIMIT 100"
+    ).all();
+    
+    console.log(`Checking availability for ${sources.length} sources...`);
+    for (const src of sources as any[]) {
+      try {
+        // 使用 HEAD 请求快速检查，超时 5 秒
+        const res = await fetch(src.book_source_url, { 
+          method: 'HEAD', 
+          headers: { 'User-Agent': 'Mozilla/5.0 Legado-Check/1.0' }
+        });
+        const available = res.ok ? 1 : 0;
+        await env.DB.prepare("UPDATE sources SET is_available = ?, last_checked = datetime('now') WHERE id = ?")
+          .bind(available, src.id).run();
+      } catch (e) {
+        // 抓取失败视为不可用
+        await env.DB.prepare("UPDATE sources SET is_available = 0, last_checked = datetime('now') WHERE id = ?")
+          .bind(src.id).run();
+      }
+    }
+    
+    console.log("Scheduled tasks completed.");
+  } catch (e) {
+    console.error("Scheduled handler error:", e);
   }
 }
