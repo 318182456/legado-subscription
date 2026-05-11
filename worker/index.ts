@@ -661,13 +661,16 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                         }, 8000);
                         if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
                         
+                        var text = await delRes.text();
                         var delJson = null;
                         try {
-                            delJson = await delRes.json();
-                        } catch (je) { /* 忽略解析非JSON的错误 */ }
+                            delJson = JSON.parse(text);
+                        } catch (je) { 
+                            throw new Error('解析响应失败(可能不支持该API或参数过大)，返回内容: ' + text.substring(0, 80));
+                        }
                         
                         if (delJson && delJson.isSuccess === false) {
-                            throw new Error('阅读APP内部错误: ' + (delJson.errorMsg || '未知'));
+                            throw new Error('阅读APP内部报错: ' + (delJson.errorMsg || '未知'));
                         }
                     }
 
