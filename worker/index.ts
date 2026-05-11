@@ -317,16 +317,87 @@ async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promi
   });
 }
 
-/** 输出整合订阅索引 JSON */
+/** 输出整合订阅索引 HTML (仿苗公子页面) */
 async function handleSubscribeIndex(request: Request, env: Env): Promise<Response> {
   const origin = new URL(request.url).origin;
-  const index = [
-    { name: "📚 整合书源订阅", url: `${origin}/subscribe/sources` },
-    { name: "✨ 整合净化规则订阅", url: `${origin}/subscribe/rules` },
-  ];
-  return new Response(JSON.stringify(index), {
+  const html = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书源整合订阅 - Legado</title>
+    <style>
+        :root {
+            --primary: #6750A4;
+            --on-primary: #FFFFFF;
+            --surface: #FEF7FF;
+            --outline: #79747E;
+            --surface-variant: #E7E0EC;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--surface);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #1C1B1F;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--primary); }
+        p { color: var(--outline); font-size: 0.9rem; margin-bottom: 2rem; }
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background-color: var(--primary);
+            color: var(--on-primary);
+            text-decoration: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .btn:active { transform: scale(0.98); opacity: 0.9; }
+        .btn-rules { background-color: #7D5260; }
+        .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>📚 书源整合订阅</h1>
+        <p>点击下方按钮一键导入阅读 APP</p>
+        
+        <a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
+            <span>📚</span> 整合书源订阅
+        </a>
+        
+        <a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
+            <span>✨</span> 整合净化规则订阅
+        </a>
+
+        <div class="footer">
+            由 Legado Subscription 系统自动生成
+        </div>
+    </div>
+</body>
+</html>
+  `;
+  return new Response(html, {
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "text/html; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
     },
   });
