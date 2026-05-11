@@ -408,29 +408,28 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         .btn:active { transform: scale(0.98); opacity: 0.9; }
         .btn-rules { background-color: #7D5260; }
         .btn-info { background-color: #006A6A; }
-        .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; }
+        .footer { font-size: 0.7rem; color: #938F99; margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem; }
+        h1 { font-size: 1.2rem; border-left: 4px solid var(--primary); padding-left: 0.5rem; margin: 1.5rem 0; }
+        h3 { margin: 1rem 0; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>📚 书源整合订阅</h1>
-        <p>点击下方按钮一键导入阅读 APP</p>
-        
-        <h3><a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
-            <span>✨</span> 添加到阅读发现
-        </a></h3>
+    <h1>📚 订阅中心</h1>
+    
+    <h3><a href="yuedu://rsssource/importonline?src=${origin}/subscribe/info.json" class="btn btn-info">
+        <span>✨</span> 添加到阅读发现
+    </a></h3>
 
-        <h3><a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
-            <span>📚</span> 整合书源订阅
-        </a></h3>
-        
-        <h3><a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
-            <span>✨</span> 整合净化规则订阅
-        </a></h3>
+    <h3><a href="yuedu://booksource/importonline?src=${origin}/subscribe/sources" class="btn">
+        <span>📚</span> 整合书源订阅
+    </a></h3>
+    
+    <h3><a href="yuedu://purificationsource/importonline?src=${origin}/subscribe/rules" class="btn btn-rules">
+        <span>✨</span> 整合净化规则订阅
+    </a></h3>
 
-        <div class="footer">
-            由 Legado Subscription 系统自动生成
-        </div>
+    <div class="footer">
+        由 Legado Subscription 系统自动生成
     </div>
 </body>
 </html>
@@ -459,7 +458,7 @@ function handleSubscribeInfo(request: Request): Response {
       }),
       "ruleExplore": [
         {
-          "title": "订阅中心",
+          "title": "一键导入",
           "url": `${origin}/subscribe/index`,
           "style": "layout_t_p_b64"
         }
@@ -468,7 +467,7 @@ function handleSubscribeInfo(request: Request): Response {
       "ruleTitle": "a@text",
       "ruleLink": "a@href",
       "enabled": true,
-      "type": 3
+      "type": 0
     }
   ];
 
