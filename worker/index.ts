@@ -600,7 +600,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                                 '当前页面为 HTTPS，无法直接访问本机 HTTP 服务。<br><br>' +
                                 '解决方法：<br>' +
                                 '① 在阅读「发现」中打开此页后点击按钮（推荐）<br>' +
-                                '② 或用手机浏览器打开 http://172.28.26.162:' + port + ' 中的管理页面手动清除',
+                                '② 或用手机浏览器打开 http://127.0.0.1:' + port + ' 中的管理页面手动清除',
                                 'error'
                             );
                         } else {
@@ -611,7 +611,8 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                     }
 
                     if (!res.ok) throw new Error('服务返回 ' + res.status);
-                    var sources = await res.json();
+                    var resJson = await res.json();
+                    var sources = Array.isArray(resJson) ? resJson : (resJson.data || []);
 
                     if (!Array.isArray(sources) || sources.length === 0) {
                         showStatus('本地无书源，直接导入订阅…', 'info');
