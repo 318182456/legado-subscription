@@ -1060,9 +1060,26 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
   const [url, setUrl] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [list, setList] = useState<{ name: string; url: string }[]>([]);
+  const [existingUrls, setExistingUrls] = useState<Set<string>>(new Set());
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [editingNames, setEditingNames] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
+  const [batchAdding, setBatchAdding] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('legado_parse_history');
+    if (saved) setHistory(JSON.parse(saved));
+  }, []);
+
+  const fetchExisting = async () => {
+    try {
+      const subs = await api.getSubscriptions();
+      setExistingUrls(new Set(subs.map(s => s.url)));
+    } catch (e) {
+      console.error('Failed to fetch existing subs', e);
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('legado_parse_history');
@@ -1079,9 +1096,11 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
     if (!url) return;
     setLoading(true);
     try {
+      await fetchExisting();
       const data = await api.parseLinks(url);
       setList(data);
       setEditingNames({});
+      setSelectedUrls(new Set());
       saveHistory(url);
     } catch (e) {
       alert('解析失败: ' + String(e));
@@ -1097,16 +1116,45 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
   }, [isOpen]);
 
   const handleAdd = async (item: { name: string; url: string }) => {
+    if (existingUrls.has(item.url)) return;
     setAdding(item.url);
     try {
       await api.addSubscription({ name: item.name, url: item.url, type: 'source' });
-      alert('添加成功: ' + item.name);
-      onAdded();
+      setExistingUrls(prev => new Set([...prev, item.url]));
+      // alert('添加成功: ' + item.name); // 减少干扰
     } catch (e) {
       alert('添加失败: ' + String(e));
     } finally {
       setAdding(null);
     }
+  };
+
+  const handleBatchAdd = async () => {
+    if (selectedUrls.size === 0) return;
+    setBatchAdding(true);
+    let success = 0;
+    for (const subUrl of selectedUrls) {
+      const item = list.find(i => i.url === subUrl);
+      if (item && !existingUrls.has(subUrl)) {
+        try {
+          const name = editingNames[list.indexOf(item)] ?? item.name;
+          await api.addSubscription({ name, url: subUrl, type: 'source' });
+          success++;
+        } catch (e) {
+          console.error(`Failed to add ${subUrl}`, e);
+        }
+      }
+    }
+    setBatchAdding(false);
+    alert(`成功批量添加 ${success} 个订阅`);
+    onAdded();
+  };
+
+  const toggleSelect = (url: string) => {
+    const next = new Set(selectedUrls);
+    if (next.has(url)) next.delete(url);
+    else next.add(url);
+    setSelectedUrls(next);
   };
 
   if (!isOpen) return null;
@@ -1119,10 +1167,22 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
         className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]"
       >
         <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright shrink-0">
-          <h3 className="font-bold text-lg flex items-center gap-2">
-            <Sparkles size={20} className="text-tertiary" />
-            外部网页解析 (提取导入链接)
-          </h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <Sparkles size={20} className="text-tertiary" />
+              外部网页解析
+            </h3>
+            {list.length > 0 && selectedUrls.size > 0 && (
+              <button 
+                onClick={handleBatchAdd}
+                disabled={batchAdding}
+                className="bg-primary text-on-primary px-3 py-1 rounded-full text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1.5 shadow-md"
+              >
+                {batchAdding ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
+                添加选中 ({selectedUrls.size})
+              </button>
+            )}
+          </div>
           <button onClick={onClose} className="p-1 text-secondary hover:text-on-surface transition-colors">
             <X size={20} />
           </button>
@@ -1180,39 +1240,64 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
                 ? (item.url.split('/').pop()?.replace('.json', '') || '未知来源')
                 : item.name;
               const currentName = editingNames[idx] ?? baseName;
+              const isAdded = existingUrls.has(item.url);
+              const isSelected = selectedUrls.has(item.url);
 
               return (
-                <div key={idx} className="flex flex-col p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
+                <div key={idx} className={`flex flex-col p-4 rounded-xl border transition-all ${
+                  isAdded ? 'bg-surface-container-low/50 border-outline-variant opacity-75' : 
+                  isSelected ? 'border-primary bg-primary/5' : 'border-outline-variant hover:bg-surface-container-low'
+                }`}>
                   <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1 flex flex-col">
-                      <input 
-                        type="text"
-                        value={currentName}
-                        onChange={(e) => setEditingNames({...editingNames, [idx]: e.target.value})}
-                        className="font-bold text-sm bg-transparent border-b border-transparent hover:border-outline focus:border-primary focus:bg-surface-container-lowest px-1 py-0.5 outline-none transition-all w-full"
-                      />
-                      <p className="text-[10px] text-secondary truncate mt-1 font-mono px-1">{item.url}</p>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {!isAdded && (
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => toggleSelect(item.url)}
+                          className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/20 cursor-pointer"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1 flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="text"
+                            value={currentName}
+                            onChange={(e) => setEditingNames({...editingNames, [idx]: e.target.value})}
+                            disabled={isAdded}
+                            className={`font-bold text-sm bg-transparent border-b border-transparent hover:border-outline focus:border-primary px-1 py-0.5 outline-none transition-all w-full ${isAdded ? 'text-secondary' : ''}`}
+                          />
+                          {isAdded && (
+                            <span className="shrink-0 px-1.5 py-0.5 bg-surface-container-highest text-secondary text-[10px] rounded font-bold">已添加</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-secondary truncate mt-1 font-mono px-1">{item.url}</p>
+                      </div>
                     </div>
                     <button 
                       onClick={() => handleAdd({ ...item, name: currentName })}
-                      disabled={!!adding}
-                      className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                      disabled={!!adding || isAdded}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 ${
+                        isAdded ? 'bg-surface-container text-outline cursor-default shadow-none' : 'bg-primary text-on-primary hover:opacity-90'
+                      }`}
                     >
                       {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
-                      添加
+                      {isAdded ? '已在库' : '添加'}
                     </button>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {currentName.split(/[\s·\-_]+/).filter(s => s.length > 1).map((word, wi) => (
-                      <button 
-                        key={wi}
-                        onClick={() => setEditingNames({...editingNames, [idx]: word})}
-                        className="text-[10px] bg-secondary-container/20 text-secondary px-1.5 py-0.5 rounded hover:bg-primary hover:text-on-primary transition-all"
-                      >
-                        {word}
-                      </button>
-                    ))}
-                  </div>
+                  {!isAdded && (
+                    <div className="mt-2 flex flex-wrap gap-1 ml-7">
+                      {currentName.split(/[\s·\-_]+/).filter(s => s.length > 1).map((word, wi) => (
+                        <button 
+                          key={wi}
+                          onClick={() => setEditingNames({...editingNames, [idx]: word})}
+                          className="text-[10px] bg-secondary-container/20 text-secondary px-1.5 py-0.5 rounded hover:bg-primary hover:text-on-primary transition-all"
+                        >
+                          {word}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })
