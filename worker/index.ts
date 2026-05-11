@@ -660,12 +660,25 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                             body: JSON.stringify(chunk)
                         }, 8000);
                         if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
+                        try {
+                            var delJson = await delRes.json();
+                            if (delJson && delJson.isSuccess === false) {
+                                throw new Error(delJson.errorMsg || '阅读服务内部错误');
+                            }
+                        } catch (je) {
+                            // 忽略非 JSON 响应的解析错误，但如果是明确的业务错误则抛出
+                            if (je.message && je.message.indexOf('阅读服务') !== -1) throw je;
+                        }
                     }
 
                     // 4. 跳转导入
-                    showStatus('✅ 删除完成，正在跳转导入…', 'success');
+                    showStatus('✅ 删除完成，正在拉起导入…', 'success');
                     restore();
-                    setTimeout(function() { location.href = importUrl; }, 800);
+                    setTimeout(function() { 
+                        var a = document.createElement('a');
+                        a.href = importUrl;
+                        a.click();
+                    }, 800);
 
                 } catch (e) {
                     restore();
