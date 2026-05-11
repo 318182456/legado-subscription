@@ -1146,22 +1146,27 @@ function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: { isOpen: boolean; o
               <p className="text-secondary">未找到任何有效的导入链接，请尝试输入其他 URL</p>
             </div>
           ) : (
-            list.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-bold truncate text-sm">{item.name}</h4>
-                  <p className="text-[10px] text-secondary truncate mt-1 font-mono">{item.url}</p>
+            list.map((item, idx) => {
+              const displayName = item.name === '未知来源' 
+                ? (item.url.split('/').pop()?.replace('.json', '') || '未知来源')
+                : item.name;
+              return (
+                <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors group">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold truncate text-sm">{displayName}</h4>
+                    <p className="text-[10px] text-secondary truncate mt-1 font-mono">{item.url}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleAdd({ ...item, name: displayName })}
+                    disabled={!!adding}
+                    className="ml-4 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  >
+                    {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
+                    添加
+                  </button>
                 </div>
-                <button 
-                  onClick={() => handleAdd(item)}
-                  disabled={!!adding}
-                  className="ml-4 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                >
-                  {adding === item.url ? <RefreshCw className="animate-spin" size={14} /> : <Plus size={14} />}
-                  添加
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </motion.div>

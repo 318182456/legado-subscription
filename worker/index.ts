@@ -394,7 +394,6 @@ async function handleParseLinks(url: URL): Promise<Response> {
   if (!targetUrl) return err("url 不能为空");
 
   try {
-    // 设置 15 秒超时，避免 Worker 挂起
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -414,15 +413,51 @@ async function handleParseLinks(url: URL): Promise<Response> {
     
     const results: { name: string; url: string }[] = [];
     
-    // 增强的正则：兼容多种 HTML 属性顺序，提取 src= 后面的内容
     // 匹配 yuedu:// 或 legado:// 链接中的 src 参数
-    const regex = /<a[^>]+href="[^"]*src=([^"& ]+)[^>]*>([\s\S]*?)<\/a>/g;
+    // 同时也适配 onclick 等属性中的链接
+    const linkRegex = /src=([^"& ]+)/g;
     let match;
-    while ((match = regex.exec(html)) !== null) {
-      let url = decodeURIComponent(match[1]);
-      let name = match[2].replace(/<[^>]+>/g, '').trim(); // 移除内部 HTML 标签
-      if (url && name) {
-        results.push({ name, url });
+    while ((match = linkRegex.exec(html)) !== null) {
+      const subUrl = decodeURIComponent(match[1]).replace(/['"]$/, ''); // 清理末尾引号
+      if (!subUrl.startsWith('http')) continue;
+
+      const matchIndex = match.index;
+      // 往前查找附近的标题信息
+      const searchRange = html.substring(Math.max(0, matchIndex - 1000), matchIndex);
+      
+      // 优先级 1: 寻找最近的标题标签 (h1-h6) 或带有 title 类的 div
+      const titlePatterns = [
+        /<(h[1-6]|div)[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/\1>/gi,
+        /<(h[1-6])>([\s\S]*?)<\/\1>/gi,
+        /<div[^>]*class="aui-flex-box"[^>]*>([\s\S]*?)<\/div>/gi
+      ];
+
+      let bestName = "";
+      for (const pattern of titlePatterns) {
+        let tMatch;
+        let lastMatchText = "";
+        while ((tMatch = pattern.exec(searchRange)) !== null) {
+          lastMatchText = tMatch[tMatch.length - 1].replace(/<[^>]+>/g, '').trim();
+        }
+        if (lastMatchText) {
+          bestName = lastMatchText;
+          // 不再 break，因为要找最后一个（离链接最近的）
+        }
+      }
+
+      // 如果还是没找到，尝试找包含链接的 a 标签本身的 title 属性
+      if (!bestName) {
+        const linkTag = html.substring(matchIndex - 50, matchIndex + 200);
+        const titleAttr = /title="([^"]+)"/.exec(linkTag);
+        if (titleAttr) bestName = titleAttr[1];
+      }
+
+      // 过滤掉无意义的名称
+      const name = (bestName && bestName !== "一键导入") ? bestName : "未知来源";
+      
+      // 避免重复（同一个页面可能有多个按钮指向同一个源）
+      if (!results.find(r => r.url === subUrl)) {
+        results.push({ name, url: subUrl });
       }
     }
 
