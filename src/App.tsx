@@ -430,6 +430,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
       setStats(data.stats);
       setHasMore(data.hasMore);
       setPage(p);
+      console.log('书源统计更新:', data.stats);
     } catch (e) {
       console.error('获取书源失败', e);
     } finally {
@@ -524,6 +525,22 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     }
   };
 
+  const handleCleanup = async () => {
+    if (!confirm(`确定要删除所有 ${stats.unavailable} 个失效书源吗？此操作不可恢复。`)) return;
+    try {
+      setLoading(true);
+      const data = await api.getSources("", 1, "unavailable");
+      // 注意：这里删除当前页能看到的失效源
+      await Promise.all(data.sources.map((s: any) => api.deleteSource(s.id)));
+      alert('清理完成 (当前页)');
+      fetchSources(query, 1, filter);
+    } catch (e) {
+      alert('清理失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCopyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
     alert('已复制到剪贴板');
@@ -539,25 +556,35 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   }
 
   return (
+    <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <SummaryIconCard 
+          <StatCard 
             icon={<BookOpen size={24} />} 
             label="总书源" 
             value={stats.total.toLocaleString()} 
             color="bg-primary/10 text-primary"
           />
-          <SummaryIconCard 
+          <StatCard 
             icon={<CheckCircle2 size={24} />} 
             label="正常书源" 
             value={stats.available.toLocaleString()} 
             color="bg-green-500/10 text-green-600"
           />
-          <SummaryIconCard 
+          <StatCard 
             icon={<AlertCircle size={24} />} 
             label="失效书源" 
             value={stats.unavailable.toLocaleString()} 
             color="bg-error/10 text-error"
           />
+          {stats.unavailable > 0 && (
+            <button 
+              onClick={handleCleanup}
+              className="absolute -top-2 -right-2 bg-error text-white p-1 rounded-full shadow-lg hover:scale-110 transition-transform"
+              title="清理所有失效书源"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -863,9 +890,9 @@ function RulesView({ onImport }: { onImport: () => void }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <SummaryIconCard icon={<Sparkles size={24} />} label="总规则数量" value={rules.length?.toLocaleString() || '0'} />
-        <SummaryIconCard icon={<CheckCircle2 size={24} />} label="已启用规则" value={rules.filter(r => r.enabled).length?.toLocaleString() || '0'} />
-        <SummaryIconCard icon={<RefreshCw size={24} />} label="最近更新" value="刚刚" />
+        <StatCard icon={<Sparkles size={24} />} label="总规则数量" value={rules.length?.toLocaleString() || '0'} color="bg-primary/10 text-primary" />
+        <StatCard icon={<CheckCircle2 size={24} />} label="已启用规则" value={rules.filter((r: any) => r.enabled).length?.toLocaleString() || '0'} color="bg-green-500/10 text-green-600" />
+        <StatCard icon={<RefreshCw size={24} />} label="最近更新" value="刚刚" color="bg-secondary/10 text-secondary" />
       </div>
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
