@@ -160,6 +160,14 @@ function isAuthed(request: Request, env: Env): boolean {
   return auth === `Bearer ${pwd}`;
 }
 
+function getOrigins(request: Request): string | string[] {
+  const origin = new URL(request.url).origin;
+  if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+    return [origin, "http://localhost:5173", "http://localhost:3000", "http://localhost:8787"];
+  }
+  return origin;
+}
+
 async function handleLogin(request: Request, env: Env): Promise<Response> {
   const body = await parseBody<{ password?: string }>(request);
   const pwd = env.ADMIN_PASSWORD || env.API_SECRET || "admin888";
@@ -198,7 +206,7 @@ async function handlePasskeyRegisterBegin(request: Request, env: Env): Promise<R
       id: p.id as string,
       transports: JSON.parse((p.transports as string) || "[]") as AuthenticatorTransportFuture[],
     })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
+    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
   });
 
   await env.KV.put("passkey:reg_challenge", options.challenge, { expirationTtl: 300 });
@@ -216,7 +224,7 @@ async function handlePasskeyRegisterFinish(request: Request, env: Env): Promise<
   const verification = await verifyRegistrationResponse({
     response: body,
     expectedChallenge,
-    expectedOrigin: origin,
+    expectedOrigin: getOrigins(request),
     expectedRPID: rpID,
   });
 
@@ -254,7 +262,7 @@ async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Resp
       id: p.id as string,
       transports: JSON.parse((p.transports as string) || "[]") as AuthenticatorTransportFuture[],
     })),
-    userVerification: "required",
+    userVerification: "preferred",
   });
 
   await env.KV.put("passkey:auth_challenge", options.challenge, { expirationTtl: 300 });
@@ -276,7 +284,7 @@ async function handlePasskeyLoginFinish(request: Request, env: Env): Promise<Res
   const verification = await verifyAuthenticationResponse({
     response: body,
     expectedChallenge,
-    expectedOrigin: origin,
+    expectedOrigin: getOrigins(request),
     expectedRPID: rpID,
     authenticator: {
       credentialID: b64urlToU8(passkey.id),
