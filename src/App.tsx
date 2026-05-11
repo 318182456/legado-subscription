@@ -80,19 +80,25 @@ export default function App() {
     setTestProgress({ current: 0, total: ids.length });
 
     try {
-      const chunkSize = 30;
-      const chunks = [];
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        chunks.push(ids.slice(i, i + chunkSize));
+      // 每批 50 个 ID 发一次请求，最多 3 个请求并发执行
+      const CHUNK = 50;
+      const CONCURRENCY = 3;
+      const chunks: number[][] = [];
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        chunks.push(ids.slice(i, i + CHUNK));
       }
 
-      const batchSize = 5; 
       let processed = 0;
-      for (let i = 0; i < chunks.length; i += batchSize) {
-        const batch = chunks.slice(i, i + batchSize);
-        await Promise.all(batch.map(chunk => api.testSources(chunk)));
-        processed += batch.reduce((sum, chunk) => sum + chunk.length, 0);
-        setTestProgress(prev => ({ ...prev, current: processed }));
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const wave = chunks.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          wave.map(chunk =>
+            api.testSources(chunk).then(() => {
+              processed += chunk.length;
+              setTestProgress(prev => ({ ...prev, current: Math.min(processed, ids.length) }));
+            })
+          )
+        );
       }
       onFinished?.();
     } catch (e) {

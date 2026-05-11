@@ -522,7 +522,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         <script>
             async function clearAndImport() {
                 // 阅读 App 本地 Web API 默认端口
-                const port = 1234;
+                const port = 1122;
                 const base = 'http://127.0.0.1:' + port;
                 const importUrl = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
 
@@ -853,79 +853,74 @@ async function handleTestSources(env: Env, request: Request): Promise<Response> 
   const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
-  // 2. 并发测试
-  const chunkSize = 15; 
-  for (let i = 0; i < ids.length; i += chunkSize) {
-    const chunk = ids.slice(i, i + chunkSize);
-    await Promise.all(chunk.map(async (id) => {
-      const sourceData = sourcesMap.get(id);
-      if (!sourceData) {
-        testResults[id] = false;
-        return;
-      }
+  // 2. 全并发测试（CF Worker 并发能力足够，不需要分批限流）
+  await Promise.all(ids.map(async (id) => {
+    const sourceData = sourcesMap.get(id);
+    if (!sourceData) {
+      testResults[id] = false;
+      return;
+    }
 
-      let urlToTest = sourceData.book_source_url;
-      let fetchOptions: RequestInit = {
-        method: 'GET',
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-        },
-        signal: AbortSignal.timeout(8000) // 搜索通常比主页慢，增加到 8秒
-      };
+    let urlToTest = sourceData.book_source_url;
+    let fetchOptions: RequestInit = {
+      method: 'GET',
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+      },
+      signal: AbortSignal.timeout(8000)
+    };
 
-      try {
-        const json = JSON.parse(sourceData.raw_json);
-        let searchUrl = json.searchUrl;
+    try {
+      const json = JSON.parse(sourceData.raw_json);
+      let searchUrl = json.searchUrl;
 
-        if (searchUrl) {
-          // 处理 Legado 复杂的 searchUrl 格式：url[,options]
-          let urlPart = searchUrl;
-          if (searchUrl.includes(',{')) {
-            const parts = searchUrl.split(',{');
-            urlPart = parts[0];
-            try {
-              const extraOptions = JSON.parse('{' + parts[1]);
-              if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
-              if (extraOptions.body) {
-                fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
-              }
-              if (extraOptions.headers) {
-                fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
-              }
-            } catch (e) { /* 忽略解析错误 */ }
-          }
-
-          // 替换 URL 中的关键词
-          urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
-
-          // 构建完整 URL
-          if (urlPart.startsWith('http')) {
-            urlToTest = urlPart;
-          } else {
-            const baseUrl = json.bookSourceUrl || sourceData.book_source_url;
-            try {
-              urlToTest = new URL(urlPart, baseUrl).toString();
-            } catch (e) {
-              urlToTest = baseUrl.replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
+      if (searchUrl) {
+        // 处理 Legado 复杂的 searchUrl 格式：url[,options]
+        let urlPart = searchUrl;
+        if (searchUrl.includes(',{')) {
+          const parts = searchUrl.split(',{');
+          urlPart = parts[0];
+          try {
+            const extraOptions = JSON.parse('{' + parts[1]);
+            if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
+            if (extraOptions.body) {
+              fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
             }
+            if (extraOptions.headers) {
+              fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
+            }
+          } catch (e) { /* 忽略解析错误 */ }
+        }
+
+        // 替换 URL 中的关键词
+        urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+
+        // 构建完整 URL
+        if (urlPart.startsWith('http')) {
+          urlToTest = urlPart;
+        } else {
+          const baseUrl = json.bookSourceUrl || sourceData.book_source_url;
+          try {
+            urlToTest = new URL(urlPart, baseUrl).toString();
+          } catch (e) {
+            urlToTest = baseUrl.replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
           }
         }
-      } catch (e) { /* 解析 JSON 失败则回退到基础测试 */ }
+      }
+    } catch (e) { /* 解析 JSON 失败则回退到基础测试 */ }
 
-      try {
-        const res = await fetch(urlToTest, fetchOptions);
-        // 只要能通且有内容返回就算可用
-        if (res.status >= 200 && res.status < 400) {
-          const text = await res.text();
-          testResults[id] = text.length > 100; // 搜索结果通常应该有一定的长度
-        } else {
-          testResults[id] = false;
-        }
-      } catch (e) {
+    try {
+      const res = await fetch(urlToTest, fetchOptions);
+      if (res.status >= 200 && res.status < 400) {
+        const text = await res.text();
+        testResults[id] = text.length > 100;
+      } else {
         testResults[id] = false;
       }
-    }));
-  }
+    } catch (e) {
+      testResults[id] = false;
+    }
+  }));
 
   // 3. 批量更新数据库 (Cloudflare D1 batch)
   const statements = ids.map(id => {
@@ -977,28 +972,37 @@ async function handleScheduled(env: Env) {
       }
     }
 
-    // 2. 检查书源可用性
-    // 每次检查最近未检查的 100 个，避免单次执行过久
+    // 2. 检查书源可用性 — 并发请求 + batch 写入
     const { results: sources } = await env.DB.prepare(
       "SELECT id, book_source_url FROM sources WHERE enabled = 1 ORDER BY last_checked ASC LIMIT 100"
     ).all();
     
     console.log(`Checking availability for ${sources.length} sources...`);
-    for (const src of sources as any[]) {
+
+    const checkResults: Record<number, boolean> = {};
+    await Promise.all((sources as any[]).map(async (src) => {
       try {
-        // 使用 HEAD 请求快速检查，超时 5 秒
+        // HEAD 请求快速检查，超时 3 秒
         const res = await fetch(src.book_source_url, { 
           method: 'HEAD', 
-          headers: { 'User-Agent': 'Mozilla/5.0 Legado-Check/1.0' }
+          headers: { 'User-Agent': 'Mozilla/5.0 Legado-Check/1.0' },
+          signal: AbortSignal.timeout(3000)
         });
-        const available = res.ok ? 1 : 0;
-        await env.DB.prepare("UPDATE sources SET is_available = ?, last_checked = datetime('now') WHERE id = ?")
-          .bind(available, src.id).run();
+        checkResults[src.id] = res.ok;
       } catch (e) {
-        // 抓取失败视为不可用
-        await env.DB.prepare("UPDATE sources SET is_available = 0, last_checked = datetime('now') WHERE id = ?")
-          .bind(src.id).run();
+        checkResults[src.id] = false;
       }
+    }));
+
+    // batch 写入全部结果
+    if (sources.length > 0) {
+      const stmts = (sources as any[]).map(src => {
+        const avail = checkResults[src.id] ? 1 : 0;
+        return env.DB.prepare(
+          "UPDATE sources SET is_available = ?, last_checked = datetime('now') WHERE id = ?"
+        ).bind(avail, src.id);
+      });
+      await env.DB.batch(stmts);
     }
     
     console.log("Scheduled tasks completed.");
