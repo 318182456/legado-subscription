@@ -445,6 +445,8 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
+  const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
+  const [isTestingAll, setIsTestingAll] = useState(false);
 
   const fetchSources = async (q = '', p = 1, f = 'all') => {
     setLoading(true);
@@ -476,6 +478,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     const nextTesting = new Set(testingIds);
     ids.forEach(id => nextTesting.add(id));
     setTestingIds(nextTesting);
+    setTestProgress({ current: 0, total: ids.length });
 
     try {
       // 提高并发度，同时处理更多分片
@@ -487,9 +490,12 @@ function SourceListView({ onImport }: { onImport: () => void }) {
 
       // 同时进行 5 个请求批次，显著提升速度
       const batchSize = 5; 
+      let processed = 0;
       for (let i = 0; i < chunks.length; i += batchSize) {
         const batch = chunks.slice(i, i + batchSize);
         await Promise.all(batch.map(chunk => api.testSources(chunk)));
+        processed += batch.reduce((sum, chunk) => sum + chunk.length, 0);
+        setTestProgress(prev => ({ ...prev, current: processed }));
       }
       
       fetchSources(query, page, filter);
@@ -501,18 +507,19 @@ function SourceListView({ onImport }: { onImport: () => void }) {
         ids.forEach(id => next.delete(id));
         return next;
       });
+      setTestProgress({ current: 0, total: 0 });
     }
   };
 
   const handleTestAll = async () => {
     try {
-      setLoading(true);
+      setIsTestingAll(true);
       const allIds = await api.getAllSourceIds();
       await handleTest(allIds);
     } catch (e) {
       alert('获取全部 ID 失败: ' + String(e));
     } finally {
-      setLoading(false);
+      setIsTestingAll(false);
     }
   };
 
@@ -653,10 +660,17 @@ function SourceListView({ onImport }: { onImport: () => void }) {
 
           <button 
             onClick={handleTestAll}
-            disabled={loading && testingIds.size > 0}
-            className="border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50"
+            disabled={isTestingAll || (loading && testingIds.size > 0)}
+            className="border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50 relative overflow-hidden"
           >
-            <ShieldCheck size={14} /> {loading && testingIds.size > 0 ? `测试中 (${testingIds.size})...` : '全部测试 (库)'}
+            <ShieldCheck size={14} /> 
+            {isTestingAll ? `测试中 (${testProgress.current}/${testProgress.total})` : '全部测试 (库)'}
+            {isTestingAll && testProgress.total > 0 && (
+              <div 
+                className="absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300" 
+                style={{ width: `${(testProgress.current / testProgress.total) * 100}%` }}
+              />
+            )}
           </button>
 
           <button 
