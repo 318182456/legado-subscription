@@ -537,8 +537,8 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
           <div style="background:#fff;border-radius:20px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
             <p id="confirm-text" style="margin:0 0 20px;font-size:0.95rem;line-height:1.6;color:#1c1b1f"></p>
             <div style="display:flex;gap:10px">
-              <button onclick="modalResolve(false)" style="flex:1;padding:10px;border-radius:12px;border:1px solid #79747e;background:#fff;font-size:0.9rem;cursor:pointer">取消</button>
-              <button onclick="modalResolve(true)" style="flex:1;padding:10px;border-radius:12px;border:none;background:#B3261E;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer">确定清除</button>
+              <button onclick="closeModal(false)" style="flex:1;padding:10px;border-radius:12px;border:1px solid #79747e;background:#fff;font-size:0.9rem;cursor:pointer">取消</button>
+              <button onclick="closeModal(true)" style="flex:1;padding:10px;border-radius:12px;border:none;background:#B3261E;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer">确定清除</button>
             </div>
           </div>
         </div>
@@ -553,11 +553,11 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         </div>
 
         <script>
-            var modalResolve = null;
+            var _modalResolve = null;
 
             function showModal(text) {
                 return new Promise(function(resolve) {
-                    modalResolve = resolve;
+                    _modalResolve = resolve;
                     document.getElementById('confirm-text').innerHTML = text;
                     var m = document.getElementById('confirm-modal');
                     m.style.display = 'flex';
@@ -565,9 +565,9 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             }
 
             // 关闭弹层并 resolve
-            window.modalResolve = function(val) {
+            window.closeModal = function(val) {
                 document.getElementById('confirm-modal').style.display = 'none';
-                if (modalResolve) { modalResolve(val); modalResolve = null; }
+                if (_modalResolve) { _modalResolve(val); _modalResolve = null; }
             };
 
             function showStatus(msg, type) {
@@ -650,13 +650,17 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
                     if (btn) { btn.textContent = '⏳ 删除中...'; btn.style.pointerEvents = 'none'; }
                     showStatus('正在删除 ' + sources.length + ' 个本地书源…', 'info');
 
-                    // 3. 批量删除
-                    var delRes = await fetchWithTimeout(base + '/deleteBookSources', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(sources)
-                    }, 8000);
-                    if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
+                    // 3. 分批批量删除（防止 NanoHTTPD 请求体过大或超时）
+                    var batchSize = 100;
+                    for (var i = 0; i < sources.length; i += batchSize) {
+                        var chunk = sources.slice(i, i + batchSize);
+                        var delRes = await fetchWithTimeout(base + '/deleteBookSources', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(chunk)
+                        }, 8000);
+                        if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
+                    }
 
                     // 4. 跳转导入
                     showStatus('✅ 删除完成，正在跳转导入…', 'success');
