@@ -66,6 +66,58 @@ export default function App() {
   const [authChecking, setAuthChecking] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isMiaogongziModalOpen, setIsMiaogongziModalOpen] = useState(false);
+  const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
+  const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
+  const [isTestingAll, setIsTestingAll] = useState(false);
+
+  const handleTest = async (ids: number[], onFinished?: () => void) => {
+    if (!ids.length) return;
+    setTestingIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      return next;
+    });
+    setTestProgress({ current: 0, total: ids.length });
+
+    try {
+      const chunkSize = 30;
+      const chunks = [];
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        chunks.push(ids.slice(i, i + chunkSize));
+      }
+
+      const batchSize = 5; 
+      let processed = 0;
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        await Promise.all(batch.map(chunk => api.testSources(chunk)));
+        processed += batch.reduce((sum, chunk) => sum + chunk.length, 0);
+        setTestProgress(prev => ({ ...prev, current: processed }));
+      }
+      onFinished?.();
+    } catch (e) {
+      alert('测试执行失败: ' + String(e));
+    } finally {
+      setTestingIds(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => next.delete(id));
+        return next;
+      });
+      setTestProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const handleTestAll = async (onFinished?: () => void) => {
+    try {
+      setIsTestingAll(true);
+      const allIds = await api.getAllSourceIds();
+      await handleTest(allIds, onFinished);
+    } catch (e) {
+      alert('获取全部 ID 失败: ' + String(e));
+    } finally {
+      setIsTestingAll(false);
+    }
+  };
 
   useEffect(() => {
     const handleUnauthorized = () => setIsLoggedIn(false);
@@ -202,7 +254,16 @@ export default function App() {
                   onExplore={() => setIsMiaogongziModalOpen(true)} 
                 />
               )}
-              {currentPage === 'sources' && <SourceListView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'sources' && (
+                <SourceListView 
+                  onImport={() => setIsAddModalOpen(true)} 
+                  testingIds={testingIds}
+                  testProgress={testProgress}
+                  isTestingAll={isTestingAll}
+                  onTest={handleTest}
+                  onTestAll={handleTestAll}
+                />
+              )}
               {currentPage === 'rules' && <RulesView onImport={() => setIsAddModalOpen(true)} />}
               {currentPage === 'settings' && <SettingsView />}
             </motion.div>
@@ -432,7 +493,16 @@ function StatCard({ icon, label, value, color, isSmallValue }: { icon: React.Rea
   );
 }
 
-function SourceListView({ onImport }: { onImport: () => void }) {
+function SourceListView({ 
+  onImport, testingIds, testProgress, isTestingAll, onTest, onTestAll 
+}: { 
+  onImport: () => void;
+  testingIds: Set<number>;
+  testProgress: { current: number; total: number };
+  isTestingAll: boolean;
+  onTest: (ids: number[], onFinished?: () => void) => Promise<void>;
+  onTestAll: (onFinished?: () => void) => Promise<void>;
+}) {
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -444,9 +514,6 @@ function SourceListView({ onImport }: { onImport: () => void }) {
   const [filter, setFilter] = useState('all');
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
-  const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
-  const [isTestingAll, setIsTestingAll] = useState(false);
 
   const fetchSources = async (q = '', p = 1, f = 'all') => {
     setLoading(true);
@@ -473,54 +540,12 @@ function SourceListView({ onImport }: { onImport: () => void }) {
     return () => clearTimeout(timer);
   }, [query, filter]);
 
-  const handleTest = async (ids: number[]) => {
-    if (!ids.length) return;
-    const nextTesting = new Set(testingIds);
-    ids.forEach(id => nextTesting.add(id));
-    setTestingIds(nextTesting);
-    setTestProgress({ current: 0, total: ids.length });
-
-    try {
-      // 提高并发度，同时处理更多分片
-      const chunkSize = 30;
-      const chunks = [];
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        chunks.push(ids.slice(i, i + chunkSize));
-      }
-
-      // 同时进行 5 个请求批次，显著提升速度
-      const batchSize = 5; 
-      let processed = 0;
-      for (let i = 0; i < chunks.length; i += batchSize) {
-        const batch = chunks.slice(i, i + batchSize);
-        await Promise.all(batch.map(chunk => api.testSources(chunk)));
-        processed += batch.reduce((sum, chunk) => sum + chunk.length, 0);
-        setTestProgress(prev => ({ ...prev, current: processed }));
-      }
-      
-      fetchSources(query, page, filter);
-    } catch (e) {
-      alert('测试执行失败: ' + String(e));
-    } finally {
-      setTestingIds(prev => {
-        const next = new Set(prev);
-        ids.forEach(id => next.delete(id));
-        return next;
-      });
-      setTestProgress({ current: 0, total: 0 });
-    }
+  const handleLocalTest = (ids: number[]) => {
+    onTest(ids, () => fetchSources(query, page, filter));
   };
 
-  const handleTestAll = async () => {
-    try {
-      setIsTestingAll(true);
-      const allIds = await api.getAllSourceIds();
-      await handleTest(allIds);
-    } catch (e) {
-      alert('获取全部 ID 失败: ' + String(e));
-    } finally {
-      setIsTestingAll(false);
-    }
+  const handleLocalTestAll = () => {
+    onTestAll(() => fetchSources(query, page, filter));
   };
 
   const toggleAll = () => {
@@ -651,7 +676,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
           
           {selectedIds.size > 0 && (
             <button 
-              onClick={() => handleTest(Array.from(selectedIds))}
+              onClick={() => handleLocalTest(Array.from(selectedIds))}
               className="bg-tertiary text-on-tertiary px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 flex items-center gap-1.5"
             >
               <Zap size={14} /> 测试选中 ({selectedIds.size})
@@ -659,7 +684,7 @@ function SourceListView({ onImport }: { onImport: () => void }) {
           )}
 
           <button 
-            onClick={handleTestAll}
+            onClick={handleLocalTestAll}
             disabled={isTestingAll || (loading && testingIds.size > 0)}
             className="border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50 relative overflow-hidden"
           >
