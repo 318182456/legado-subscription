@@ -188,6 +188,7 @@ export default function App() {
               {currentPage === 'settings' && <SettingsView />}
             </motion.div>
           </AnimatePresence>
+          </div>
         </div>
       </main>
 
