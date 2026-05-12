@@ -490,12 +490,15 @@ function FontPreview({ path, name }: { path: string; name: string }) {
 
   useEffect(() => {
     const fontUrl = `${window.location.origin}/repo/${path}`;
-    const fontFace = new FontFace(fontId.current, `url(${fontUrl})`);
+    // 使用引号包裹 URL 以处理特殊字符，防止空格、括号等引起解析错误
+    const fontFace = new FontFace(fontId.current, `url('${fontUrl}')`);
     fontFace.load().then(f => {
       (document.fonts as any).add(f);
       setLoaded(true);
-    }).catch(e => console.error('Font preview failed', e));
-  }, [path]);
+    }).catch(e => {
+      console.warn(`Font preview failed for ${name}:`, e);
+    });
+  }, [path, name]);
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center" style={{ fontFamily: loaded ? fontId.current : 'inherit' }}>
@@ -567,6 +570,7 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
     footerPaddingBottom: 0,
     footerPaddingLeft: 0,
     footerPaddingRight: 0,
+    tipColor: '#80000000', // 默认半透明黑
     textFont: '',
     bgAlpha: 100,
     letterSpacing: 0,
@@ -794,12 +798,13 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
             {/* 模拟页眉 */}
             {config.headerMode !== 2 && (
               <div 
-                className="flex items-center justify-between text-[8px] opacity-40 border-b border-black/5"
+                className="flex items-center justify-between text-[8px] border-b border-black/5"
                 style={{
                   paddingLeft: `${config.headerPaddingLeft}px`,
                   paddingRight: `${config.headerPaddingRight}px`,
                   paddingTop: `${config.headerPaddingTop + 20}px`,
                   paddingBottom: `${config.headerPaddingBottom}px`,
+                  color: argbToCss(config.tipColor || '#80000000')
                 }}
               >
                 <span>书籍名称</span>
@@ -853,12 +858,13 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
             {/* 模拟页脚 */}
             {config.footerMode !== 2 && (
               <div 
-                className="flex items-center justify-between text-[8px] opacity-40 border-t border-black/5"
+                className="flex items-center justify-between text-[8px] border-t border-black/5"
                 style={{
                   paddingLeft: `${config.footerPaddingLeft}px`,
                   paddingRight: `${config.footerPaddingRight}px`,
                   paddingTop: `${config.footerPaddingTop}px`,
                   paddingBottom: `${config.footerPaddingBottom + 10}px`,
+                  color: argbToCss(config.tipColor || '#80000000')
                 }}
               >
                 <span>21:08</span>
@@ -904,7 +910,8 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
+          {/* 基础属性 */}
           <div className="space-y-4">
              <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Palette size={14} /> 基础属性</label>
              <div className="grid grid-cols-2 gap-3">
@@ -946,11 +953,12 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
              </div>
           </div>
 
+          {/* 页面布局 */}
           <div className="space-y-4">
              <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Layout size={14} /> 页面布局</label>
              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <Slider label="左边距" value={config.paddingLeft} min={0} max={60} onChange={v => setConfig({...config, paddingLeft: v})} />
-                <Slider label="右边距" value={config.paddingRight} min={0} max={60} onChange={v => setConfig({...config, paddingRight: v})} />
+                <Slider label="左边距" value={config.paddingLeft} min={0} max={100} onChange={v => setConfig({...config, paddingLeft: v})} />
+                <Slider label="右边距" value={config.paddingRight} min={0} max={100} onChange={v => setConfig({...config, paddingRight: v})} />
                 <Slider label="上边距" value={config.paddingTop} min={0} max={100} onChange={v => setConfig({...config, paddingTop: v})} />
                 <Slider label="下边距" value={config.paddingBottom} min={0} max={100} onChange={v => setConfig({...config, paddingBottom: v})} />
              </div>
@@ -969,6 +977,7 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
              </div>
           </div>
 
+          {/* 标题样式 */}
           <div className="space-y-4">
              <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Type size={14} /> 标题样式</label>
              <div className="flex bg-surface-container p-1 rounded-xl gap-1">
@@ -976,7 +985,51 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
                   <button key={i} onClick={() => setConfig({...config, titleMode: i})} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${config.titleMode === i ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>
                 ))}
              </div>
-             {config.titleMode !== 2 && <Slider label="标题大小" value={config.titleSize} min={0} max={5} onChange={v => setConfig({...config, titleSize: v})} />}
+             {config.titleMode !== 2 && (
+               <div className="space-y-4">
+                 <Slider label="标题大小缩放" value={config.titleSize} min={0} max={10} onChange={v => setConfig({...config, titleSize: v})} />
+                 <div className="grid grid-cols-2 gap-3">
+                   <Slider label="标题上间距" value={config.titleTopSpacing} min={0} max={100} unit="px" onChange={v => setConfig({...config, titleTopSpacing: v})} />
+                   <Slider label="标题下间距" value={config.titleBottomSpacing} min={0} max={100} unit="px" onChange={v => setConfig({...config, titleBottomSpacing: v})} />
+                 </div>
+               </div>
+             )}
+          </div>
+
+          {/* 页眉页脚 */}
+          <div className="space-y-4">
+             <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Settings2 size={14} /> 页眉与页脚</label>
+             <div className="p-3 bg-surface-container rounded-xl space-y-4">
+               <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-secondary">文字颜色 (TipColor)</span>
+                  <input 
+                    type="color" 
+                    value={getHex6(config.tipColor || '#80000000')} 
+                    onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} 
+                    className="w-12 h-6 rounded cursor-pointer" 
+                  />
+               </div>
+               
+               <div className="space-y-3">
+                 <span className="text-[10px] text-outline font-bold">页眉间距</span>
+                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                    <Slider label="上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} />
+                    <Slider label="下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} />
+                    <Slider label="左" value={config.headerPaddingLeft} min={0} max={100} onChange={v => setConfig({...config, headerPaddingLeft: v})} />
+                    <Slider label="右" value={config.headerPaddingRight} min={0} max={100} onChange={v => setConfig({...config, headerPaddingRight: v})} />
+                 </div>
+               </div>
+
+               <div className="space-y-3">
+                 <span className="text-[10px] text-outline font-bold">页脚间距</span>
+                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                    <Slider label="上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} />
+                    <Slider label="下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} />
+                    <Slider label="左" value={config.footerPaddingLeft} min={0} max={100} onChange={v => setConfig({...config, footerPaddingLeft: v})} />
+                    <Slider label="右" value={config.footerPaddingRight} min={0} max={100} onChange={v => setConfig({...config, footerPaddingRight: v})} />
+                 </div>
+               </div>
+             </div>
           </div>
         </div>
 
