@@ -101,7 +101,7 @@ export default function SubscriptionView({ onImport, onExplore }: SubscriptionVi
             className="flex items-center gap-2 px-4 py-2 bg-tertiary text-on-tertiary rounded-lg text-sm font-bold hover:opacity-90 transition-all shadow-sm"
           >
             <Sparkles size={18} />
-            发现书源
+            从网页导入数据
           </button>
           <button 
             onClick={onImport}

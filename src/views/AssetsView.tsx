@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, RefreshCw, Package, Book, Sparkles, BookOpen, ShieldCheck, Info, Globe, Copy, X } from 'lucide-react';
+import { Search, RefreshCw, Package, Book, Sparkles, BookOpen, ShieldCheck, Info, Globe, Copy, X, Zap } from 'lucide-react';
 import * as api from '../api';
 
 export default function AssetsView() {

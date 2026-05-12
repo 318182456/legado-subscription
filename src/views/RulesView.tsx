@@ -108,12 +108,12 @@ export default function RulesView({ onAdd }: RulesViewProps) {
                         <span className="font-bold">{rule.name}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-6">
-                      <div className="flex flex-col gap-1">
-                        <code className="text-[10px] bg-surface-container px-2 py-0.5 rounded text-secondary font-mono truncate max-w-[300px]" title={rule.pattern}>{rule.pattern}</code>
+                    <td className="py-4 px-6 max-w-md">
+                      <div className="flex flex-col gap-1.5">
+                        <code className="text-[10px] bg-surface-container px-2 py-1 rounded text-secondary font-mono break-all leading-relaxed" title={rule.pattern}>{rule.pattern}</code>
                         {rule.replacement && (
-                          <div className="text-[10px] text-primary flex items-center gap-1">
-                             👉 <code className="bg-primary/5 px-1 rounded">{rule.replacement}</code>
+                          <div className="text-[10px] text-primary flex items-center gap-2 font-bold bg-primary/5 px-2 py-1 rounded w-fit">
+                             <span className="opacity-50">REPLACE:</span> <code>{rule.replacement}</code>
                           </div>
                         )}
                       </div>

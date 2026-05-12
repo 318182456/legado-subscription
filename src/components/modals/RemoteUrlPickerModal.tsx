@@ -117,7 +117,7 @@ export function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: RemoteUrlPick
           <div className="flex items-center gap-3">
             <h3 className="font-bold text-lg flex items-center gap-2">
               <Sparkles size={20} className="text-tertiary" />
-              外部网页解析
+              从网页导入外部数据
             </h3>
             {list.length > 0 && selectedUrls.size > 0 && (
               <button 

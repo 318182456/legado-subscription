@@ -80,8 +80,8 @@ export default function DashboardView({ onImport }: DashboardViewProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="flex flex-col gap-6">
-          <StatCard icon={<Book size={24} />} label="已启用阅读源" value={stats?.sources?.enabled?.toLocaleString() || '0'} color="bg-surface-container text-primary" />
-          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value={stats?.rules?.enabled?.toLocaleString() || '0'} color="bg-tertiary-container/10 text-tertiary" />
+          <StatCard icon={<Book size={24} />} label="已启用阅读源" value={stats?.sources?.total?.toLocaleString() || '0'} color="bg-surface-container text-primary" />
+          <StatCard icon={<Sparkles size={24} />} label="净化规则数" value={stats?.rules?.total?.toLocaleString() || '0'} color="bg-tertiary-container/10 text-tertiary" />
           <StatCard icon={<RefreshCw size={24} />} label="启用订阅总数" value={stats?.subscriptions?.total?.toLocaleString() || '0'} color="bg-secondary-container text-on-surface" />
         </div>
 
