@@ -3,6 +3,7 @@ import {
   ok,
   err,
   parseBody,
+  rebuildCache,
 } from "../utils";
 
 export async function handleListSources(env: Env, url: URL): Promise<Response> {
@@ -48,7 +49,7 @@ export async function handleAllSourceIds(env: Env): Promise<Response> {
   return ok(results.map((r: any) => r.id));
 }
 
-export async function handleTestSources(env: Env, request: Request): Promise<Response> {
+export async function handleTestSources(env: Env, request: Request, ctx: ExecutionContext): Promise<Response> {
   const body = await parseBody<{ ids: number[] }>(request);
   const ids = body?.ids || [];
   if (!ids.length) return ok({});
@@ -77,8 +78,10 @@ export async function handleTestSources(env: Env, request: Request): Promise<Res
     };
 
     try {
-      const json = JSON.parse(sourceData.raw_json as string);
-      let searchUrl = json.searchUrl;
+      const rawJson = sourceData.raw_json as string;
+      // 优化：使用正则提取 searchUrl，极大降低 CPU 消耗
+      const searchUrlMatch = rawJson.match(/"searchUrl"\s*:\s*"([^"]+)"/);
+      let searchUrl = searchUrlMatch ? searchUrlMatch[1] : null;
 
       if (searchUrl) {
         let urlPart = searchUrl;
@@ -102,7 +105,8 @@ export async function handleTestSources(env: Env, request: Request): Promise<Res
         if (urlPart.startsWith('http')) {
           urlToTest = urlPart;
         } else {
-          const baseUrl = json.bookSourceUrl || sourceData.book_source_url;
+          const baseUrlMatch = rawJson.match(/"bookSourceUrl"\s*:\s*"([^"]+)"/);
+          const baseUrl = (baseUrlMatch ? baseUrlMatch[1] : null) || sourceData.book_source_url;
           try {
             urlToTest = new URL(urlPart, baseUrl as string).toString();
           } catch (e) {
@@ -133,6 +137,9 @@ export async function handleTestSources(env: Env, request: Request): Promise<Res
   });
   
   await env.DB.batch(statements);
+
+  // 如果状态有变化，在后台异步重建缓存，不阻塞当前请求
+  ctx.waitUntil(rebuildCache(env, "source"));
 
   return ok(testResults);
 }

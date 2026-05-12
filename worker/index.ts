@@ -17,7 +17,7 @@ import * as subscribe from "./handlers/subscribe";
 import { handleScheduled } from "./handlers/scheduled";
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
@@ -94,7 +94,7 @@ export default {
       // ── /api/sources / rules ──────────────────────────────────────
       if (path === "/api/sources" && method === "GET") return sources.handleListSources(env, url);
       if (path === "/api/sources/ids" && method === "GET") return sources.handleAllSourceIds(env);
-      if (path === "/api/sources/test" && method === "POST") return sources.handleTestSources(env, request);
+      if (path === "/api/sources/test" && method === "POST") return sources.handleTestSources(env, request, ctx);
       if (path === "/api/parse-links" && method === "GET") return sources.handleParseLinks(url);
 
       if (path === "/api/rules") {

@@ -2,9 +2,26 @@ import { Env } from "../types";
 
 export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
   try {
+    const cacheKey = type === "sources" ? "sources" : "rules";
+    
+    // 1. 优先尝试从 KV 读取缓存（这是 rebuildCache 预生成的，已去重）
+    const cached = await env.KV.get(cacheKey);
+    if (cached) {
+      return new Response(cached, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+          "X-Cache": "HIT"
+        },
+      });
+    }
+
+    // 2. 缓存失效时降级到 DB，但必须包含 GROUP BY 逻辑 (回答用户：是的，现在是 SQL 过滤)
     const table = type === "sources" ? "sources" : "rules";
+    const groupBy = type === "sources" ? "book_source_url" : "name, pattern";
+    
     const { results } = await env.DB.prepare(
-      `SELECT raw_json FROM ${table} WHERE enabled=1 ORDER BY id`
+      `SELECT raw_json FROM ${table} WHERE enabled=1 GROUP BY ${groupBy} ORDER BY id`
     ).all();
     
     const jsonArray = "[" + results.map(r => r.raw_json).join(",") + "]";
@@ -13,6 +30,7 @@ export async function handleSubscribeOutput(env: Env, type: "sources" | "rules")
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
+        "X-Cache": "MISS"
       },
     });
   } catch (e) {

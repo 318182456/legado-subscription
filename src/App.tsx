@@ -94,12 +94,15 @@ export default function App() {
       const allIds = await api.getAllSourceIds();
       setTestProgress({ current: 0, total: allIds.length });
       
-      const batchSize = 10;
+      const batchSize = 50;
       for (let i = 0; i < allIds.length; i += batchSize) {
         const batch = allIds.slice(i, i + batchSize);
         await api.testSources(batch);
         setTestProgress(prev => ({ ...prev, current: Math.min(prev.total, i + batch.length) }));
       }
+      
+      // 测试完毕后，触发一次全局同步以确保订阅输出的 KV 缓存是最新的
+      await api.sync();
       onFinished?.();
     } catch (e) {
       alert('批量测试失败: ' + String(e));
