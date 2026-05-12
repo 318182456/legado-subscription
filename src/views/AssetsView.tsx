@@ -35,22 +35,43 @@ function ThemePreview({ config }: { config: any }) {
     backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    paddingLeft: `${(config.paddingLeft || 0) / 4}px`,
-    paddingRight: `${(config.paddingRight || 0) / 4}px`,
-    paddingTop: `${(config.paddingTop || 0) / 4}px`,
-    paddingBottom: `${(config.paddingBottom || 0) / 4}px`,
-    letterSpacing: `${(config.letterSpacing || 0) * 2}px`,
     fontWeight: config.textBold ? 'bold' : 'normal',
-    fontSize: '10px',
-    lineHeight: ((config.textSize || 20) + (config.lineSpacingExtra || 12)) / (config.textSize || 20),
+    letterSpacing: `${(config.letterSpacing || 0) * 4}px`,
   };
 
+  const tipStyle = { color: argbToCss(config.tipColor || '#80000000'), fontSize: '8px', opacity: 0.8 };
+
   return (
-    <div className="w-full h-full p-4 flex flex-col overflow-hidden" style={style}>
-      <div className="text-[10px] font-bold border-b border-current pb-1 mb-2 opacity-50">《预览样式》</div>
-      <p style={{ textIndent: `${config.paragraphIndent?.length || 0}em` }}>
-        这是生成的自定义主题效果预览。您可以点击卡片重新编辑。
-      </p>
+    <div className="w-full h-full flex flex-col overflow-hidden" style={style}>
+      {/* 模拟页眉 */}
+      {config.headerMode !== 2 && (
+        <div className="flex items-center justify-between px-4 pt-4 pb-1 border-b border-current/5 shrink-0" style={tipStyle}>
+          <span>书籍名称</span><span>章节名称</span>
+        </div>
+      )}
+
+      {/* 主体内容 */}
+      <div className="flex-1 p-4 overflow-hidden">
+        {config.titleMode !== 2 && (
+          <div className={`font-bold mb-2 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: '12px' }}>
+            第一章 预览样式
+          </div>
+        )}
+        <div className="space-y-2 opacity-90">
+          {[1, 2, 3].map(i => (
+            <p key={i} style={{ fontSize: '9px', lineHeight: 1.5, textIndent: `${config.paragraphIndent?.length || 0}em` }}>
+              这是生成的自定义主题效果预览。排版比例已按真实效果进行等比例缩放。
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {/* 模拟页脚 */}
+      {config.footerMode !== 2 && (
+        <div className="flex items-center justify-between px-4 pt-1 pb-4 border-t border-current/5 shrink-0" style={tipStyle}>
+          <span>17:28</span><span>85%</span><span>1 / 1</span>
+        </div>
+      )}
     </div>
   );
 }

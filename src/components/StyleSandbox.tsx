@@ -250,15 +250,17 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       {/* 左侧预览 */}
       <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col items-center justify-center min-h-0 relative">
         <div className="absolute top-6 left-6 flex items-center gap-3"><Zap className="text-primary" size={20} /><h3 className="font-bold text-lg">样式实验室</h3></div>
-        <div className="absolute top-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest">Mobile Preview</div>
+        <div className="absolute top-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
+          <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+          一加 Ace 6T 模拟
+        </div>
         
-        <div className="relative w-[320px] h-[580px] bg-[#1a1a1a] rounded-[48px] p-2.5 shadow-[0_0_0_2px_rgba(255,255,255,0.1),0_20px_50px_rgba(0,0,0,0.4)] border-4 border-[#2a2a2a] overflow-hidden flex flex-col scale-[0.9] lg:scale-100 transition-transform">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-[20px] z-20 flex items-center justify-center">
-             <div className={`w-10 h-1 rounded-full ${config.darkStatusIcon ? 'bg-white/10' : 'bg-white/20'}`}></div>
-          </div>
-
+        <div className="relative w-[320px] h-[704px] bg-[#1a1a1a] rounded-[48px] p-2.5 shadow-[0_0_0_2px_rgba(255,255,255,0.1),0_20px_50px_rgba(0,0,0,0.4)] border-4 border-[#2a2a2a] overflow-hidden flex flex-col scale-[0.8] lg:scale-[0.85] xl:scale-[0.9] transition-transform origin-center">
+          {/* 模拟摄像头/挖孔 */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-black rounded-full z-20 shadow-inner"></div>
+          
           <div 
-            className="flex-1 rounded-[38px] overflow-y-auto scrollbar-none relative bg-white flex flex-col"
+            className="flex-1 rounded-[38px] relative bg-white flex flex-col overflow-hidden"
             style={{ 
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
@@ -268,12 +270,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             }}
           >
             {config.headerMode !== 2 && (
-              <div className="flex items-center justify-between text-[8px] border-b border-black/5" style={{ paddingLeft: `${config.headerPaddingLeft}px`, paddingRight: `${config.headerPaddingRight}px`, paddingTop: `${config.headerPaddingTop + 20}px`, paddingBottom: `${config.headerPaddingBottom}px`, color: argbToCss(config.tipColor || '#80000000') }}>
+              <div className="flex items-center justify-between text-[8px] border-b border-black/5 shrink-0" style={{ paddingLeft: `${config.headerPaddingLeft}px`, paddingRight: `${config.headerPaddingRight}px`, paddingTop: `${config.headerPaddingTop + 24}px`, paddingBottom: `${config.headerPaddingBottom + 4}px`, color: argbToCss(config.tipColor || '#80000000') }}>
                 <span>书籍名称</span><span>章节名称</span>
               </div>
             )}
 
-            <div className="flex-1" style={{ paddingLeft: `${config.paddingLeft}px`, paddingRight: `${config.paddingRight}px`, paddingTop: `${config.paddingTop}px`, paddingBottom: `${config.paddingBottom}px` }}>
+            <div className="flex-1 overflow-y-auto scrollbar-none" style={{ paddingLeft: `${config.paddingLeft}px`, paddingRight: `${config.paddingRight}px`, paddingTop: `${config.paddingTop}px`, paddingBottom: `${config.paddingBottom}px` }}>
               {loading ? <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm"><RefreshCw className="animate-spin text-primary" /></div> : (
                 <>
                   {config.titleMode !== 2 && <h1 className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1)}px`, marginTop: `${config.titleTopSpacing}px`, marginBottom: `${config.titleBottomSpacing}px` }}>第一章 极简主义的排版</h1>}
@@ -285,7 +287,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             </div>
 
             {config.footerMode !== 2 && (
-              <div className="flex items-center justify-between text-[8px] border-t border-black/5" style={{ paddingLeft: `${config.footerPaddingLeft}px`, paddingRight: `${config.footerPaddingRight}px`, paddingTop: `${config.footerPaddingTop}px`, paddingBottom: `${config.footerPaddingBottom + 10}px`, color: argbToCss(config.tipColor || '#80000000') }}>
+              <div className="flex items-center justify-between text-[8px] border-t border-black/5 shrink-0" style={{ paddingLeft: `${config.footerPaddingLeft}px`, paddingRight: `${config.footerPaddingRight}px`, paddingTop: `${config.footerPaddingTop + 4}px`, paddingBottom: `${config.footerPaddingBottom + 16}px`, color: argbToCss(config.tipColor || '#80000000') }}>
                 <span>21:08</span><span>75%</span><span>1 / 12</span>
               </div>
             )}
@@ -358,7 +360,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           <div className="space-y-4">
              <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Settings2 size={14} /> 页眉与页脚</label>
              <div className="p-3 bg-surface-container rounded-xl space-y-4">
-               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary">文字颜色</span><input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-12 h-6 rounded cursor-pointer" /></div>
+               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary uppercase">页眉状态</span><div className="flex bg-surface-container-lowest p-1 rounded-lg gap-1">{['显示', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, headerMode: i === 0 ? 1 : 2})} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${config.headerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white' : 'text-secondary'}`}>{l}</button>)}</div></div>
+               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary uppercase">页脚状态</span><div className="flex bg-surface-container-lowest p-1 rounded-lg gap-1">{['显示', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 1 : 2})} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${config.footerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white' : 'text-secondary'}`}>{l}</button>)}</div></div>
+               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary">提示文字颜色</span><input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-12 h-6 rounded cursor-pointer" /></div>
                <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页眉间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} /><Slider label="下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} /></div></div>
                <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页脚间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} /><Slider label="下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} /></div></div>
              </div>
