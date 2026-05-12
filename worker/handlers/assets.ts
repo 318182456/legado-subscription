@@ -88,9 +88,15 @@ export async function handleSaveCustomTheme(request: Request, env: Env): Promise
   const body = await request.json() as any;
   if (!body.name || !body.config) return err("Name and Config are required");
 
-  await env.DB.prepare(
-    "INSERT INTO custom_themes (name, config, preview_url) VALUES (?, ?, ?)"
-  ).bind(body.name, body.config, body.preview_url || null).run();
+  if (body.id) {
+    await env.DB.prepare(
+      "UPDATE custom_themes SET name = ?, config = ?, preview_url = ? WHERE id = ?"
+    ).bind(body.name, body.config, body.preview_url || null, body.id).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO custom_themes (name, config, preview_url) VALUES (?, ?, ?)"
+    ).bind(body.name, body.config, body.preview_url || null).run();
+  }
 
   return new Response(JSON.stringify({ ok: true }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }

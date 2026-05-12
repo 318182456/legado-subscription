@@ -15,7 +15,7 @@ declare const Tesseract: any;
 
 export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
-    name: initialBase.name + ' 定制',
+    name: initialType === 'saved' ? initialBase.name : (initialBase.name + ' 定制'),
     bgStr: '#EEEEEE',
     bgType: 0,
     textColor: '#3E3D3B',
@@ -50,6 +50,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     textBold: 0,
     darkStatusIcon: true
   });
+
+  const DEVICES = [
+    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 56, innerRadius: 48, bezel: 1.5, notch: 'hole' },
+    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 54, innerRadius: 44, bezel: 2.5, notch: 'island' },
+    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 40, innerRadius: 32, bezel: 3, notch: 'hole' },
+    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 24, innerRadius: 16, bezel: 8, notch: 'none' }
+  ];
+  const [device, setDevice] = useState(DEVICES[0]);
 
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -234,8 +242,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     if (!config.name) return alert('请输入名称');
     setSaving(true);
     try {
-      await api.saveCustomTheme({ name: config.name, config: JSON.stringify(config) });
-      alert('已保存到云端精选');
+      const payload: any = { name: config.name, config: JSON.stringify(config) };
+      if (initialType === 'saved') payload.id = initialBase.id;
+      await api.saveCustomTheme(payload);
+      alert(initialType === 'saved' ? '已更新主题' : '已保存到云端精选');
       onSaved();
     } catch (e) {
       alert('保存失败: ' + String(e));
@@ -262,16 +272,27 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
         <div className="absolute bottom-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2 z-10 border border-outline-variant/30">
           <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-          一加 Ace 6T 模拟 (20:9)
+          {device.name} ({device.ratio})
         </div>
         
-        <div className="relative w-[360px] h-[800px] bg-[#0c0c0c] rounded-[56px] p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col scale-[0.7] lg:scale-[0.75] xl:scale-[0.8] transition-transform origin-center">
-          {/* 旗舰级极窄边框挖孔 */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>
+        <div 
+          className="relative bg-[#0c0c0c] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col transition-all duration-500 ease-in-out origin-center"
+          style={{ 
+            width: `${device.width}px`, 
+            height: `${device.height}px`, 
+            borderRadius: `${device.radius}px`,
+            padding: `${device.bezel * 4}px`,
+            transform: `scale(${device.width > 400 ? 0.6 : 0.75})` 
+          }}
+        >
+          {/* 模拟刘海/挖孔 */}
+          {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
+          {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
           
           <div 
-            className="flex-1 rounded-[48px] relative bg-white flex flex-col overflow-hidden"
+            className="flex-1 relative bg-white flex flex-col overflow-hidden"
             style={{ 
+              borderRadius: `${device.innerRadius}px`,
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
               backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
@@ -303,14 +324,20 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                           </h1>
                         )}
                         <div className="space-y-6">
-                          {[1, 2, 3, 4, 5].map(i => (
+                          {[
+                            "窗外的蝉鸣在烈日下显得格外躁动，苏醒揉了揉有些发胀的太阳穴，从堆满试卷的课桌前站了起来。",
+                            "他看了一眼日历，距离那个改变命运的日子，只剩下不到一周了。在这个全民进化的时代，每个人在成年时都会觉醒属于自己的异能，而他，似乎还是那个被遗忘的异类。",
+                            "“系统提示：检测到宿主情绪波动，‘极简加点’模板已加载。”一个冰冷的电子音突然在脑海中响起，苏醒愣住了，随即嘴角微微上扬。",
+                            "原来，传说中的外挂可能会迟到，但永远不会缺席。他尝试着点击面前虚幻的面板，将所有的潜能点都加在了‘精神力’上。",
+                            "刹那间，原本嘈杂的世界变得无比寂静，他能感觉到方圆百米内每一只昆虫的振翅，甚至能听见隔壁邻居正在讨论晚饭吃什么。这种掌控感，让他感到前所未有的踏实。"
+                          ].map((para, i) => (
                             <p key={i} style={{ 
                               fontSize: `${config.textSize * COMP}px`, 
                               lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize, 
                               marginBottom: `${config.paragraphSpacing * COMP}px`, 
                               textIndent: `${config.paragraphIndent?.length || 0}em` 
                             }}>
-                              这是模拟手机端的排版预览。Legado 支持极细致的参数调节。
+                              {para}
                             </p>
                           ))}
                         </div>
@@ -332,6 +359,17 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
       {/* 右侧控制面板 */}
       <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0 relative pt-20">
+        <div className="space-y-4">
+          <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Smartphone size={14} /> 模拟机型</label>
+          <div className="grid grid-cols-2 gap-2">
+             {DEVICES.map(d => (
+               <button key={d.id} onClick={() => setDevice(d)} className={`py-2 px-1 rounded-xl text-[10px] font-bold transition-all border ${device.id === d.id ? 'bg-primary text-white border-primary shadow-md' : 'bg-surface-container-lowest text-secondary border-outline-variant hover:bg-surface-container'}`}>
+                 {d.name}
+               </button>
+             ))}
+          </div>
+        </div>
+
         <div className="space-y-4">
           <label className="text-xs font-bold text-secondary uppercase">主题设置</label>
           <div className="space-y-4 pt-2">
