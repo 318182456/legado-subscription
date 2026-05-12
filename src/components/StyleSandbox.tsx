@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2 
+  Layout, Type, Settings2, RefreshCw, Share2, Smartphone
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
@@ -12,6 +12,54 @@ import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 // 外部库引用
 declare const fflate: any;
 declare const Tesseract: any;
+
+const TIP_OPTIONS = [
+  { value: 0, label: '无' },
+  { value: 7, label: '书名' },
+  { value: 1, label: '章节名' },
+  { value: 2, label: '时间' },
+  { value: 3, label: '电池' },
+  { value: 10, label: '电池%' },
+  { value: 4, label: '页数' },
+  { value: 5, label: '总进度' },
+  { value: 11, label: '总进度1' },
+  { value: 6, label: '页数/总进度' },
+  { value: 8, label: '时间+电池' },
+  { value: 9, label: '时间+电池%' },
+];
+
+function TipView({ value }: { value: number }) {
+  if (value === 0) return <span></span>;
+  const labelMap: Record<number, string> = {
+    7: '书名',
+    1: '章节名',
+    2: '17:36',
+    3: '75%',
+    10: '75%',
+    4: '1',
+    5: '5.2%',
+    11: '5.2%',
+    6: '1 / 18',
+    8: '17:36 75%',
+    9: '17:36 75%'
+  };
+  return <span>{labelMap[value] || ''}</span>;
+}
+
+function TipSelector({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) {
+  return (
+    <div className="flex-1 flex flex-col gap-1">
+      <span className="text-[9px] text-outline text-center">{label}</span>
+      <select 
+        value={value} 
+        onChange={e => onChange(parseInt(e.target.value))}
+        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-1 py-1.5 text-[10px] outline-none"
+      >
+        {TIP_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+      </select>
+    </div>
+  );
+}
 
 export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
@@ -43,6 +91,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     footerPaddingRight: 16,
     showHeaderLine: false,
     showFooterLine: true,
+    tipHeaderLeft: 2, // time
+    tipHeaderMiddle: 0, // none
+    tipHeaderRight: 3, // battery
+    tipFooterLeft: 1, // chapterTitle
+    tipFooterMiddle: 0, // none
+    tipFooterRight: 6, // pageAndTotal
     tipColor: '#803E3D3B', // 默认文字颜色的半透明
     textFont: '',
     bgAlpha: 100,
@@ -156,6 +210,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   };
 
   const loadFont = async (path: string, name: string) => {
+    if (!path || path.startsWith('content://')) return;
     const fontUrl = `${window.location.origin}/repo/${path}`;
     const fontName = 'PreviewFont_' + Math.random().toString(36).substring(7);
     const fontFace = new FontFace(fontName, `url(${fontUrl})`);
@@ -295,7 +350,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               borderRadius: `${device.innerRadius}px`,
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
-              backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+              backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
               backgroundSize: 'cover', backgroundPosition: 'center',
               letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}
@@ -307,7 +362,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 <>
                   {config.headerMode !== 2 && (
                     <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showHeaderLine ? 'border-b border-black/10' : ''}`} style={{ paddingLeft: `${config.headerPaddingLeft * COMP}px`, paddingRight: `${config.headerPaddingRight * COMP}px`, paddingTop: `${(config.headerPaddingTop + 24) * COMP}px`, paddingBottom: `${(config.headerPaddingBottom + 4) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
-                      <span>17:36</span><span>75%</span>
+                      <TipView value={config.tipHeaderLeft} />
+                      <TipView value={config.tipHeaderMiddle} />
+                      <TipView value={config.tipHeaderRight} />
                     </div>
                   )}
 
@@ -347,7 +404,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
                   {config.footerMode !== 2 && (
                     <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showFooterLine ? 'border-t border-black/10' : ''}`} style={{ paddingLeft: `${config.footerPaddingLeft * COMP}px`, paddingRight: `${config.footerPaddingRight * COMP}px`, paddingTop: `${(config.footerPaddingTop + 4) * COMP}px`, paddingBottom: `${(config.footerPaddingBottom + 16) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
-                      <span>第一章 极简主义的排版</span><span>1 / 18</span>
+                      <TipView value={config.tipFooterLeft} />
+                      <TipView value={config.tipFooterMiddle} />
+                      <TipView value={config.tipFooterRight} />
                     </div>
                   )}
                 </>

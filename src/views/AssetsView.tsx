@@ -13,12 +13,30 @@ import { FontPreview } from '../components/FontPreview';
 import { StyleSandbox } from '../components/StyleSandbox';
 import { argbToCss } from '../utils/color';
 
+function TipView({ value }: { value: number }) {
+  if (value === 0) return <span></span>;
+  const labelMap: Record<number, string> = {
+    7: '书名',
+    1: '章节名',
+    2: '17:36',
+    3: '75%',
+    10: '75%',
+    4: '1',
+    5: '5.2%',
+    11: '5.2%',
+    6: '1 / 18',
+    8: '17:36 75%',
+    9: '17:36 75%'
+  };
+  return <span>{labelMap[value] || ''}</span>;
+}
+
 function ThemePreview({ config }: { config: any }) {
   const [fontFamily, setFontFamily] = useState<string>('inherit');
   const [selectedFontName, setSelectedFontName] = useState<string>('');
 
   useEffect(() => {
-    if (config.textFont) {
+    if (config.textFont && !config.textFont.startsWith('content://')) {
       const fontName = config.textFont.split('/').pop()?.split('.')[0] || 'CustomFont';
       const fontUrl = `${window.location.origin}/repo/${config.textFont}`;
       const fontFace = new FontFace(fontName, `url(${fontUrl})`);
@@ -54,7 +72,9 @@ function ThemePreview({ config }: { config: any }) {
       {/* 模拟页眉 */}
       {config.headerMode !== 2 && (
         <div className={`flex items-center justify-between px-4 pt-4 pb-1 shrink-0 ${config.showHeaderLine ? 'border-b border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
-          <span>17:36</span><span>75%</span>
+          <TipView value={config.tipHeaderLeft ?? 2} />
+          <TipView value={config.tipHeaderMiddle ?? 0} />
+          <TipView value={config.tipHeaderRight ?? 3} />
         </div>
       )}
 
@@ -73,7 +93,7 @@ function ThemePreview({ config }: { config: any }) {
               marginBottom: `${config.paragraphSpacing * COMP}px`,
               textIndent: `${config.paragraphIndent?.length || 0}em` 
             }}>
-              这是生成的自定义主题效果预览。排版比例已按真实效果进行等比例缩放。
+              这是生成的自定义主题效果预览。
             </p>
           ))}
         </div>
@@ -82,7 +102,9 @@ function ThemePreview({ config }: { config: any }) {
       {/* 模拟页脚 */}
       {config.footerMode !== 2 && (
         <div className={`flex items-center justify-between px-4 pt-1 pb-4 shrink-0 ${config.showFooterLine ? 'border-t border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
-          <span>预览章节名称</span><span>1 / 18</span>
+          <TipView value={config.tipFooterLeft ?? 1} />
+          <TipView value={config.tipFooterMiddle ?? 0} />
+          <TipView value={config.tipFooterRight ?? 6} />
         </div>
       )}
     </div>
