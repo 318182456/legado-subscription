@@ -9,7 +9,8 @@ import {
 import * as api from '../api';
 
 // 导入拆分后的组件与工具
-import { PreviewModal, FontPreview } from '../components/PreviewModal';
+import { PreviewModal } from '../components/PreviewModal';
+import { FontPreview } from '../components/FontPreview';
 import { StyleSandbox } from '../components/StyleSandbox';
 
 export default function AssetsView() {
