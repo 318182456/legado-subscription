@@ -61,8 +61,8 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
   const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
-  // 控制并发：降低内部并发到 8，通过前端多请求并行来提升总量，保证单个请求不超时
-  const CONCURRENCY = 8;
+  // 极限并发：推至 Cloudflare 子请求上限 50，因为我们现在逻辑极轻（无正则、无重构）
+  const CONCURRENCY = 50;
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
     chunks.push(ids.slice(i, i + CONCURRENCY));

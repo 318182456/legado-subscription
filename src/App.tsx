@@ -103,8 +103,8 @@ export default function App() {
       const allIds = await api.getAllSourceIds();
       setTestProgress({ current: 0, total: allIds.length });
       
-      const batchSize = 30; // 稍稍调大批次
-      const concurrency = 3; // 降低并行度到 3，避免压垮 D1 数据库
+      const batchSize = 50; // 配合后端极限并发
+      const concurrency = 10; // 同时发起 10 路，总计瞬时 500 并发测试
 
       // 切分批次
       const chunks: number[][] = [];
