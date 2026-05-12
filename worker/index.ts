@@ -657,21 +657,6 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
   });
 }
 
-        <div class="footer">
-            由 Legado Subscription 系统自动生成
-        </div>
-    </div>
-</body>
-</html>
-  `;
-  return new Response(html, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
-}
-
 /** 输出发现源定义 JSON (供一键导入) */
 function handleSubscribeInfo(request: Request): Response {
   const origin = new URL(request.url).origin;
