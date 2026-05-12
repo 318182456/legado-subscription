@@ -296,7 +296,17 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       </div>
 
       {/* 右侧控制面板 */}
-      <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0">
+      <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0 relative">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-secondary uppercase">主题设置</label>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-3 py-1.5 bg-surface-container text-secondary rounded-lg text-[10px] font-bold hover:bg-surface-container-high transition-colors">取消</button>
+            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-[10px] font-bold shadow-md shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5">
+              {saving ? <RefreshCw className="animate-spin" size={12} /> : <Share2 size={12} />} 保存
+            </button>
+          </div>
+        </div>
+
         <div className="space-y-4">
           <label className="text-xs font-bold text-secondary uppercase">主题名称</label>
           <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
@@ -369,12 +379,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           </div>
         </div>
 
-        <div className="mt-auto pt-6 space-y-3">
-          <button onClick={handleSave} disabled={saving} className="w-full py-3 bg-primary text-on-primary rounded-2xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
-            {saving ? <RefreshCw className="animate-spin" size={16} /> : <Share2 size={16} />} 保存至云端精选
-          </button>
-          <button onClick={onClose} className="w-full py-3 bg-surface-container text-secondary rounded-2xl text-sm font-bold hover:bg-surface-container-high transition-colors">取消</button>
-        </div>
       </div>
 
       {showPicker && (
