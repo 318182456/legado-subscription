@@ -8,10 +8,52 @@ import {
 } from 'lucide-react';
 import * as api from '../api';
 
-// 导入拆分后的组件与工具
 import { PreviewModal } from '../components/PreviewModal';
 import { FontPreview } from '../components/FontPreview';
 import { StyleSandbox } from '../components/StyleSandbox';
+import { argbToCss } from '../utils/color';
+
+function ThemePreview({ config }: { config: any }) {
+  const [fontFamily, setFontFamily] = useState('inherit');
+
+  useEffect(() => {
+    if (config.textFont) {
+      const fontUrl = `${window.location.origin}/repo/${config.textFont}`;
+      const name = `ThemeFont_${Math.random().toString(36).substring(7)}`;
+      const font = new FontFace(name, `url(${fontUrl})`);
+      font.load().then(loaded => {
+        (document.fonts as any).add(loaded);
+        setFontFamily(name);
+      }).catch(e => console.error('Preview font load failed', e));
+    }
+  }, [config.textFont]);
+
+  const style: React.CSSProperties = {
+    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white',
+    color: argbToCss(config.textColor),
+    fontFamily: fontFamily,
+    backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    paddingLeft: `${(config.paddingLeft || 0) / 4}px`,
+    paddingRight: `${(config.paddingRight || 0) / 4}px`,
+    paddingTop: `${(config.paddingTop || 0) / 4}px`,
+    paddingBottom: `${(config.paddingBottom || 0) / 4}px`,
+    letterSpacing: `${(config.letterSpacing || 0) * 2}px`,
+    fontWeight: config.textBold ? 'bold' : 'normal',
+    fontSize: '10px',
+    lineHeight: ((config.textSize || 20) + (config.lineSpacingExtra || 12)) / (config.textSize || 20),
+  };
+
+  return (
+    <div className="w-full h-full p-4 flex flex-col overflow-hidden" style={style}>
+      <div className="text-[10px] font-bold border-b border-current pb-1 mb-2 opacity-50">《预览样式》</div>
+      <p style={{ textIndent: `${config.paragraphIndent?.length || 0}em` }}>
+        这是生成的自定义主题效果预览。您可以点击卡片重新编辑。
+      </p>
+    </div>
+  );
+}
 
 export default function AssetsView() {
   const [data, setData] = useState<any>(null);
@@ -177,6 +219,13 @@ export default function AssetsView() {
 
   const handleTagClick = (tag: string) => {
     setQuery(prev => prev.includes(tag) ? prev : (prev + ' ' + tag).trim());
+  };
+
+  const editTheme = (item: any) => {
+    setSandboxConfig({ 
+      base: item, 
+      type: 'saved' 
+    });
   };
 
   return (
@@ -379,12 +428,12 @@ export default function AssetsView() {
                 const exportUrl = `${window.location.origin}/api/custom-themes/${item.id}/export`;
                 const importUrl = 'legado://import/readConfig?src=' + encodeURIComponent(exportUrl);
                 return (
-                  <div key={item.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden group hover:shadow-xl transition-all">
+                  <div key={item.id} onClick={() => editTheme(item)} className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden group hover:shadow-xl transition-all cursor-pointer">
                     <div className="aspect-[4/3] relative bg-surface-container flex items-center justify-center">
-                       {item.preview_url ? <img src={item.preview_url} className="w-full h-full object-cover" /> : <div className="w-full h-full p-4 flex flex-col" style={{ background: config.backgroundColor || '#fff', color: config.textColor || '#000' }}><div className="text-xs font-bold border-b border-current pb-2 mb-2">《预览样式》</div><p className="text-[10px] leading-relaxed opacity-80">这是生成的自定义主题效果预览。</p></div>}
-                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => deleteTheme(item.id)} className="p-1.5 bg-red-500 text-white rounded-lg shadow-lg hover:scale-105 transition-transform"><Trash2 size={14} /></button></div>
+                       {item.preview_url ? <img src={item.preview_url} className="w-full h-full object-cover" /> : <ThemePreview config={config} />}
+                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); deleteTheme(item.id); }} className="p-1.5 bg-red-500 text-white rounded-lg shadow-lg hover:scale-105 transition-transform"><Trash2 size={14} /></button></div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-4" onClick={(e) => e.stopPropagation()}>
                       <h3 className="font-bold text-sm mb-1">{item.name}</h3>
                       <p className="text-[10px] text-secondary mb-4">创建于 {new Date(item.created_at).toLocaleString()}</p>
                       <div className="flex gap-2">

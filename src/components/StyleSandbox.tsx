@@ -13,7 +13,7 @@ import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 declare const fflate: any;
 declare const Tesseract: any;
 
-export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip'; onClose: () => void; onSaved: () => void; fileTree: any }) {
+export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
     name: initialBase.name + ' 定制',
     bgStr: '#ffffff',
@@ -62,6 +62,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   }, [initialBase]);
 
   const loadBaseConfig = async (type: string, base: any) => {
+    if (type === 'saved') {
+      const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
+      setConfig({ ...data, id: base.id }); // 保留 ID 用于可能的更新操作，虽然目前后端 save 可能是插入
+      if (data.textFont) {
+        loadFont(data.textFont, data.textFont.split('/').pop() || 'CustomFont');
+      }
+      return;
+    }
     if (type === 'image') {
       const url = `${window.location.origin}/repo/${base.path}`;
       recognizeLayoutFromImage(url);
