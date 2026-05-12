@@ -57,7 +57,8 @@ export default {
 
       // ── 鉴权检查 ──────────────────────────────────────────────────
       if (path.startsWith("/api/")) {
-        if (!auth.isAuthed(request, env)) return err("Unauthorized", 401);
+        const isPublicGet = method === "GET" && (path === "/api/custom-themes" || path === "/api/resources" || path === "/api/stats");
+        if (!isPublicGet && !auth.isAuthed(request, env)) return err("Unauthorized", 401);
       }
 
       // ── /api/auth (鉴权) ──────────────────────────────────────────
