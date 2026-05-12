@@ -62,7 +62,7 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
   const testResults: Record<number, boolean> = {};
 
   // 控制并发：Worker CPU 有限，每批最多同时发起 30 个 fetch
-  const CONCURRENCY = 30;
+  const CONCURRENCY = 15;
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
     chunks.push(ids.slice(i, i + CONCURRENCY));
@@ -144,15 +144,29 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
     }));
   }
 
-  // 无条件更新：简化 SQL，让 DB 引擎判断是否修改
-  const statements = ids.map(id => {
-    const isAvail = testResults[id] ? 1 : 0;
-    return env.DB.prepare(
-      "UPDATE sources SET is_available = ?, enabled = ?, last_checked = datetime('now') WHERE id = ?"
-    ).bind(isAvail, isAvail, id);
-  });
+  // 批量更新数据库：将 50 个更新简化为 2 个 SQL 语句，大幅节省 CPU
+  const availIds = ids.filter(id => testResults[id]);
+  const unavailIds = ids.filter(id => !testResults[id]);
 
-  await env.DB.batch(statements);
+  const updateBatch = [];
+  if (availIds.length > 0) {
+    updateBatch.push(
+      env.DB.prepare(
+        `UPDATE sources SET is_available = 1, enabled = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
+      ).bind(...availIds)
+    );
+  }
+  if (unavailIds.length > 0) {
+    updateBatch.push(
+      env.DB.prepare(
+        `UPDATE sources SET is_available = 0, enabled = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
+      ).bind(...unavailIds)
+    );
+  }
+
+  if (updateBatch.length > 0) {
+    await env.DB.batch(updateBatch);
+  }
 
   // 异步重建订阅缓存，不阻塞响应
   ctx.waitUntil(rebuildCache(env, "source"));

@@ -103,28 +103,43 @@ export default function App() {
       const allIds = await api.getAllSourceIds();
       setTestProgress({ current: 0, total: allIds.length });
       
-      const batchSize = 100; // 调大批次，Worker 内部现在有并发控制
+      const batchSize = 50; // 降低单次请求规模，避免 Worker CPU 超时
+      const concurrency = 5; // 同时发起 5 个并行批次
+
+      // 切分批次
+      const chunks: number[][] = [];
       for (let i = 0; i < allIds.length; i += batchSize) {
-        if (cancelTestingRef.current) break;
-
-        const batch = allIds.slice(i, i + batchSize);
-        try {
-          await api.testSources(batch);
-        } catch (e) {
-          console.error(`Batch ${i} failed:`, e);
-        }
-
-        const nextCurrent = Math.min(allIds.length, i + batch.length);
-        setTestProgress(prev => ({ ...prev, current: nextCurrent }));
-
-        // 每 500 条同步一次数据统计，让用户看到中间结果
-        if (nextCurrent % 500 === 0 || nextCurrent === allIds.length) {
-          onFinished?.(); 
-        }
-
-        // 稍微停顿一下，防止浏览器主线程卡死
-        await new Promise(resolve => setTimeout(resolve, 50));
+        chunks.push(allIds.slice(i, i + batchSize));
       }
+
+      let finishedCount = 0;
+
+      // 定义并行工作者
+      const worker = async () => {
+        while (chunks.length > 0 && !cancelTestingRef.current) {
+          const batch = chunks.shift()!;
+          try {
+            await api.testSources(batch);
+          } catch (e) {
+            console.error('批次测试失败', e);
+          }
+
+          finishedCount += batch.length;
+          // 更新进度
+          setTestProgress(prev => ({ ...prev, current: Math.min(allIds.length, finishedCount) }));
+
+          // 阶段性回调（同步中间结果）
+          if (finishedCount % 500 === 0 || finishedCount >= allIds.length) {
+            onFinished?.();
+          }
+
+          // 每个工作者执行完一批后稍微停顿，降低数据库瞬间并发压力
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      };
+
+      // 启动多个并行工作者
+      await Promise.all(Array(concurrency).fill(null).map(worker));
       
       // 全部结束后，触发一次 KV 缓存重建
       await api.syncAll();

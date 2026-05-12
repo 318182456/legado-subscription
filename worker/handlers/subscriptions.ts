@@ -50,12 +50,17 @@ export async function handleToggleSubscription(request: Request, env: Env, id: n
 
 export async function handleSync(env: Env, id: number | null): Promise<Response> {
   const subs = id ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
-  for (const sub of subs as any[]) {
+  
+  // 并行同步所有启用的订阅
+  await Promise.all((subs as any[]).map(async (sub) => {
     try {
       if (sub.type === "source") await syncSourceSubscription(env, sub.id, sub.url);
       else await syncRuleSubscription(env, sub.id, sub.url);
-    } catch (e) { console.error(e); }
-  }
+    } catch (e) { 
+      console.error(`Sync failed for [${sub.name}]:`, e); 
+    }
+  }));
+
   await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
   return ok();
 }
