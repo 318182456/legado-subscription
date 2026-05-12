@@ -84,8 +84,10 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
 
       try {
         const res = await fetch(urlToTest, fetchOptions);
+        // 关键：必须显式取消/关闭响应流，否则会占据连接池导致死锁或 503
+        await res.body?.cancel();
+        
         if (res.status >= 200 && res.status < 400) {
-          // 仅检查响应状态和非空响应，不再手动读取 reader 避免资源死锁
           testResults[id] = true;
         } else {
           testResults[id] = false;

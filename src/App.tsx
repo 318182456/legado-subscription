@@ -103,8 +103,8 @@ export default function App() {
       const allIds = await api.getAllSourceIds();
       setTestProgress({ current: 0, total: allIds.length });
       
-      const batchSize = 20; // 极小化单次负载，确保即使在 Free Tier 也不会超时
-      const concurrency = 10; // 提高并行度，总量不变但分发更散
+      const batchSize = 30; // 稍稍调大批次
+      const concurrency = 3; // 降低并行度到 3，避免压垮 D1 数据库
 
       // 切分批次
       const chunks: number[][] = [];
