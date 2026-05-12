@@ -174,7 +174,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab(0)">订阅整合</div>
-        <div class="tab" onclick="switchTab(1)">资源仓库</div>
+        <div class="tab" onclick="switchTab(1)">精选主题</div>
     </div>
 
     <!-- Tab 0: 订阅整合 -->
@@ -190,9 +190,9 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
         </div>
     </div>
 
-    <!-- Tab 1: 资源仓库 -->
+    <!-- Tab 1: 精选主题 -->
     <div id="tab-1" class="container">
-        <div id="res-loading" style="text-align:center; padding:40px; color:var(--outline);">正在加载资源索引...</div>
+        <div id="res-loading" style="text-align:center; padding:40px; color:var(--outline);">正在从云端获取精选主题...</div>
         <div id="res-content"></div>
     </div>
 
@@ -210,39 +210,39 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             if (container.innerHTML !== '') return;
 
             try {
-                const res = await fetch('/api/resources');
+                const res = await fetch('/api/custom-themes');
                 const json = await res.json();
-                const data = json.data || {};
-                let html = '';
+                const items = json.data || [];
+                
+                if (items.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">暂无精选主题，请先在后台编辑并保存</div>';
+                    document.getElementById('res-loading').style.display = 'none';
+                    return;
+                }
 
-                const renderGrid = (title, items, protocol, icon) => {
-                    if (!items || !items.length) return '';
-                    let section = \`<div class="card"><h3>\${icon} \${title}</h3><div class="grid">\`;
-                    items.forEach(item => {
-                        const url = window.location.origin + '/repo/' + item.path;
-                        const isImg = item.path.match(/\\.(png|jpg|jpeg|webp)$/i);
-                        const preview = isImg ? \`<img class="res-preview" src="\${url}">\` : '';
-                        
-                        section += \`
-                            <div class="res-item">
-                                \${preview}
-                                <div class="res-name">\${item.name}</div>
-                                <a href="\${protocol ? (protocol + encodeURIComponent(url)) : url}" 
-                                   class="res-btn" \${!protocol ? 'download' : ''}>
-                                   \${protocol ? '一键导入' : '点击下载'}
-                                </a>
-                            </div>\`;
-                    });
-                    return section + '</div></div>';
-                };
+                let html = '<div class="card"><h3>🎨 精选推荐</h3><div class="grid">';
+                items.forEach(item => {
+                    const config = JSON.parse(item.config);
+                    // Legado theme import protocol
+                    // If config is already a stringified JSON, we double-stringify or just use it.
+                    // Usually legado://import/theme?src=BASE64 or URL.
+                    // Here we'll use the Base64 approach for one-click.
+                    const b64 = btoa(unescape(encodeURIComponent(item.config)));
+                    const importUrl = 'legado://import/theme?src=' + b64;
+                    
+                    const preview = item.preview_url ? `<img class="res-preview" src="${item.preview_url}">` : 
+                                   (config.backgroundColor ? `<div class="res-preview" style="background:${config.backgroundColor}"></div>` : '');
+                    
+                    html += `
+                        <div class="res-item">
+                            ${preview}
+                            <div class="res-name">${item.name}</div>
+                            <a href="${importUrl}" class="res-btn">一键导入</a>
+                        </div>`;
+                });
+                html += '</div></div>';
 
-                html += renderGrid('精美主题', data.themes, 'legado://import/theme?src=', '🎨');
-                html += renderGrid('排版方案', data.layouts, 'legado://import/readConfig?src=', '📏');
-                html += renderGrid('净化规则', data.rules, 'legado://import/replaceRule?src=', '🧹');
-                html += renderGrid('发现源', data.rss, 'legado://import/rssSource?src=', '📌');
-                html += renderGrid('优选字体', data.fonts, null, '🔤');
-
-                container.innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">暂无资源，请先运行同步脚本</div>';
+                container.innerHTML = html;
                 document.getElementById('res-loading').style.display = 'none';
             } catch (e) {
                 container.innerHTML = '<div style="color:red;padding:20px;">加载失败: ' + e.message + '</div>';

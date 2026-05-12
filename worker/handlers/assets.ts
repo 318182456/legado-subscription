@@ -72,3 +72,34 @@ export async function handleR2List(request: Request, env: Env): Promise<Response
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
+
+// ---------- 精选主题管理 ----------
+
+export async function handleListCustomThemes(env: Env): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM custom_themes ORDER BY created_at DESC"
+  ).all();
+  return new Response(JSON.stringify({ ok: true, data: results }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}
+
+export async function handleSaveCustomTheme(request: Request, env: Env): Promise<Response> {
+  const body = await request.json() as any;
+  if (!body.name || !body.config) return err("Name and Config are required");
+
+  await env.DB.prepare(
+    "INSERT INTO custom_themes (name, config, preview_url) VALUES (?, ?, ?)"
+  ).bind(body.name, body.config, body.preview_url || null).run();
+
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}
+
+export async function handleDeleteCustomTheme(id: number, env: Env): Promise<Response> {
+  await env.DB.prepare("DELETE FROM custom_themes WHERE id = ?").bind(id).run();
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}

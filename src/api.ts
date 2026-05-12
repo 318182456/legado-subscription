@@ -151,3 +151,9 @@ export const deleteSource = (id: number) => apiFetch<any>(`/api/sources/${id}`, 
 export const toggleRule = (id: number, enabled: boolean) => apiFetch<any>(`/api/rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
 export const deleteRule = (id: number) => apiFetch<any>(`/api/rules/${id}`, { method: "DELETE" });
 export const parseLinks = (url: string) => apiFetch<{ name: string; url: string }[]>(`/api/parse-links?url=${encodeURIComponent(url)}`);
+
+export const getCustomThemes = () => apiFetch<any[]>("/api/custom-themes");
+export const saveCustomTheme = (data: { name: string; config: string; preview_url?: string }) => 
+  apiFetch<any>("/api/custom-themes", { method: "POST", body: JSON.stringify(data) });
+export const deleteCustomTheme = (id: number) => 
+  apiFetch<any>(`/api/custom-themes/${id}`, { method: "DELETE" });

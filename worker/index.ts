@@ -124,6 +124,16 @@ export default {
       // ── /api/r2-list (R2 完整文件清单) ─────────────────────────────
       if (path === "/api/r2-list" && method === "GET") return assets.handleR2List(request, env);
 
+      // ── /api/custom-themes (精选主题) ──────────────────────────────
+      if (path === "/api/custom-themes") {
+        if (method === "GET") return assets.handleListCustomThemes(env);
+        if (method === "POST") return assets.handleSaveCustomTheme(request, env);
+      }
+      if (path.startsWith("/api/custom-themes/") && method === "DELETE") {
+        const id = Number(path.split("/").pop());
+        return assets.handleDeleteCustomTheme(id, env);
+      }
+
       return err("Not Found", 404);
     } catch (e) {
       console.error(e);
