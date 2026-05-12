@@ -139,14 +139,50 @@ export default {
 
       // ── /repo/* (R2 资源代理) ───────────────────────────────────
       if (path.startsWith("/repo/")) {
-        const key = path.replace("/repo/", "");
-        const object = await env.ASSETS_R2.get(key);
-        if (!object) return err(`Resource Not Found: ${key}`, 404);
+        const rawKey = path.replace("/repo/", "");
+        
+        // 依次尝试多种可能的 Key 匹配方式
+        let object = await env.ASSETS_R2.get(rawKey);
+        
+        if (!object) {
+          try {
+            const decodedKey = decodeURIComponent(rawKey);
+            if (decodedKey !== rawKey) {
+              object = await env.ASSETS_R2.get(decodedKey);
+            }
+          } catch (e) {}
+        }
+
+        if (!object && rawKey.includes('+')) {
+          try {
+            const spaceKey = decodeURIComponent(rawKey.replace(/\+/g, ' '));
+            object = await env.ASSETS_R2.get(spaceKey);
+          } catch (e) {}
+        }
+
+        if (!object) return err(`Resource Not Found: ${rawKey}`, 404);
         
         const headers = new Headers();
         object.writeHttpMetadata(headers);
         headers.set("Access-Control-Allow-Origin", "*");
         headers.set("etag", object.httpEtag);
+        
+        // 自动识别并设置图片等资源的 Content-Type
+        const ext = rawKey.split('.').pop()?.toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          'png': 'image/png',
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'webp': 'image/webp',
+          'gif': 'image/gif',
+          'ttf': 'font/ttf',
+          'otf': 'font/otf',
+          'woff': 'font/woff',
+          'woff2': 'font/woff2'
+        };
+        if (ext && mimeTypes[ext]) {
+          headers.set("Content-Type", mimeTypes[ext]);
+        }
         
         return new Response(object.body, { headers });
       }

@@ -2085,26 +2085,26 @@ function AssetsView() {
   };
 
   return (
-    <div className="space-y-10 pb-20 relative">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-20 py-4 -mx-4 px-4">
+    <div className="space-y-8 pb-20 relative">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant/30 pb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-on-surface">资源管理 (R2)</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-on-surface">资源管理 (R2)</h2>
           <p className="text-sm text-secondary mt-1">同步到云端 R2 存储的主题、字体、排版等素材。</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={18} />
             <input 
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索资源..."
-              className="w-full bg-surface border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary transition-all"
+              placeholder="通过关键字筛选资源..."
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
             />
           </div>
           <button 
             onClick={fetchResources}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border border-outline-variant text-primary rounded-xl text-sm font-bold hover:bg-surface-container-low transition-colors shadow-sm"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             刷新索引
@@ -2232,6 +2232,7 @@ function PreviewModal({ item, onClose }: { item: any; onClose: () => void }) {
 
 function StyleSandbox({ theme, font, onClose }: { theme: any; font: any; onClose: () => void }) {
   const [themeData, setThemeData] = useState<any>(null);
+  const [fontLoading, setFontLoading] = useState(false);
   
   useEffect(() => {
     if (theme) {
@@ -2243,27 +2244,38 @@ function StyleSandbox({ theme, font, onClose }: { theme: any; font: any; onClose
   }, [theme]);
 
   // 加载字体
+  const fontId = font ? `font-${font.path.replace(/[^a-zA-Z0-9]/g, '-')}` : '';
+  
   useEffect(() => {
     if (font) {
+      setFontLoading(true);
       const fontUrl = `${window.location.origin}/repo/${font.path}`;
-      const fontName = `custom-font-${font.name.replace(/\s+/g, '-')}`;
       const style = document.createElement('style');
+      style.id = `style-${fontId}`;
       style.innerHTML = `
         @font-face {
-          font-family: '${fontName}';
-          src: url('${fontUrl}');
+          font-family: "${fontId}";
+          src: url("${fontUrl}");
         }
       `;
       document.head.appendChild(style);
+      
+      // 模拟加载检测
+      const timer = setTimeout(() => setFontLoading(false), 1000);
+      
       return () => {
-        document.head.removeChild(style);
+        const el = document.getElementById(`style-${fontId}`);
+        if (el) document.head.removeChild(el);
+        clearTimeout(timer);
       };
+    } else {
+      setFontLoading(false);
     }
-  }, [font]);
+  }, [font, fontId]);
 
   const bg = themeData?.backgroundColor || '#ffffff';
   const text = themeData?.textColor || '#000000';
-  const fontFamily = font ? `'custom-font-${font.name.replace(/\s+/g, '-')}', sans-serif` : 'inherit';
+  const fontFamily = font ? `"${fontId}", sans-serif` : 'inherit';
 
   return (
     <div className="bg-surface-container-lowest border border-primary/30 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-64 border-b-4 border-b-primary">
@@ -2283,7 +2295,10 @@ function StyleSandbox({ theme, font, onClose }: { theme: any; font: any; onClose
             </div>
             <div className="flex items-center justify-between text-xs p-2 bg-surface-container rounded-lg">
               <span className="text-secondary">当前字体:</span>
-              <span className="font-bold text-tertiary truncate max-w-[100px]">{font?.name || '系统默认'}</span>
+              <div className="flex items-center gap-2">
+                {fontLoading && <RefreshCw size={10} className="animate-spin text-primary" />}
+                <span className="font-bold text-tertiary truncate max-w-[100px]">{font?.name || '系统默认'}</span>
+              </div>
             </div>
           </div>
         </div>
