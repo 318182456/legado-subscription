@@ -35,11 +35,12 @@ import {
   Globe,
   Trash2,
   Link as LinkIcon,
+  Package,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-type Page = 'dashboard' | 'subscriptions' | 'sources' | 'rules' | 'settings';
+type Page = 'dashboard' | 'subscriptions' | 'sources' | 'rules' | 'assets' | 'settings';
 
 const formatDate = (dateInput: string | number | Date) => {
   if (!dateInput) return '-';
@@ -190,6 +191,12 @@ export default function App() {
             label="净化规则"
           />
           <NavItem 
+            active={currentPage === 'assets'} 
+            onClick={() => setCurrentPage('assets')}
+            icon={<Package size={20} />}
+            label="资源管理"
+          />
+          <NavItem 
             active={currentPage === 'settings'} 
             onClick={() => setCurrentPage('settings')}
             icon={<SettingsIcon size={20} />}
@@ -271,6 +278,7 @@ export default function App() {
                 />
               )}
               {currentPage === 'rules' && <RulesView onImport={() => setIsAddModalOpen(true)} />}
+              {currentPage === 'assets' && <AssetsView />}
               {currentPage === 'settings' && <SettingsView />}
             </motion.div>
           </AnimatePresence>
@@ -1976,6 +1984,123 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
           </p>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+function AssetsView() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchResources = async () => {
+    setLoading(true);
+    try {
+      const res = await api.getResources();
+      setData(res);
+    } catch (e) {
+      console.error('获取资源列表失败', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResources();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
+
+  const renderCategory = (title: string, items: any[], icon: React.ReactNode) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-on-surface font-bold">
+          <div className="p-1.5 bg-surface-container rounded-lg text-primary">{icon}</div>
+          <h3>{title} ({items.length})</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {items.map((item, idx) => {
+            const url = `${window.location.origin}/repo/${item.path}`;
+            const isImage = item.path.match(/\.(png|jpg|jpeg|webp)$/i);
+            return (
+              <div key={idx} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-3 group hover:shadow-md transition-all">
+                {isImage ? (
+                  <div className="w-full h-32 rounded-lg overflow-hidden bg-surface-container">
+                    <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  </div>
+                ) : (
+                  <div className="w-full h-32 rounded-lg bg-surface-container flex items-center justify-center text-secondary">
+                    <Book size={32} opacity={0.3} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 min-w-0">
+                  <span className="text-sm font-bold truncate" title={item.name}>{item.name}</span>
+                  <span className="text-[10px] text-secondary truncate font-mono">{item.path}</span>
+                </div>
+                <div className="flex gap-2 mt-auto">
+                  <a 
+                    href={url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex-1 text-center py-1.5 bg-surface-container-high text-primary rounded-lg text-xs font-bold hover:bg-surface-container-highest transition-colors"
+                  >
+                    预览
+                  </a>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(url);
+                      alert('链接已复制');
+                    }}
+                    className="p-1.5 text-secondary hover:text-primary transition-colors"
+                    title="复制链接"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  return (
+    <div className="space-y-10 pb-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-on-surface">资源管理 (R2)</h2>
+          <p className="text-sm text-secondary mt-1">同步到云端 R2 存储的主题、字体、排版等素材。</p>
+        </div>
+        <button 
+          onClick={fetchResources}
+          className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors"
+        >
+          <RefreshCw size={16} />
+          刷新索引
+        </button>
+      </div>
+
+      {!data || Object.values(data).every((v: any) => !v?.length) ? (
+        <div className="flex flex-col items-center justify-center py-20 text-secondary gap-4 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant">
+          <Package size={48} opacity={0.2} />
+          <p>暂无资源索引，请先运行本地同步脚本</p>
+        </div>
+      ) : (
+        <>
+          {renderCategory('精美主题', data.themes, <Sparkles size={18} />)}
+          {renderCategory('排版方案', data.layouts, <BookOpen size={18} />)}
+          {renderCategory('净化规则', data.rules, <ShieldCheck size={18} />)}
+          {renderCategory('发现源', data.rss, <Globe size={18} />)}
+          {renderCategory('优选字体', data.fonts, <Info size={18} />)}
+        </>
+      )}
     </div>
   );
 }

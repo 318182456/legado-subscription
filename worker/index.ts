@@ -154,7 +154,10 @@ export default {
       // ── /api/resources (资源列表) ────────────────────────────────
       if (path === "/api/resources" && method === "GET") {
         const data = await env.KV.get("resources-index");
-        return new Response(data || "{}", { headers: { "Content-Type": "application/json" } });
+        const json = data ? JSON.parse(data) : {};
+        return new Response(JSON.stringify({ ok: true, data: json }), { 
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+        });
       }
 
       return err("Not Found", 404);
@@ -397,7 +400,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legado 订阅中心</title>
+    <title>Legado 资源中心</title>
     <style>
         :root {
             --primary: #6750A4;
@@ -462,11 +465,12 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         .card {
             background: white;
             border-radius: 24px;
-            padding: 24px;
+            padding: 20px;
             margin-bottom: 16px;
             box-shadow: 0 4px 12px var(--shadow);
             border: 1px solid rgba(0,0,0,0.05);
         }
+        .card h3 { font-size: 1rem; margin-bottom: 15px; color: #555; border-left: 4px solid var(--primary); padding-left: 10px; }
         
         .btn {
             display: flex;
@@ -490,14 +494,22 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
         .res-item {
             background: var(--surface-container);
-            padding: 16px;
+            padding: 12px;
             border-radius: 18px;
             text-align: center;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
         }
-        .res-name { font-size: 0.85rem; font-weight: 700; margin-bottom: 8px; color: #444; }
+        .res-preview {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: #eee;
+        }
+        .res-name { font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; color: #444; word-break: break-all; }
         .res-btn {
             font-size: 0.75rem;
             padding: 6px;
@@ -567,47 +579,37 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 
             try {
                 const res = await fetch('/api/resources');
-                const data = await res.json();
+                const json = await res.json();
+                const data = json.data || {};
                 let html = '';
 
-                if (data.themes?.length) {
-                    html += '<div class="card"><h3>🎨 精美主题</h3><div class="grid">';
-                    data.themes.forEach(t => {
-                        const url = window.location.origin + '/repo/' + t.path;
-                        html += \`
+                // 通用渲染函数
+                const renderGrid = (title, items, protocol, icon) => {
+                    if (!items || !items.length) return '';
+                    let section = \`<div class="card"><h3>\${icon} \${title}</h3><div class="grid">\`;
+                    items.forEach(item => {
+                        const url = window.location.origin + '/repo/' + item.path;
+                        const isImg = item.path.match(/\\.(png|jpg|jpeg|webp)$/i);
+                        const preview = isImg ? \`<img class="res-preview" src="\${url}">\` : '';
+                        
+                        section += \`
                             <div class="res-item">
-                                <div class="res-name">\${t.name}</div>
-                                <a href="legado://import/theme?src=\${encodeURIComponent(url)}" class="res-btn">一键导入</a>
+                                \${preview}
+                                <div class="res-name">\${item.name}</div>
+                                <a href="\${protocol ? (protocol + encodeURIComponent(url)) : url}" 
+                                   class="res-btn" \${!protocol ? 'download' : ''}>
+                                   \${protocol ? '一键导入' : '点击下载'}
+                                </a>
                             </div>\`;
                     });
-                    html += '</div></div>';
-                }
+                    return section + '</div></div>';
+                };
 
-                if (data.layouts?.length) {
-                    html += '<div class="card"><h3>📏 排版方案</h3><div class="grid">';
-                    data.layouts.forEach(l => {
-                        const url = window.location.origin + '/repo/' + l.path;
-                        html += \`
-                            <div class="res-item">
-                                <div class="res-name">\${l.name}</div>
-                                <a href="legado://import/readConfig?src=\${encodeURIComponent(url)}" class="res-btn">一键导入</a>
-                            </div>\`;
-                    });
-                    html += '</div></div>';
-                }
-
-                if (data.fonts?.length) {
-                    html += '<div class="card"><h3>🔤 优选字体</h3><div class="grid">';
-                    data.fonts.forEach(f => {
-                        const url = window.location.origin + '/repo/' + f.path;
-                        html += \`
-                            <div class="res-item">
-                                <div class="res-name">\${f.name}</div>
-                                <a href="\${url}" class="res-btn" download>点击下载</a>
-                            </div>\`;
-                    });
-                    html += '</div></div>';
-                }
+                html += renderGrid('精美主题', data.themes, 'legado://import/theme?src=', '🎨');
+                html += renderGrid('排版方案', data.layouts, 'legado://import/readConfig?src=', '📏');
+                html += renderGrid('净化规则', data.rules, 'legado://import/replaceRule?src=', '🧹');
+                html += renderGrid('发现源', data.rss, 'legado://import/rssSource?src=', '📌');
+                html += renderGrid('优选字体', data.fonts, null, '🔤');
 
                 container.innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">暂无资源，请先运行同步脚本</div>';
                 document.getElementById('res-loading').style.display = 'none';
