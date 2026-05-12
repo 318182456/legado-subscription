@@ -245,6 +245,8 @@ export default function AssetsView() {
                           <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" />
                         ) : isImg ? (
                           <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        ) : ['ttf', 'otf', 'woff', 'woff2'].includes(item.extension) ? (
+                          <FontPreview path={item.path} name={item.name} />
                         ) : (
                           <div className="text-primary/30 font-bold text-lg uppercase">{item.extension || 'FILE'}</div>
                         )}
@@ -436,16 +438,16 @@ function PreviewModal({ item, onClose }: { item: any; onClose: () => void }) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-surface custom-scrollbar">
+        <div className={`flex-1 p-6 bg-surface ${['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(item.extension) ? 'overflow-hidden' : 'overflow-y-auto custom-scrollbar'}`}>
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <RefreshCw className="animate-spin text-primary" size={32} />
               <p className="text-sm text-secondary">正在分析资源...</p>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center h-full">
               {['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(item.extension) ? (
-                <img src={item.url} alt={item.name} className="max-w-full rounded-lg shadow-md" />
+                <img src={item.url} alt={item.name} className="max-w-full max-h-full object-contain rounded-lg shadow-md" />
               ) : item.extension === 'zip' ? (
                 <div className="w-full">
                   <div className="flex items-center gap-2 mb-4 text-primary">
@@ -475,6 +477,28 @@ function PreviewModal({ item, onClose }: { item: any; onClose: () => void }) {
           )}
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+// 字体预览组件
+function FontPreview({ path, name }: { path: string; name: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const fontId = useRef(`font_${Math.random().toString(36).substring(7)}`);
+
+  useEffect(() => {
+    const fontUrl = `${window.location.origin}/repo/${path}`;
+    const fontFace = new FontFace(fontId.current, `url(${fontUrl})`);
+    fontFace.load().then(f => {
+      (document.fonts as any).add(f);
+      setLoaded(true);
+    }).catch(e => console.error('Font preview failed', e));
+  }, [path]);
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center" style={{ fontFamily: loaded ? fontId.current : 'inherit' }}>
+      <span className="text-2xl mb-1">阅读</span>
+      <span className="text-[10px] opacity-50 truncate w-full">{name}</span>
     </div>
   );
 }
@@ -541,6 +565,7 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
   const [selectedFontName, setSelectedFontName] = useState('');
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
+  const [manualAssets, setManualAssets] = useState({ bg: false, font: false });
 
   useEffect(() => {
     api.getResources().then(setResources);
@@ -554,7 +579,17 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
       fetch(`${window.location.origin}/repo/${base.path}`)
         .then(res => res.json())
         .then(data => {
-          setConfig(prev => ({ ...prev, ...data }));
+          setConfig(prev => {
+            const next = { ...prev, ...data };
+            if (manualAssets.bg) {
+              next.bgStr = prev.bgStr;
+              next.bgType = prev.bgType;
+            }
+            if (manualAssets.font) {
+              next.textFont = prev.textFont;
+            }
+            return next;
+          });
         })
         .finally(() => setLoading(false));
     } else if (type === 'font') {
@@ -570,10 +605,21 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
           if (configFile) {
             const str = new TextDecoder().decode(unzipped[configFile]);
             const data = JSON.parse(str);
-            setConfig(prev => ({ ...prev, ...data }));
             
-            // 尝试加载同包内的字体
-            if (data.textFont) {
+            setConfig(prev => {
+              const next = { ...prev, ...data };
+              if (manualAssets.bg) {
+                next.bgStr = prev.bgStr;
+                next.bgType = prev.bgType;
+              }
+              if (manualAssets.font) {
+                next.textFont = prev.textFont;
+              }
+              return next;
+            });
+            
+            // 尝试加载同包内的字体 (仅当用户没手动选字体时)
+            if (data.textFont && !manualAssets.font) {
               const fontFile = Object.keys(unzipped).find(k => k.includes(data.textFont) || data.textFont.includes(k));
               if (fontFile) {
                 const fontBlob = new Blob([unzipped[fontFile]]);
@@ -740,7 +786,10 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
                   <input 
                     type="color" 
                     value={getHex6(config.bgStr)} 
-                    onChange={(e) => setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0})} 
+                    onChange={(e) => {
+                      setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0});
+                      setManualAssets(p => ({ ...p, bg: true }));
+                    }} 
                     className="w-full h-8 rounded-lg cursor-pointer" 
                   />
                 </div>
@@ -836,8 +885,10 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
                 onSelect={(r: any) => {
                   if (showPicker === 'font') {
                     loadFont(r.path, r.name);
+                    setManualAssets(p => ({ ...p, font: true }));
                   } else if (showPicker === 'bg') {
                     setConfig({...config, bgStr: r.path, bgType: 2});
+                    setManualAssets(p => ({ ...p, bg: true }));
                   } else if (showPicker === 'layout') {
                     loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
                   }
@@ -916,6 +967,8 @@ function AssetPicker({ type, fileTree, onSelect, onClose }: { type: string; file
                      <img src={`${window.location.origin}/repo/${item.path}`} className="w-full h-full object-cover" />
                    ) : type === 'layout' ? (
                      <Package size={24} className="text-primary/30" />
+                   ) : type === 'font' ? (
+                     <FontPreview path={item.path} name={item.name} />
                    ) : <Type size={24} className="text-primary/30" />}
                 </div>
                 <span className="text-[10px] font-bold truncate group-hover:text-primary">{item.name}</span>
