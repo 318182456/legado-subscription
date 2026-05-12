@@ -137,8 +137,25 @@ export default {
         if (method === "PATCH") return handleRuleAction(env, id, "toggle", request);
       }
 
-      // ── /api/parse-links ──────────────────────────────────────────
-      if (path === "/api/parse-links" && method === "GET") return handleParseLinks(url);
+      // ── /repo/* (R2 资源代理) ───────────────────────────────────
+      if (path.startsWith("/repo/")) {
+        const key = path.replace("/repo/", "");
+        const object = await env.ASSETS_R2.get(key);
+        if (!object) return err("Resource Not Found", 404);
+        
+        const headers = new Headers();
+        object.writeHttpMetadata(headers);
+        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("etag", object.httpEtag);
+        
+        return new Response(object.body, { headers });
+      }
+
+      // ── /api/resources (资源列表) ────────────────────────────────
+      if (path === "/api/resources" && method === "GET") {
+        const data = await env.KV.get("resources-index");
+        return new Response(data || "{}", { headers: { "Content-Type": "application/json" } });
+      }
 
       return err("Not Found", 404);
     } catch (e) {
@@ -371,7 +388,7 @@ async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promi
   }
 }
 
-/** 输出整合订阅索引 HTML (仿苗公子页面) */
+/** 输出整合订阅索引 HTML (全能订阅中心) */
 async function handleSubscribeIndex(request: Request, env: Env): Promise<Response> {
   const origin = new URL(request.url).origin;
   const html = `
@@ -380,25 +397,7 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>书源整合订阅 - Legado</title>
-    <style>
-        :root {
-            --primary: #6750A4;
-            --on-primary: #FFFFFF;
-            --surface: #FEF7FF;
-            --outline: #79747E;
-            --surface-variant: #E7E0EC;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--surface);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: #1C1B1F;
-        }
+    <title>Legado 订阅中心</title>
     <style>
         :root {
             --primary: #6750A4;
@@ -406,285 +405,257 @@ async function handleSubscribeIndex(request: Request, env: Env): Promise<Respons
             --surface: #fef7ff;
             --surface-container: #f3edf7;
             --outline: #79747e;
+            --secondary: #625b71;
             --shadow: rgba(0, 0, 0, 0.08);
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
-            background: linear-gradient(135deg, #fef7ff 0%, #f3edf7 100%);
+            background: var(--surface);
             color: #1c1b1f;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
         }
-        .container {
+        .app-bar {
             width: 100%;
-            max-width: 440px;
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 32px;
-            padding: 40px 24px;
-            box-shadow: 0 12px 40px var(--shadow);
+            padding: 20px;
+            background: white;
+            box-shadow: 0 2px 4px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 10;
             text-align: center;
         }
-        .header { margin-bottom: 28px; }
-        h1 {
-            font-size: 1.6rem;
-            color: var(--primary);
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
-            font-weight: 800;
+        h1 { font-size: 1.4rem; color: var(--primary); font-weight: 800; }
+        
+        .tabs {
+            display: flex;
+            background: #eee;
+            padding: 4px;
+            border-radius: 12px;
+            margin: 20px 0;
+            width: 90%;
+            max-width: 400px;
         }
-        .subtitle {
-            font-size: 0.95rem;
-            color: var(--outline);
-            margin-bottom: 28px;
+        .tab {
+            flex: 1;
+            padding: 8px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        h3 { margin-bottom: 12px; }
+        .tab.active { background: white; color: var(--primary); box-shadow: 0 2px 6px var(--shadow); }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            padding: 0 20px 40px;
+            display: none;
+        }
+        .container.active { display: block; }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px var(--shadow);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        
         .btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
-            padding: 16px;
-            border-radius: 18px;
+            padding: 14px;
+            border-radius: 16px;
             text-decoration: none;
             font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 2px 8px var(--shadow);
+            margin-bottom: 12px;
+            transition: transform 0.2s;
         }
-        .btn:active { transform: scale(0.96); box-shadow: 0 1px 2px var(--shadow); }
-        
-        .btn-info {
-            background: linear-gradient(135deg, #6750A4 0%, #9580FF 100%);
-            color: var(--on-primary);
+        .btn:active { transform: scale(0.97); }
+        .btn-p { background: var(--primary); color: white; }
+        .btn-s { background: #EADDFF; color: #21005D; }
+        .btn-o { background: #FFD8E4; color: #31111D; }
+        .btn-d { background: #FFDAD6; color: #410002; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        .res-item {
+            background: var(--surface-container);
+            padding: 16px;
+            border-radius: 18px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
-        .btn-sources {
-            background-color: #EADDFF;
-            color: #21005D;
+        .res-name { font-size: 0.85rem; font-weight: 700; margin-bottom: 8px; color: #444; }
+        .res-btn {
+            font-size: 0.75rem;
+            padding: 6px;
+            background: white;
+            border-radius: 8px;
+            color: var(--primary);
+            text-decoration: none;
+            border: 1px solid var(--primary);
         }
-        .btn-rules {
-            background-color: #FFD8E4;
-            color: #31111D;
-        }
-        
-        .icon { font-size: 1.3rem; }
-        .footer {
-            margin-top: 24px;
-            font-size: 0.8rem;
-            color: var(--outline);
-            opacity: 0.7;
-            border-top: 1px solid rgba(0,0,0,0.05);
-            padding-top: 20px;
-        }
-        .tip {
-            margin-top: 20px;
-            padding: 12px 16px;
-            background: rgba(103, 80, 164, 0.08);
+
+        #status-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 12px;
             border-radius: 12px;
-            font-size: 0.82rem;
-            color: var(--outline);
-            line-height: 1.6;
-        }
-        .btn-danger {
-            background-color: #FFDAD6;
-            color: #410002;
-            margin-top: 8px;
-        }
-        .btn-danger:active { background-color: #FFBAB1; }
-        .divider {
-            margin: 16px 0;
-            border: none;
-            border-top: 1px dashed rgba(0,0,0,0.12);
+            background: #333;
+            color: white;
+            font-size: 0.85rem;
+            display: none;
+            z-index: 100;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📚 订阅中心</h1>
-            <p class="subtitle">Legado 资源一键整合导入</p>
+    <div class="app-bar">
+        <h1>📚 Legado 资源中心</h1>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">订阅整合</div>
+        <div class="tab" onclick="switchTab(1)">资源仓库</div>
+    </div>
+
+    <!-- Tab 0: 订阅整合 -->
+    <div id="tab-0" class="container active">
+        <div class="card">
+            <a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-p">📦 导入全量整合书源</a>
+            <a href="legado://import/replaceRule?src=${encodeURIComponent(origin + '/subscribe/rules')}" class="btn btn-s">✨ 导入全量净化规则</a>
+            <a href="legado://import/rssSource?src=${encodeURIComponent(origin + '/subscribe/info.json')}" class="btn btn-o">📌 添加到阅读发现</a>
         </div>
-
-        <h3><a href="legado://import/rssSource?src=${encodeURIComponent(origin + '/subscribe/info.json')}" class="btn btn-info">
-            ✨ 添加到阅读发现
-        </a></h3>
-
-        <h3><a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-sources">
-            📚 整合书源订阅
-        </a></h3>
-
-        <h3><a href="legado://import/replaceRule?src=${encodeURIComponent(origin + '/subscribe/rules')}" class="btn btn-rules">
-            ✨ 整合净化规则
-        </a></h3>
-
-        <hr class="divider">
-
-        <!-- 状态提示条 -->
-        <div id="status-bar" style="display:none;margin-bottom:12px;padding:12px 16px;border-radius:14px;font-size:0.85rem;line-height:1.5;text-align:left;word-break:break-all"></div>
-
-        <!-- 确认弹层 -->
-        <div id="confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:none;align-items:center;justify-content:center">
-          <div style="background:#fff;border-radius:20px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
-            <p id="confirm-text" style="margin:0 0 20px;font-size:0.95rem;line-height:1.6;color:#1c1b1f"></p>
-            <div style="display:flex;gap:10px">
-              <button onclick="closeModal(false)" style="flex:1;padding:10px;border-radius:12px;border:1px solid #79747e;background:#fff;font-size:0.9rem;cursor:pointer">取消</button>
-              <button onclick="closeModal(true)" style="flex:1;padding:10px;border-radius:12px;border:none;background:#B3261E;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer">确定清除</button>
-            </div>
-          </div>
+        <div class="card">
+            <p style="font-size:0.8rem; color:var(--outline); margin-bottom:12px;">高级操作</p>
+            <a href="#" onclick="clearAndImport(); return false;" class="btn btn-d">🗑️ 清空并重新订阅</a>
         </div>
+    </div>
 
-        <h3><a href="#" onclick="clearAndImport(this); return false;" class="btn btn-danger">
-            🗑️ 清除本地书源并重新订阅
-        </a></h3>
+    <!-- Tab 1: 资源仓库 -->
+    <div id="tab-1" class="container">
+        <div id="res-loading" style="text-align:center; padding:40px; color:var(--outline);">正在加载资源索引...</div>
+        <div id="res-content"></div>
+    </div>
 
-        <div class="tip">
-            💡 <strong>使用说明</strong>：请在阅读 App 的发现列表中点击导入。<br>
-            ⚠️ <strong>清除功能</strong>：需先在阅读设置中开启 <strong>Web 服务</strong>，清除操作<strong>不可恢复</strong>。
-        </div>
+    <div id="status-bar"></div>
 
-        <script>
-            var _modalResolve = null;
+    <script>
+        function switchTab(idx) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+            document.querySelectorAll('.container').forEach((c, i) => c.classList.toggle('active', i === idx));
+            if (idx === 1) loadResources();
+        }
 
-            function showModal(text) {
-                return new Promise(function(resolve) {
-                    _modalResolve = resolve;
-                    document.getElementById('confirm-text').innerHTML = text;
-                    var m = document.getElementById('confirm-modal');
-                    m.style.display = 'flex';
-                });
-            }
+        async function loadResources() {
+            const container = document.getElementById('res-content');
+            if (container.innerHTML !== '') return;
 
-            // 关闭弹层并 resolve
-            window.closeModal = function(val) {
-                document.getElementById('confirm-modal').style.display = 'none';
-                if (_modalResolve) { _modalResolve(val); _modalResolve = null; }
-            };
+            try {
+                const res = await fetch('/api/resources');
+                const data = await res.json();
+                let html = '';
 
-            function showStatus(msg, type) {
-                // type: 'info' | 'error' | 'success'
-                var bar = document.getElementById('status-bar');
-                var colors = {
-                    info:    { bg: 'rgba(103,80,164,0.10)', color: '#4a3780' },
-                    error:   { bg: 'rgba(179,38,30,0.10)',  color: '#B3261E' },
-                    success: { bg: 'rgba(0,128,0,0.10)',    color: '#1a7f1a' }
-                };
-                var c = colors[type] || colors.info;
-                bar.style.background = c.bg;
-                bar.style.color      = c.color;
-                bar.innerHTML        = msg;
-                bar.style.display    = 'block';
-            }
-
-            // AbortController + setTimeout（兼容旧版 WebView，不用 AbortSignal.timeout）
-            function fetchWithTimeout(url, opts, ms) {
-                var ctrl = new AbortController();
-                var tid = setTimeout(function() { ctrl.abort(); }, ms);
-                return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
-                    .finally(function() { clearTimeout(tid); });
-            }
-
-            async function clearAndImport(btn) {
-                var port      = 1122;
-                var base      = 'http://127.0.0.1:' + port;
-                var importUrl = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
-
-                // 立刻给按钮视觉反馈
-                var origText = btn ? btn.textContent : '';
-                if (btn) { btn.textContent = '⏳ 连接中...'; btn.style.pointerEvents = 'none'; }
-                showStatus('正在连接阅读 Web 服务（端口 ' + port + '）…', 'info');
-
-                var restore = function() {
-                    if (btn) { btn.textContent = origText; btn.style.pointerEvents = ''; }
-                };
-
-                try {
-                    // 1. 获取本地书源列表
-                    var res;
-                    try {
-                        res = await fetchWithTimeout(base + '/getBookSources', {}, 4000);
-                    } catch (e) {
-                        // 混合内容或网络错误
-                        var isMixed = (window.location.protocol === 'https:');
-                        if (isMixed) {
-                            showStatus(
-                                '❌ 连接失败（混合内容限制）<br><br>' +
-                                '当前页面为 HTTPS，无法直接访问本机 HTTP 服务。<br><br>' +
-                                '解决方法：<br>' +
-                                '① 在阅读「发现」中打开此页后点击按钮（推荐）<br>' +
-                                '② 或用手机浏览器打开 http://127.0.0.1:' + port + ' 中的管理页面手动清除',
-                                'error'
-                            );
-                        } else {
-                            showStatus('❌ 连接失败：' + e.message + '<br>请确认阅读 Web 服务已开启', 'error');
-                        }
-                        restore();
-                        return;
-                    }
-
-                    if (!res.ok) throw new Error('服务返回 ' + res.status);
-                    var resJson = await res.json();
-                    var sources = Array.isArray(resJson) ? resJson : (resJson.data || []);
-
-                    if (!Array.isArray(sources) || sources.length === 0) {
-                        showStatus('本地无书源，直接导入订阅…', 'info');
-                        restore();
-                        setTimeout(function() { location.href = importUrl; }, 800);
-                        return;
-                    }
-
-                    // 2. 显示确认弹层（替代 confirm()）
-                    restore();
-                    var ok = await showModal('将清除本地 ' + sources.length + ' 个书源，然后导入订阅书源。<br><br>此操作不可恢复，确定继续？');
-                    if (!ok) { showStatus('已取消', 'info'); return; }
-
-                    if (btn) { btn.textContent = '⏳ 删除中...'; btn.style.pointerEvents = 'none'; }
-                    showStatus('正在删除 ' + sources.length + ' 个本地书源…', 'info');
-
-                    // 3. 分批批量删除（防止 NanoHTTPD 请求体过大或超时）
-                    var batchSize = 100;
-                    for (var i = 0; i < sources.length; i += batchSize) {
-                        var chunk = sources.slice(i, i + batchSize);
-                        var delRes = await fetchWithTimeout(base + '/deleteBookSources', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                            body: JSON.stringify(chunk)
-                        }, 8000);
-                        if (!delRes.ok) throw new Error('删除接口返回 ' + delRes.status);
-                        
-                        var text = await delRes.text();
-                        var delJson = null;
-                        try {
-                            delJson = JSON.parse(text);
-                        } catch (je) { 
-                            throw new Error('解析响应失败(可能不支持该API或参数过大)，返回内容: ' + text.substring(0, 80));
-                        }
-                        
-                        if (delJson && delJson.isSuccess === false) {
-                            throw new Error('阅读APP内部报错: ' + (delJson.errorMsg || '未知'));
-                        }
-                    }
-
-                    // 4. 自动拉起导入
-                    showStatus('✅ 删除完成，正在拉起导入…', 'success');
-                    restore();
-                    setTimeout(function() { location.href = importUrl; }, 800);
-
-                } catch (e) {
-                    restore();
-                    showStatus('❌ 操作失败：' + e.message, 'error');
+                if (data.themes?.length) {
+                    html += '<div class="card"><h3>🎨 精美主题</h3><div class="grid">';
+                    data.themes.forEach(t => {
+                        const url = window.location.origin + '/repo/' + t.path;
+                        html += \`
+                            <div class="res-item">
+                                <div class="res-name">\${t.name}</div>
+                                <a href="legado://import/theme?src=\${encodeURIComponent(url)}" class="res-btn">一键导入</a>
+                            </div>\`;
+                    });
+                    html += '</div></div>';
                 }
+
+                if (data.layouts?.length) {
+                    html += '<div class="card"><h3>📏 排版方案</h3><div class="grid">';
+                    data.layouts.forEach(l => {
+                        const url = window.location.origin + '/repo/' + l.path;
+                        html += \`
+                            <div class="res-item">
+                                <div class="res-name">\${l.name}</div>
+                                <a href="legado://import/readConfig?src=\${encodeURIComponent(url)}" class="res-btn">一键导入</a>
+                            </div>\`;
+                    });
+                    html += '</div></div>';
+                }
+
+                if (data.fonts?.length) {
+                    html += '<div class="card"><h3>🔤 优选字体</h3><div class="grid">';
+                    data.fonts.forEach(f => {
+                        const url = window.location.origin + '/repo/' + f.path;
+                        html += \`
+                            <div class="res-item">
+                                <div class="res-name">\${f.name}</div>
+                                <a href="\${url}" class="res-btn" download>点击下载</a>
+                            </div>\`;
+                    });
+                    html += '</div></div>';
+                }
+
+                container.innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">暂无资源，请先运行同步脚本</div>';
+                document.getElementById('res-loading').style.display = 'none';
+            } catch (e) {
+                container.innerHTML = '<div style="color:red;padding:20px;">加载失败: ' + e.message + '</div>';
             }
-        </script>
+        }
+
+        function showStatus(msg) {
+            const bar = document.getElementById('status-bar');
+            bar.textContent = msg;
+            bar.style.display = 'block';
+            setTimeout(() => bar.style.display = 'none', 3000);
+        }
+
+        async function clearAndImport() {
+            if (!confirm('将清空本地所有书源并同步云端，确定吗？')) return;
+            const port = 1122;
+            const base = 'http://127.0.0.1:' + port;
+            showStatus('正在尝试连接本地服务...');
+            try {
+                const res = await fetch(base + '/getBookSources');
+                const sources = await res.json();
+                const list = Array.isArray(sources) ? sources : (sources.data || []);
+                if (list.length > 0) {
+                    showStatus('正在删除 ' + list.length + ' 个书源...');
+                    await fetch(base + '/deleteBookSources', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(list)
+                    });
+                }
+                showStatus('✅ 已清空，正在拉起导入...');
+                setTimeout(() => {
+                    location.href = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
+                }, 1000);
+            } catch (e) {
+                showStatus('❌ 失败: 请确保阅读 Web 服务已开启 (端口 ' + port + ')');
+            }
+        }
+    </script>
+</body>
+</html>
+  `;
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" },
+  });
+}
 
         <div class="footer">
             由 Legado Subscription 系统自动生成

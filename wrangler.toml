@@ -27,3 +27,7 @@ binding = "KV"
 [[d1_databases]]
 binding = "DB"
 database_name = "legado-subscription"
+
+[[r2_buckets]]
+binding = "ASSETS_R2"
+bucket_name = "legado-assets"

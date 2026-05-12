@@ -2,6 +2,7 @@ import type {
   KVNamespace,
   D1Database,
   ExecutionContext,
+  R2Bucket,
 } from "@cloudflare/workers-types";
 
 // ─── 环境绑定 ────────────────────────────────────────────────────
@@ -14,6 +15,8 @@ export interface Env {
   API_SECRET: string;
   /** 管理员密码（首次登录用） */
   ADMIN_PASSWORD?: string;
+  /** R2: 静态资源存储 */
+  ASSETS_R2: R2Bucket;
 }
 
 // ─── 数据类型 ────────────────────────────────────────────────────
