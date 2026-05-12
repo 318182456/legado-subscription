@@ -479,6 +479,40 @@ function PreviewModal({ item, onClose }: { item: any; onClose: () => void }) {
   );
 }
 
+// 转换 Legado 的 ARGB (#AARRGGBB) 为 CSS 的 RGBA (#RRGGBBAA)
+function argbToCss(color: string) {
+  if (!color || !color.startsWith('#')) return color;
+  if (color.length === 9) {
+    const a = color.substring(1, 3);
+    const r = color.substring(3, 5);
+    const g = color.substring(5, 7);
+    const b = color.substring(7, 9);
+    return `#${r}${g}${b}${a}`;
+  }
+  return color;
+}
+
+// 转换 CSS 颜色回 Legado ARGB (主要用于保存)
+function cssToArgb(color: string) {
+  if (!color || !color.startsWith('#')) return color;
+  if (color.length === 7) return `#ff${color.substring(1)}`; // #RRGGBB -> #ffRRGGBB
+  if (color.length === 9) {
+    const r = color.substring(1, 3);
+    const g = color.substring(3, 5);
+    const b = color.substring(5, 7);
+    const a = color.substring(7, 9);
+    return `#${a}${r}${g}${b}`;
+  }
+  return color;
+}
+
+// 获取不带 Alpha 的 6 位 Hex (用于 input[type=color])
+function getHex6(color: string) {
+  if (!color || !color.startsWith('#')) return '#000000';
+  if (color.length === 9) return `#${color.substring(3, 9)}`; // ARGB -> #RRGGBB
+  return color;
+}
+
 function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
     name: initialBase.name + ' 定制',
@@ -496,7 +530,10 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
     titleMode: 0,
     titleSize: 1,
     textFont: '',
-    bgAlpha: 100
+    bgAlpha: 100,
+    letterSpacing: 0,
+    textBold: 0,
+    darkStatusIcon: true
   });
 
   const [saving, setSaving] = useState(false);
@@ -604,24 +641,26 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
         <div className="relative w-[320px] h-[580px] bg-[#1a1a1a] rounded-[48px] p-2.5 shadow-[0_0_0_2px_rgba(255,255,255,0.1),0_20px_50px_rgba(0,0,0,0.4)] border-4 border-[#2a2a2a] overflow-hidden flex flex-col scale-[0.9] lg:scale-100 transition-transform">
           {/* 刘海/灵动岛区域 */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-b-[20px] z-20 flex items-center justify-center">
-             <div className="w-10 h-1 bg-white/10 rounded-full"></div>
+             <div className={`w-10 h-1 rounded-full ${config.darkStatusIcon ? 'bg-white/10' : 'bg-white/20'}`}></div>
           </div>
 
-          <div 
-            className="flex-1 rounded-[38px] overflow-y-auto custom-scrollbar relative bg-white"
-            style={{ 
-              backgroundColor: config.bgType === 0 ? config.bgStr : 'white', 
-              color: config.textColor, 
-              fontFamily: selectedFontName || 'inherit',
-              backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              paddingLeft: `${config.paddingLeft}px`,
-              paddingRight: `${config.paddingRight}px`,
-              paddingTop: `${config.paddingTop + 30}px`, // 为刘海留出空间
-              paddingBottom: `${config.paddingBottom}px`,
-            }}
-          >
+        <div 
+          className="flex-1 rounded-[38px] overflow-y-auto scrollbar-none relative bg-white"
+          style={{ 
+            backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
+            color: argbToCss(config.textColor), 
+            fontFamily: selectedFontName || 'inherit',
+            backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            paddingLeft: `${config.paddingLeft}px`,
+            paddingRight: `${config.paddingRight}px`,
+            paddingTop: `${config.paddingTop + 30}px`, // 为刘海留出空间
+            paddingBottom: `${config.paddingBottom}px`,
+            letterSpacing: `${config.letterSpacing * 10}px`,
+            fontWeight: config.textBold ? 'bold' : 'normal'
+          }}
+        >
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm">
                 <RefreshCw className="animate-spin text-primary" />
@@ -698,16 +737,37 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <span className="text-[10px] text-outline">背景色</span>
-                  <input type="color" value={config.bgStr.startsWith('#') ? config.bgStr : '#ffffff'} onChange={(e) => setConfig({...config, bgStr: e.target.value, bgType: 0})} className="w-full h-8 rounded-lg cursor-pointer" />
+                  <input 
+                    type="color" 
+                    value={getHex6(config.bgStr)} 
+                    onChange={(e) => setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0})} 
+                    className="w-full h-8 rounded-lg cursor-pointer" 
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <span className="text-[10px] text-outline">文字色</span>
-                  <input type="color" value={config.textColor} onChange={(e) => setConfig({...config, textColor: e.target.value})} className="w-full h-8 rounded-lg cursor-pointer" />
+                  <input 
+                    type="color" 
+                    value={getHex6(config.textColor)} 
+                    onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} 
+                    className="w-full h-8 rounded-lg cursor-pointer" 
+                  />
                 </div>
              </div>
              <Slider label="字号" value={config.textSize} min={12} max={40} unit="px" onChange={v => setConfig({...config, textSize: v})} />
              <Slider label="行距 (额外)" value={config.lineSpacingExtra} min={0} max={30} unit="px" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
+             <Slider label="字间距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
              <Slider label="段间距" value={config.paragraphSpacing} min={0} max={40} unit="px" onChange={v => setConfig({...config, paragraphSpacing: v})} />
+             
+             <div className="flex items-center justify-between p-3 bg-surface-container rounded-xl">
+                <span className="text-xs font-bold text-secondary">文本加粗</span>
+                <button 
+                  onClick={() => setConfig({...config, textBold: config.textBold ? 0 : 1})}
+                  className={`w-10 h-5 rounded-full transition-all relative ${config.textBold ? 'bg-primary' : 'bg-outline-variant'}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.textBold ? 'left-6' : 'left-1'}`}></div>
+                </button>
+             </div>
           </div>
 
           <div className="space-y-4">
