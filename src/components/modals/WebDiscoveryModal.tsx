@@ -3,65 +3,48 @@ import { motion } from 'motion/react';
 import { Sparkles, X, RefreshCw, Plus, Search, Info } from 'lucide-react';
 import * as api from '../../api';
 
-interface RemoteUrlPickerModalProps {
+interface WebDiscoveryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdded: () => void;
 }
 
-export function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: RemoteUrlPickerModalProps) {
+export function WebDiscoveryModal({ isOpen, onClose, onAdded }: WebDiscoveryModalProps) {
   const [url, setUrl] = useState('');
-  const [history, setHistory] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const [list, setList] = useState<{ name: string; url: string }[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
+  const [editingNames, setEditingNames] = useState<Record<number, string>>({});
+  const [adding, setAdding] = useState<string | null>(null);
   const [existingUrls, setExistingUrls] = useState<Set<string>>(new Set());
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
-  const [editingNames, setEditingNames] = useState<Record<number, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState<string | null>(null);
   const [batchAdding, setBatchAdding] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('legado_parse_history');
-    if (saved) setHistory(JSON.parse(saved));
-  }, []);
-
-  const fetchExisting = async () => {
-    try {
-      const subs = await api.getSubscriptions();
-      setExistingUrls(new Set(subs.map(s => s.url)));
-    } catch (e) {
-      console.error('Failed to fetch existing subs', e);
+    if (isOpen) {
+      const h = localStorage.getItem('parse_history');
+      if (h) setHistory(JSON.parse(h));
+      api.getSubscriptions().then(subs => setExistingUrls(new Set(subs.map(s => s.url)))).catch(() => {});
     }
-  };
-
-  const saveHistory = (newUrl: string) => {
-    const newHistory = [newUrl, ...history.filter(u => u !== newUrl)].slice(0, 5);
-    setHistory(newHistory);
-    localStorage.setItem('legado_parse_history', JSON.stringify(newHistory));
-  };
+  }, [isOpen]);
 
   const handleParse = async () => {
     if (!url) return;
     setLoading(true);
     try {
-      await fetchExisting();
-      const data = await api.parseLinks(url);
-      setList(data);
+      const results = await api.parseLinks(url);
+      setList(results);
       setEditingNames({});
       setSelectedUrls(new Set());
-      saveHistory(url);
+      const nextHistory = [url, ...history.filter(h => h !== url)].slice(0, 10);
+      setHistory(nextHistory);
+      localStorage.setItem('parse_history', JSON.stringify(nextHistory));
     } catch (e) {
       alert('解析失败: ' + String(e));
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (isOpen) {
-      handleParse();
-    }
-  }, [isOpen]);
 
   const handleAdd = async (item: { name: string; url: string }) => {
     if (existingUrls.has(item.url)) return;
@@ -115,9 +98,9 @@ export function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: RemoteUrlPick
       >
         <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright shrink-0">
           <div className="flex items-center gap-3">
-            <h3 className="font-bold text-lg flex items-center gap-2">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-on-surface">
               <Sparkles size={20} className="text-tertiary" />
-              从网页导入外部数据
+              外部网页解析
             </h3>
             {list.length > 0 && selectedUrls.size > 0 && (
               <button 
@@ -170,7 +153,7 @@ export function RemoteUrlPickerModal({ isOpen, onClose, onAdded }: RemoteUrlPick
           <p className="text-[10px] text-secondary">将自动提取页面中 yuedu:// 或 legado:// 协议的导入链接</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
           {loading ? (
             <div className="py-12 text-center">
               <RefreshCw className="animate-spin mx-auto text-primary mb-4" size={32} />

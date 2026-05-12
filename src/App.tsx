@@ -20,7 +20,7 @@ import { IconButton } from './components/IconButton';
 // Modals
 import { AddSubscriptionModal } from './components/modals/AddSubscriptionModal';
 import { AddRuleModal } from './components/modals/AddRuleModal';
-import { RemoteUrlPickerModal } from './components/modals/RemoteUrlPickerModal';
+import { WebDiscoveryModal } from './components/modals/WebDiscoveryModal';
 
 // Views
 import LoginView from './views/LoginView';
@@ -40,7 +40,7 @@ export default function App() {
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddRuleModalOpen, setIsAddRuleModalOpen] = useState(false);
-  const [isMiaogongziModalOpen, setIsMiaogongziModalOpen] = useState(false);
+  const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
 
   // Global Testing State (Shared for consistency)
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
@@ -115,7 +115,7 @@ export default function App() {
       case 'subscriptions': return (
         <SubscriptionView 
           onImport={() => setIsAddModalOpen(true)} 
-          onExplore={() => setIsMiaogongziModalOpen(true)} 
+          onExplore={() => setIsDiscoveryModalOpen(true)} 
         />
       );
       case 'sources': return (
@@ -235,11 +235,11 @@ export default function App() {
         }}
       />
 
-      <RemoteUrlPickerModal
-        isOpen={isMiaogongziModalOpen}
-        onClose={() => setIsMiaogongziModalOpen(false)}
+      <WebDiscoveryModal
+        isOpen={isDiscoveryModalOpen}
+        onClose={() => setIsDiscoveryModalOpen(false)}
         onAdded={() => {
-          setIsMiaogongziModalOpen(false);
+          setIsDiscoveryModalOpen(false);
           window.dispatchEvent(new CustomEvent('refresh-data'));
         }}
       />
