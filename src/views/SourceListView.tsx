@@ -170,13 +170,13 @@ export default function SourceListView({
           <button 
             onClick={handleLocalTestAll}
             disabled={isTestingAll || (loading && testingIds.size > 0)}
-            className="border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50 relative overflow-hidden"
+            className={`border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50 relative overflow-hidden transition-all ${isTestingAll ? 'ring-1 ring-primary/30' : ''}`}
           >
-            <ShieldCheck size={14} /> 
-            {isTestingAll ? `测试中 (${testProgress.current}/${testProgress.total})` : '全部测试 (库)'}
+            <ShieldCheck size={14} className={isTestingAll ? 'animate-pulse text-primary' : ''} /> 
+            {isTestingAll ? `测试中 ${Math.round((testProgress.current / testProgress.total) * 100)}% (${testProgress.current}/${testProgress.total})` : '全部测试 (库)'}
             {isTestingAll && testProgress.total > 0 && (
               <div 
-                className="absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300" 
+                className="absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-500 ease-out" 
                 style={{ width: `${(testProgress.current / testProgress.total) * 100}%` }}
               />
             )}
@@ -281,7 +281,7 @@ export default function SourceListView({
                           <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
                           <div className="absolute right-6 top-10 w-32 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden text-left">
                             <button 
-                              onClick={() => { handleTest([source.id]); setActiveMenu(null); }}
+                              onClick={() => { onTest([source.id]); setActiveMenu(null); }}
                               className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container-low transition-colors flex items-center gap-2"
                             >
                               <Zap size={14} /> 立即测试

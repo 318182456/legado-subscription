@@ -46,6 +46,7 @@ export default function App() {
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
   const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
   const [isTestingAll, setIsTestingAll] = useState(false);
+  const cancelTestingRef = React.useRef(false);
 
   useEffect(() => {
     const token = api.getToken();
@@ -88,27 +89,52 @@ export default function App() {
   }, [testingIds]);
 
   const handleTestAll = useCallback(async (onFinished?: () => void) => {
-    if (isTestingAll) return;
+    if (isTestingAll) {
+      if (confirm('确定要停止测试吗？')) {
+        cancelTestingRef.current = true;
+      }
+      return;
+    }
+
     setIsTestingAll(true);
+    cancelTestingRef.current = false;
+    
     try {
       const allIds = await api.getAllSourceIds();
       setTestProgress({ current: 0, total: allIds.length });
       
-      const batchSize = 50;
+      const batchSize = 100; // 调大批次，Worker 内部现在有并发控制
       for (let i = 0; i < allIds.length; i += batchSize) {
+        if (cancelTestingRef.current) break;
+
         const batch = allIds.slice(i, i + batchSize);
-        await api.testSources(batch);
-        setTestProgress(prev => ({ ...prev, current: Math.min(prev.total, i + batch.length) }));
+        try {
+          await api.testSources(batch);
+        } catch (e) {
+          console.error(`Batch ${i} failed:`, e);
+        }
+
+        const nextCurrent = Math.min(allIds.length, i + batch.length);
+        setTestProgress(prev => ({ ...prev, current: nextCurrent }));
+
+        // 每 500 条同步一次数据统计，让用户看到中间结果
+        if (nextCurrent % 500 === 0 || nextCurrent === allIds.length) {
+          onFinished?.(); 
+        }
+
+        // 稍微停顿一下，防止浏览器主线程卡死
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
       
-      // 测试完毕后，触发一次全局同步以确保订阅输出的 KV 缓存是最新的
-      await api.sync();
+      // 全部结束后，触发一次 KV 缓存重建
+      await api.syncAll();
       onFinished?.();
     } catch (e) {
       alert('批量测试失败: ' + String(e));
     } finally {
       setIsTestingAll(false);
       setTestProgress({ current: 0, total: 0 });
+      cancelTestingRef.current = false;
     }
   }, [isTestingAll]);
 

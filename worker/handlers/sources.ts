@@ -57,88 +57,104 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
   const { results: rawSources } = await env.DB.prepare(
     `SELECT id, book_source_url, raw_json FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
   ).bind(...ids).all();
-  
+
   const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
-  await Promise.all(ids.map(async (id) => {
-    const sourceData = sourcesMap.get(id);
-    if (!sourceData) {
-      testResults[id] = false;
-      return;
-    }
+  // 控制并发：Worker CPU 有限，每批最多同时发起 30 个 fetch
+  const CONCURRENCY = 30;
+  const chunks: number[][] = [];
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    chunks.push(ids.slice(i, i + CONCURRENCY));
+  }
 
-    let urlToTest = sourceData.book_source_url as string;
-    let fetchOptions: RequestInit = {
-      method: 'GET',
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-      },
-      signal: AbortSignal.timeout(8000)
-    };
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async (id) => {
+      const sourceData = sourcesMap.get(id);
+      if (!sourceData) { testResults[id] = false; return; }
 
-    try {
-      const rawJson = sourceData.raw_json as string;
-      // 优化：使用正则提取 searchUrl，极大降低 CPU 消耗
-      const searchUrlMatch = rawJson.match(/"searchUrl"\s*:\s*"([^"]+)"/);
-      let searchUrl = searchUrlMatch ? searchUrlMatch[1] : null;
+      let urlToTest = sourceData.book_source_url as string;
+      let fetchOptions: RequestInit = {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(5000) // 5s 超时，减少 CPU 占用
+      };
 
-      if (searchUrl) {
-        let urlPart = searchUrl;
-        if (searchUrl.includes(',{')) {
-          const parts = searchUrl.split(',{');
-          urlPart = parts[0];
-          try {
-            const extraOptions = JSON.parse('{' + parts[1]);
-            if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
-            if (extraOptions.body) {
-              fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+      try {
+        const rawJson = sourceData.raw_json as string;
+        const searchUrlMatch = rawJson.match(/"searchUrl"\s*:\s*"([^"]+)"/);
+        let searchUrl = searchUrlMatch ? searchUrlMatch[1] : null;
+
+        if (searchUrl) {
+          let urlPart = searchUrl;
+          if (searchUrl.includes(',{')) {
+            const parts = searchUrl.split(',{');
+            urlPart = parts[0];
+            try {
+              const extraOptions = JSON.parse('{' + parts[1]);
+              if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
+              if (extraOptions.body) {
+                fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+              }
+              if (extraOptions.headers) {
+                fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
+              }
+            } catch (_) { }
+          }
+
+          urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+
+          if (urlPart.startsWith('http')) {
+            urlToTest = urlPart;
+          } else {
+            const baseUrlMatch = rawJson.match(/"bookSourceUrl"\s*:\s*"([^"]+)"/);
+            const baseUrl = (baseUrlMatch ? baseUrlMatch[1] : null) || sourceData.book_source_url;
+            try {
+              urlToTest = new URL(urlPart, baseUrl as string).toString();
+            } catch (_) {
+              urlToTest = (baseUrl as string).replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
             }
-            if (extraOptions.headers) {
-              fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
-            }
-          } catch (e) { }
-        }
-
-        urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
-
-        if (urlPart.startsWith('http')) {
-          urlToTest = urlPart;
-        } else {
-          const baseUrlMatch = rawJson.match(/"bookSourceUrl"\s*:\s*"([^"]+)"/);
-          const baseUrl = (baseUrlMatch ? baseUrlMatch[1] : null) || sourceData.book_source_url;
-          try {
-            urlToTest = new URL(urlPart, baseUrl as string).toString();
-          } catch (e) {
-            urlToTest = (baseUrl as string).replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
           }
         }
-      }
-    } catch (e) { }
+      } catch (_) { }
 
-    try {
-      const res = await fetch(urlToTest, fetchOptions);
-      if (res.status >= 200 && res.status < 400) {
-        const text = await res.text();
-        testResults[id] = text.length > 100;
-      } else {
+      try {
+        const res = await fetch(urlToTest, fetchOptions);
+        if (res.status >= 200 && res.status < 400) {
+          // 仅读取前 512 字节判断有无内容，避免大文本 CPU 消耗
+          const reader = res.body?.getReader();
+          let total = 0;
+          if (reader) {
+            while (total < 512) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              total += value?.length ?? 0;
+            }
+            reader.cancel();
+          }
+          testResults[id] = total > 100;
+        } else {
+          testResults[id] = false;
+        }
+      } catch (_) {
         testResults[id] = false;
       }
-    } catch (e) {
-      testResults[id] = false;
-    }
-  }));
+    }));
+  }
 
+  // 无条件更新：简化 SQL，让 DB 引擎判断是否修改
   const statements = ids.map(id => {
     const isAvail = testResults[id] ? 1 : 0;
     return env.DB.prepare(
-      "UPDATE sources SET is_available = ?, last_checked = datetime('now'), enabled = ? WHERE id = ? AND (is_available IS NOT ? OR enabled IS NOT ? OR last_checked < datetime('now', '-1 hour') OR last_checked IS NULL)"
-    ).bind(isAvail, isAvail, id, isAvail, isAvail);
+      "UPDATE sources SET is_available = ?, enabled = ?, last_checked = datetime('now') WHERE id = ?"
+    ).bind(isAvail, isAvail, id);
   });
-  
+
   await env.DB.batch(statements);
 
-  // 如果状态有变化，在后台异步重建缓存，不阻塞当前请求
+  // 异步重建订阅缓存，不阻塞响应
   ctx.waitUntil(rebuildCache(env, "source"));
 
   return ok(testResults);
