@@ -223,22 +223,17 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                 let html = '<div class="card"><h3>🎨 精选推荐</h3><div class="grid">';
                 items.forEach(item => {
                     const config = JSON.parse(item.config);
-                    // Legado theme import protocol
-                    // If config is already a stringified JSON, we double-stringify or just use it.
-                    // Usually legado://import/theme?src=BASE64 or URL.
-                    // Here we'll use the Base64 approach for one-click.
                     const b64 = btoa(unescape(encodeURIComponent(item.config)));
                     const importUrl = 'legado://import/theme?src=' + b64;
                     
-                    const preview = item.preview_url ? `<img class="res-preview" src="${item.preview_url}">` : 
-                                   (config.backgroundColor ? `<div class="res-preview" style="background:${config.backgroundColor}"></div>` : '');
+                    const preview = item.preview_url ? '<img class="res-preview" src="' + item.preview_url + '">' : 
+                                   (config.backgroundColor ? '<div class="res-preview" style="background:' + config.backgroundColor + '"></div>' : '');
                     
-                    html += `
-                        <div class="res-item">
-                            ${preview}
-                            <div class="res-name">${item.name}</div>
-                            <a href="${importUrl}" class="res-btn">一键导入</a>
-                        </div>`;
+                    html += '<div class="res-item">' +
+                            preview +
+                            '<div class="res-name">' + item.name + '</div>' +
+                            '<a href="' + importUrl + '" class="res-btn">一键导入</a>' +
+                            '</div>';
                 });
                 html += '</div></div>';
 
