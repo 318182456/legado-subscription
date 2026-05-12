@@ -1928,14 +1928,6 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-md bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-xl overflow-hidden"
       >
-        <div className="p-8 text-center border-b border-outline-variant bg-surface-bright">
-          <div className="w-16 h-16 bg-primary rounded-2xl mx-auto flex items-center justify-center text-on-primary mb-4 shadow-lg">
-            <Book size={32} />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Legado Subscription</h1>
-          <p className="text-sm text-secondary mt-1">书源订阅管理系统</p>
-        </div>
-
         <div className="p-8 space-y-6">
           {hasPasskey && (
             <button 
@@ -1991,6 +1983,10 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
 function AssetsView() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [previewItem, setPreviewItem] = useState<any>(null);
+  const [selectedTheme, setSelectedTheme] = useState<any>(null);
+  const [selectedFont, setSelectedFont] = useState<any>(null);
 
   const fetchResources = async () => {
     setLoading(true);
@@ -2008,35 +2004,41 @@ function AssetsView() {
     fetchResources();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="animate-spin text-primary" size={32} />
-      </div>
+  const filterItems = (items: any[]) => {
+    if (!items) return [];
+    if (!query) return items;
+    return items.filter(item => 
+      item.name.toLowerCase().includes(query.toLowerCase()) || 
+      item.path.toLowerCase().includes(query.toLowerCase())
     );
-  }
+  };
 
-  const renderCategory = (title: string, items: any[], icon: React.ReactNode) => {
-    if (!items || items.length === 0) return null;
+  const renderCategory = (title: string, items: any[], icon: React.ReactNode, type: 'theme' | 'font' | 'layout' | 'rule' | 'rss') => {
+    const filtered = filterItems(items);
+    if (!filtered || filtered.length === 0) return null;
+    
     return (
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-on-surface font-bold">
           <div className="p-1.5 bg-surface-container rounded-lg text-primary">{icon}</div>
-          <h3>{title} ({items.length})</h3>
+          <h3>{title} ({filtered.length})</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {items.map((item, idx) => {
+          {filtered.map((item, idx) => {
             const url = `${window.location.origin}/repo/${item.path}`;
             const isImage = item.path.match(/\.(png|jpg|jpeg|webp)$/i);
+            const isSelected = (type === 'theme' && selectedTheme?.path === item.path) || 
+                               (type === 'font' && selectedFont?.path === item.path);
+            
             return (
-              <div key={idx} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-3 group hover:shadow-md transition-all">
+              <div key={idx} className={`bg-surface-container-lowest border rounded-xl p-4 flex flex-col gap-3 group hover:shadow-md transition-all ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-outline-variant'}`}>
                 {isImage ? (
                   <div className="w-full h-32 rounded-lg overflow-hidden bg-surface-container">
                     <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                   </div>
                 ) : (
                   <div className="w-full h-32 rounded-lg bg-surface-container flex items-center justify-center text-secondary">
-                    <Book size={32} opacity={0.3} />
+                    {type === 'font' ? <span className="text-2xl font-bold">Aa</span> : <Book size={32} opacity={0.3} />}
                   </div>
                 )}
                 <div className="flex flex-col gap-1 min-w-0">
@@ -2044,14 +2046,25 @@ function AssetsView() {
                   <span className="text-[10px] text-secondary truncate font-mono">{item.path}</span>
                 </div>
                 <div className="flex gap-2 mt-auto">
-                  <a 
-                    href={url} 
-                    target="_blank" 
-                    rel="noreferrer"
+                  <button 
+                    onClick={() => setPreviewItem({ ...item, type, url })}
                     className="flex-1 text-center py-1.5 bg-surface-container-high text-primary rounded-lg text-xs font-bold hover:bg-surface-container-highest transition-colors"
                   >
                     预览
-                  </a>
+                  </button>
+                  {(type === 'theme' || type === 'font') && (
+                    <button 
+                      onClick={() => {
+                        if (type === 'theme') setSelectedTheme(isSelected ? null : item);
+                        else setSelectedFont(isSelected ? null : item);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        isSelected ? 'bg-primary text-on-primary' : 'bg-surface-container text-secondary hover:bg-surface-container-high'
+                      }`}
+                    >
+                      {isSelected ? '取消' : '应用'}
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       navigator.clipboard.writeText(url);
@@ -2072,35 +2085,239 @@ function AssetsView() {
   };
 
   return (
-    <div className="space-y-10 pb-10">
-      <div className="flex items-center justify-between">
+    <div className="space-y-10 pb-20 relative">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-20 py-4 -mx-4 px-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-on-surface">资源管理 (R2)</h2>
           <p className="text-sm text-secondary mt-1">同步到云端 R2 存储的主题、字体、排版等素材。</p>
         </div>
-        <button 
-          onClick={fetchResources}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors"
-        >
-          <RefreshCw size={16} />
-          刷新索引
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={16} />
+            <input 
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索资源..."
+              className="w-full bg-surface border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-primary transition-all"
+            />
+          </div>
+          <button 
+            onClick={fetchResources}
+            className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary rounded-lg text-sm font-medium hover:bg-surface-container-low transition-colors"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            刷新索引
+          </button>
+        </div>
       </div>
 
       {!data || Object.values(data).every((v: any) => !v?.length) ? (
         <div className="flex flex-col items-center justify-center py-20 text-secondary gap-4 bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant">
           <Package size={48} opacity={0.2} />
           <p>暂无资源索引，请先运行本地同步脚本</p>
+          <div className="bg-surface p-4 rounded-lg text-xs font-mono text-secondary max-w-md">
+            # 同步命令示例<br/>
+            node scripts/sync-assets.mjs YOUR_TOKEN
+          </div>
         </div>
       ) : (
-        <>
-          {renderCategory('精美主题', data.themes, <Sparkles size={18} />)}
-          {renderCategory('排版方案', data.layouts, <BookOpen size={18} />)}
-          {renderCategory('净化规则', data.rules, <ShieldCheck size={18} />)}
-          {renderCategory('发现源', data.rss, <Globe size={18} />)}
-          {renderCategory('优选字体', data.fonts, <Info size={18} />)}
-        </>
+        <div className="space-y-12">
+          {renderCategory('精美主题', data.themes, <Sparkles size={18} />, 'theme')}
+          {renderCategory('排版方案', data.layouts, <BookOpen size={18} />, 'layout')}
+          {renderCategory('净化规则', data.rules, <ShieldCheck size={18} />, 'rule')}
+          {renderCategory('发现源', data.rss, <Globe size={18} />, 'rss')}
+          {renderCategory('优选字体', data.fonts, <Info size={18} />, 'font')}
+        </div>
       )}
+
+      {/* 组合预览沙盒 */}
+      {(selectedTheme || selectedFont) && (
+        <div className="fixed bottom-6 right-6 left-[264px] z-30 animate-in slide-in-from-bottom duration-300">
+          <StyleSandbox 
+            theme={selectedTheme} 
+            font={selectedFont} 
+            onClose={() => { setSelectedTheme(null); setSelectedFont(null); }} 
+          />
+        </div>
+      )}
+
+      {/* 预览弹窗 */}
+      <AnimatePresence>
+        {previewItem && (
+          <PreviewModal 
+            item={previewItem} 
+            onClose={() => setPreviewItem(null)} 
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function PreviewModal({ item, onClose }: { item: any; onClose: () => void }) {
+  const [content, setContent] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (['theme', 'layout', 'rule', 'rss'].includes(item.type)) {
+      setLoading(true);
+      fetch(item.url)
+        .then(res => res.text())
+        .then(text => {
+          try {
+            setContent(JSON.stringify(JSON.parse(text), null, 2));
+          } catch {
+            setContent(text);
+          }
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [item]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-on-background/40 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col"
+      >
+        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright">
+          <div className="flex flex-col">
+            <h3 className="font-bold text-lg">{item.name}</h3>
+            <span className="text-[10px] text-secondary font-mono">{item.path}</span>
+          </div>
+          <button onClick={onClose} className="p-2 text-secondary hover:bg-surface-container rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 bg-surface">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <RefreshCw className="animate-spin text-primary" size={32} />
+              <p className="text-sm text-secondary">正在加载资源内容...</p>
+            </div>
+          ) : (
+            <>
+              {item.type === 'font' ? (
+                <div className="space-y-8">
+                  <div className="p-8 border border-outline-variant rounded-xl bg-surface-container-lowest text-center">
+                    <p className="text-4xl mb-4">字体预览</p>
+                    <p className="text-sm text-secondary">加载字体后，您可以在组合预览中查看效果。</p>
+                  </div>
+                  <div className="space-y-4">
+                    <p className="text-lg">床前明月光，疑是地上霜。</p>
+                    <p className="text-lg">举头望明月，低头思故乡。</p>
+                    <p className="text-2xl font-bold">The quick brown fox jumps over the lazy dog.</p>
+                  </div>
+                </div>
+              ) : item.path.match(/\.(png|jpg|jpeg|webp)$/i) ? (
+                <div className="flex items-center justify-center">
+                  <img src={item.url} alt={item.name} className="max-w-full rounded-lg shadow-md" />
+                </div>
+              ) : (
+                <pre className="text-xs font-mono p-4 bg-surface-container-lowest border border-outline-variant rounded-lg overflow-x-auto whitespace-pre-wrap">
+                  {content}
+                </pre>
+              )}
+            </>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function StyleSandbox({ theme, font, onClose }: { theme: any; font: any; onClose: () => void }) {
+  const [themeData, setThemeData] = useState<any>(null);
+  
+  useEffect(() => {
+    if (theme) {
+      fetch(`${window.location.origin}/repo/${theme.path}`)
+        .then(res => res.json())
+        .then(data => setThemeData(data))
+        .catch(() => setThemeData(null));
+    }
+  }, [theme]);
+
+  // 加载字体
+  useEffect(() => {
+    if (font) {
+      const fontUrl = `${window.location.origin}/repo/${font.path}`;
+      const fontName = `custom-font-${font.name.replace(/\s+/g, '-')}`;
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @font-face {
+          font-family: '${fontName}';
+          src: url('${fontUrl}');
+        }
+      `;
+      document.head.appendChild(style);
+      return () => {
+        document.head.removeChild(style);
+      };
+    }
+  }, [font]);
+
+  const bg = themeData?.backgroundColor || '#ffffff';
+  const text = themeData?.textColor || '#000000';
+  const fontFamily = font ? `'custom-font-${font.name.replace(/\s+/g, '-')}', sans-serif` : 'inherit';
+
+  return (
+    <div className="bg-surface-container-lowest border border-primary/30 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-64 border-b-4 border-b-primary">
+      <div className="w-full md:w-1/3 p-4 border-r border-outline-variant flex flex-col justify-between bg-surface-bright">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm flex items-center gap-2">
+              <Zap size={16} className="text-primary" />
+              组合样式预览
+            </h4>
+            <button onClick={onClose} className="p-1 hover:bg-surface-container rounded-md"><X size={14} /></button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs p-2 bg-surface-container rounded-lg">
+              <span className="text-secondary">当前主题:</span>
+              <span className="font-bold text-primary truncate max-w-[100px]">{theme?.name || '默认'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs p-2 bg-surface-container rounded-lg">
+              <span className="text-secondary">当前字体:</span>
+              <span className="font-bold text-tertiary truncate max-w-[100px]">{font?.name || '系统默认'}</span>
+            </div>
+          </div>
+        </div>
+        <p className="text-[10px] text-secondary">点击资源卡片上的“应用”切换预览组合</p>
+      </div>
+
+      <div className="flex-1 relative overflow-hidden flex flex-col">
+        {/* 阅读器仿真顶栏 */}
+        <div className="absolute top-0 left-0 right-0 h-8 flex items-center justify-between px-4 text-[10px] opacity-40 z-10" style={{ color: text }}>
+          <span>12:45</span>
+          <span>第十二章 · 资源整合</span>
+          <span>85%</span>
+        </div>
+        
+        {/* 内容区 */}
+        <div 
+          className="flex-1 p-8 pt-10 overflow-y-auto transition-all duration-500 ease-in-out"
+          style={{ backgroundColor: bg, color: text, fontFamily }}
+        >
+          <h2 className="text-xl font-bold mb-4">第十二章 资源整合</h2>
+          <p className="leading-relaxed mb-4">
+            这里是模拟阅读器的预览区域。当您在上方选择了不同的主题和字体后，此处的背景色、文字颜色以及字体样式会自动更新，方便您快速查看组合后的视觉效果。
+          </p>
+          <p className="leading-relaxed mb-4">
+            Legado 资源中心致力于提供最便捷的阅读素材管理方案。通过云端 R2 存储与 KV 索引的配合，您可以轻松同步您的个性化配置。
+          </p>
+          <p className="leading-relaxed">
+            “生活不只有眼前的苟且，还有诗和远方的田野。”—— 愿每一个热爱阅读的人都能在这里找到属于自己的舒适空间。
+          </p>
+        </div>
+
+        {/* 底部装饰 */}
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary/20" />
+      </div>
     </div>
   );
 }
