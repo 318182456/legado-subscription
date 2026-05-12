@@ -100,6 +100,7 @@ export default {
       if (path === "/api/sources" && method === "GET") return sources.handleListSources(env, url);
       if (path === "/api/sources/ids" && method === "GET") return sources.handleAllSourceIds(env);
       if (path === "/api/sources/test" && method === "POST") return sources.handleTestSources(env, request, ctx);
+      if (path === "/api/sources/all" && method === "DELETE") return sources.handleSourceAction(env, 0, "delete-all");
       if (path === "/api/parse-links" && method === "GET") return sources.handleParseLinks(url);
 
       if (path === "/api/rules") {

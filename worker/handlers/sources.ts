@@ -131,6 +131,8 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
 export async function handleSourceAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {
   if (action === "delete") {
     await env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(id).run();
+  } else if (action === "delete-all") {
+    await env.DB.prepare("DELETE FROM sources").run();
   } else if (action === "toggle" && request) {
     const { enabled } = await request.json() as { enabled: number };
     await env.DB.prepare("UPDATE sources SET enabled = ? WHERE id = ?").bind(enabled, id).run();

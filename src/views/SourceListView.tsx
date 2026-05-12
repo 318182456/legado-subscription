@@ -183,6 +183,23 @@ export default function SourceListView({
           </button>
 
           <button 
+            onClick={async () => {
+              if (confirm('确定要清空所有书源吗？此操作不可撤销！')) {
+                try {
+                  await api.deleteAllSources();
+                  fetchSources(query, 1);
+                } catch (e) {
+                  alert('删除失败: ' + String(e));
+                }
+              }
+            }}
+            className="p-1.5 border border-error/30 rounded-lg bg-error/5 text-error hover:bg-error/10 transition-colors"
+            title="清空所有书源"
+          >
+            <Trash2 size={16} />
+          </button>
+
+          <button 
             onClick={() => fetchSources(query, page, filter)}
             className="p-1.5 border border-outline-variant rounded-lg bg-surface-container-lowest hover:bg-surface-container-low transition-colors"
           >
