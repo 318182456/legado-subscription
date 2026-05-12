@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, RefreshCw, Package, Book, Sparkles, BookOpen, 
@@ -11,9 +11,11 @@ import {
 } from 'lucide-react';
 import * as api from '../api';
 
-// 动态加载 fflate
+// 动态加载库
 let fflate: any;
 import('https://cdn.skypack.dev/fflate').then(mod => fflate = mod);
+let Tesseract: any;
+import('https://cdn.skypack.dev/tesseract.js').then(mod => Tesseract = mod.default);
 
 interface FileNode {
   name: string;
@@ -553,6 +555,18 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
     paddingBottom: 10,
     titleMode: 0,
     titleSize: 1,
+    titleTopSpacing: 0,
+    titleBottomSpacing: 0,
+    headerMode: 1,
+    headerPaddingTop: 0,
+    headerPaddingBottom: 0,
+    headerPaddingLeft: 0,
+    headerPaddingRight: 0,
+    footerMode: 1,
+    footerPaddingTop: 0,
+    footerPaddingBottom: 0,
+    footerPaddingLeft: 0,
+    footerPaddingRight: 0,
     textFont: '',
     bgAlpha: 100,
     letterSpacing: 0,
@@ -574,6 +588,12 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
   }, [initialBase]);
 
   const loadBaseConfig = async (type: string, base: any) => {
+    if (type === 'image') {
+      // 触发图片识别
+      const url = `${window.location.origin}/repo/${base.path}`;
+      recognizeLayoutFromImage(url);
+      return;
+    }
     if (type === 'theme') {
       setLoading(true);
       fetch(`${window.location.origin}/repo/${base.path}`)
@@ -652,6 +672,74 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
     }
   };
 
+  const recognizeLayoutFromImage = async (url: string) => {
+    if (!Tesseract) return alert('OCR 引擎尚未加载完成，请稍后');
+    setLoading(true);
+    try {
+      // 执行识别
+      const result = await Tesseract.recognize(url, 'chi_sim+eng');
+      const lines = result.data.lines;
+      
+      const newConfig: any = {};
+      let currentSection: 'main' | 'title' | 'header' | 'footer' = 'main';
+
+      lines.forEach((line: any) => {
+        const text = line.text.replace(/\s+/g, '');
+        
+        // 识别章节切换
+        if (text.includes('正文标题')) currentSection = 'title';
+        else if (text.includes('页眉')) currentSection = 'header';
+        else if (text.includes('页脚')) currentSection = 'footer';
+        else if (text.includes('正文') && !text.includes('标题')) currentSection = 'main';
+
+        const findValue = () => {
+          const matches = text.match(/[\d.]+/g);
+          return (matches && matches.length > 0) ? parseFloat(matches[matches.length - 1]) : null;
+        };
+
+        const val = findValue();
+        if (val === null || isNaN(val)) return;
+
+        if (currentSection === 'main') {
+          if (text.includes('字号')) newConfig.textSize = val;
+          else if (text.includes('字距')) newConfig.letterSpacing = val;
+          else if (text.includes('行距')) newConfig.lineSpacingExtra = val;
+          else if (text.includes('段距')) newConfig.paragraphSpacing = val;
+          else if (text.includes('上边距')) newConfig.paddingTop = val;
+          else if (text.includes('下边距')) newConfig.paddingBottom = val;
+          else if (text.includes('左边距')) newConfig.paddingLeft = val;
+          else if (text.includes('右边距')) newConfig.paddingRight = val;
+        } else if (currentSection === 'title') {
+          if (text.includes('字号')) newConfig.titleSize = val;
+          else if (text.includes('上边距')) newConfig.titleTopSpacing = val;
+          else if (text.includes('下边距')) newConfig.titleBottomSpacing = val;
+        } else if (currentSection === 'header') {
+          if (text.includes('上边距')) newConfig.headerPaddingTop = val;
+          else if (text.includes('下边距')) newConfig.headerPaddingBottom = val;
+          else if (text.includes('左边距')) newConfig.headerPaddingLeft = val;
+          else if (text.includes('右边距')) newConfig.headerPaddingRight = val;
+        } else if (currentSection === 'footer') {
+          if (text.includes('上边距')) newConfig.footerPaddingTop = val;
+          else if (text.includes('下边距')) newConfig.footerPaddingBottom = val;
+          else if (text.includes('左边距')) newConfig.headerPaddingLeft = val; // 注意：这里通常共用逻辑或拼写
+          else if (text.includes('右边距')) newConfig.headerPaddingRight = val;
+        }
+      });
+
+      if (Object.keys(newConfig).length > 0) {
+        setConfig(prev => ({ ...prev, ...newConfig }));
+        alert(`识别成功！提取了 ${Object.keys(newConfig).length} 项参数（包含页眉/页脚/标题）`);
+      } else {
+        alert('未能从图片中提取到有效参数，请确保图片包含设置面板。');
+      }
+    } catch (e) {
+      console.error('OCR Error:', e);
+      alert('识别失败: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!config.name) return alert('请输入名称');
     setSaving(true);
@@ -690,54 +778,93 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
              <div className={`w-10 h-1 rounded-full ${config.darkStatusIcon ? 'bg-white/10' : 'bg-white/20'}`}></div>
           </div>
 
-        <div 
-          className="flex-1 rounded-[38px] overflow-y-auto scrollbar-none relative bg-white"
-          style={{ 
-            backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
-            color: argbToCss(config.textColor), 
-            fontFamily: selectedFontName || 'inherit',
-            backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            paddingLeft: `${config.paddingLeft}px`,
-            paddingRight: `${config.paddingRight}px`,
-            paddingTop: `${config.paddingTop + 30}px`, // 为刘海留出空间
-            paddingBottom: `${config.paddingBottom}px`,
-            letterSpacing: `${config.letterSpacing * 10}px`,
-            fontWeight: config.textBold ? 'bold' : 'normal'
-          }}
-        >
-            {loading ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm">
-                <RefreshCw className="animate-spin text-primary" />
+          <div 
+            className="flex-1 rounded-[38px] overflow-y-auto scrollbar-none relative bg-white flex flex-col"
+            style={{ 
+              backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
+              color: argbToCss(config.textColor), 
+              fontFamily: selectedFontName || 'inherit',
+              backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              letterSpacing: `${config.letterSpacing * 10}px`,
+              fontWeight: config.textBold ? 'bold' : 'normal'
+            }}
+          >
+            {/* 模拟页眉 */}
+            {config.headerMode !== 2 && (
+              <div 
+                className="flex items-center justify-between text-[8px] opacity-40 border-b border-black/5"
+                style={{
+                  paddingLeft: `${config.headerPaddingLeft}px`,
+                  paddingRight: `${config.headerPaddingRight}px`,
+                  paddingTop: `${config.headerPaddingTop + 20}px`,
+                  paddingBottom: `${config.headerPaddingBottom}px`,
+                }}
+              >
+                <span>书籍名称</span>
+                <span>章节名称</span>
               </div>
-            ) : (
-              <>
-                {config.titleMode !== 2 && (
-                  <h1 
-                    className={`font-bold mb-8 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} 
-                    style={{ fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1)}px` }}
-                  >
-                    第一章 极简主义的排版
-                  </h1>
-                )}
-                <div className="space-y-6">
-                  {[1, 2, 3, 4].map(i => (
-                    <p 
-                      key={i} 
+            )}
+
+            <div className="flex-1" style={{
+              paddingLeft: `${config.paddingLeft}px`,
+              paddingRight: `${config.paddingRight}px`,
+              paddingTop: `${config.paddingTop}px`,
+              paddingBottom: `${config.paddingBottom}px`,
+            }}>
+              {loading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm">
+                  <RefreshCw className="animate-spin text-primary" />
+                </div>
+              ) : (
+                <>
+                  {config.titleMode !== 2 && (
+                    <h1 
+                      className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} 
                       style={{ 
-                        fontSize: `${config.textSize}px`, 
-                        lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize,
-                        marginBottom: `${config.paragraphSpacing}px`,
-                        textIndent: `${config.paragraphIndent?.length || 0}em`
+                        fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1)}px`,
+                        marginTop: `${config.titleTopSpacing}px`,
+                        marginBottom: `${config.titleBottomSpacing}px`,
                       }}
                     >
-                      这是模拟手机端的排版预览。Legado 支持极细致的参数调节，包括行间距、段间距、页边距以及首行缩进。
-                      通过这个拟真的手机框，您可以更直观地感受导入 App 后的实际效果。
-                    </p>
-                  ))}
-                </div>
-              </>
+                      第一章 极简主义的排版
+                    </h1>
+                  )}
+                  <div className="space-y-6">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <p 
+                        key={i} 
+                        style={{ 
+                          fontSize: `${config.textSize}px`, 
+                          lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize,
+                          marginBottom: `${config.paragraphSpacing}px`,
+                          textIndent: `${config.paragraphIndent?.length || 0}em`
+                        }}
+                      >
+                        这是模拟手机端的排版预览。Legado 支持极细致的参数调节，包含页眉、页脚以及标题的独立间距设置。
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 模拟页脚 */}
+            {config.footerMode !== 2 && (
+              <div 
+                className="flex items-center justify-between text-[8px] opacity-40 border-t border-black/5"
+                style={{
+                  paddingLeft: `${config.footerPaddingLeft}px`,
+                  paddingRight: `${config.footerPaddingRight}px`,
+                  paddingTop: `${config.footerPaddingTop}px`,
+                  paddingBottom: `${config.footerPaddingBottom + 10}px`,
+                }}
+              >
+                <span>21:08</span>
+                <span>75%</span>
+                <span>1 / 12</span>
+              </div>
             )}
           </div>
         </div>
@@ -890,7 +1017,8 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
                     setConfig({...config, bgStr: r.path, bgType: 2});
                     setManualAssets(p => ({ ...p, bg: true }));
                   } else if (showPicker === 'layout') {
-                    loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
+                    const isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(r.extension);
+                    loadBaseConfig(isImg ? 'image' : (r.path.endsWith('.zip') ? 'zip' : 'theme'), r);
                   }
                   setShowPicker(null);
                 }}
