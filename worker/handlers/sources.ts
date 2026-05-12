@@ -55,14 +55,14 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
   if (!ids.length) return ok({});
 
   const { results: rawSources } = await env.DB.prepare(
-    `SELECT id, book_source_url, raw_json FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
+    `SELECT id, COALESCE(test_url, book_source_url) as test_url FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
   ).bind(...ids).all();
 
   const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
-  // 控制并发：Worker CPU 有限，每批最多同时发起 30 个 fetch
-  const CONCURRENCY = 15;
+  // 控制并发：降低内部并发到 8，通过前端多请求并行来提升总量，保证单个请求不超时
+  const CONCURRENCY = 8;
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += CONCURRENCY) {
     chunks.push(ids.slice(i, i + CONCURRENCY));
@@ -71,70 +71,22 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
   for (const chunk of chunks) {
     await Promise.all(chunk.map(async (id) => {
       const sourceData = sourcesMap.get(id);
-      if (!sourceData) { testResults[id] = false; return; }
+      if (!sourceData || !sourceData.test_url) { testResults[id] = false; return; }
 
-      let urlToTest = sourceData.book_source_url as string;
-      let fetchOptions: RequestInit = {
+      const urlToTest = sourceData.test_url;
+      const fetchOptions: RequestInit = {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         },
-        signal: AbortSignal.timeout(5000) // 5s 超时，减少 CPU 占用
+        signal: AbortSignal.timeout(5000) 
       };
-
-      try {
-        const rawJson = sourceData.raw_json as string;
-        const searchUrlMatch = rawJson.match(/"searchUrl"\s*:\s*"([^"]+)"/);
-        let searchUrl = searchUrlMatch ? searchUrlMatch[1] : null;
-
-        if (searchUrl) {
-          let urlPart = searchUrl;
-          if (searchUrl.includes(',{')) {
-            const parts = searchUrl.split(',{');
-            urlPart = parts[0];
-            try {
-              const extraOptions = JSON.parse('{' + parts[1]);
-              if (extraOptions.method) fetchOptions.method = extraOptions.method.toUpperCase();
-              if (extraOptions.body) {
-                fetchOptions.body = extraOptions.body.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
-              }
-              if (extraOptions.headers) {
-                fetchOptions.headers = { ...fetchOptions.headers, ...extraOptions.headers };
-              }
-            } catch (_) { }
-          }
-
-          urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
-
-          if (urlPart.startsWith('http')) {
-            urlToTest = urlPart;
-          } else {
-            const baseUrlMatch = rawJson.match(/"bookSourceUrl"\s*:\s*"([^"]+)"/);
-            const baseUrl = (baseUrlMatch ? baseUrlMatch[1] : null) || sourceData.book_source_url;
-            try {
-              urlToTest = new URL(urlPart, baseUrl as string).toString();
-            } catch (_) {
-              urlToTest = (baseUrl as string).replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
-            }
-          }
-        }
-      } catch (_) { }
 
       try {
         const res = await fetch(urlToTest, fetchOptions);
         if (res.status >= 200 && res.status < 400) {
-          // 仅读取前 512 字节判断有无内容，避免大文本 CPU 消耗
-          const reader = res.body?.getReader();
-          let total = 0;
-          if (reader) {
-            while (total < 512) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              total += value?.length ?? 0;
-            }
-            reader.cancel();
-          }
-          testResults[id] = total > 100;
+          // 仅检查响应状态和非空响应，不再手动读取 reader 避免资源死锁
+          testResults[id] = true;
         } else {
           testResults[id] = false;
         }

@@ -113,14 +113,33 @@ export async function syncSourceSubscription(
         const name = String(src["bookSourceName"] ?? src["name"] ?? "未知书源").trim();
         const group = String(src["bookSourceGroup"] ?? src["group"] ?? "");
         const rawJson = JSON.stringify(src);
+        
+        // 预解析测试链接：在同步阶段完成正则扫描，避免测试阶段 CPU 超时
+        let testUrl = bsUrl;
+        try {
+          const searchUrl = src["searchUrl"];
+          if (typeof searchUrl === 'string' && searchUrl) {
+            let urlPart = searchUrl.split(',{')[0];
+            urlPart = urlPart.replace(/\{\{key\}\}/g, encodeURIComponent('我的'));
+            if (urlPart.startsWith('http')) {
+              testUrl = urlPart;
+            } else {
+              try {
+                testUrl = new URL(urlPart, bsUrl).toString();
+              } catch (_) {
+                testUrl = bsUrl.replace(/\/$/, '') + '/' + urlPart.replace(/^\//, '');
+              }
+            }
+          }
+        } catch (_) {}
         return env.DB.prepare(
-          `INSERT INTO sources (subscription_id, book_source_url, name, group_name, raw_json, updated_at)
-           VALUES (?, ?, ?, ?, ?, datetime('now'))
+          `INSERT INTO sources (subscription_id, book_source_url, name, group_name, raw_json, test_url, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(subscription_id, book_source_url)
            DO UPDATE SET name=excluded.name, group_name=excluded.group_name,
-                         raw_json=excluded.raw_json, updated_at=excluded.updated_at
+                         raw_json=excluded.raw_json, test_url=excluded.test_url, updated_at=excluded.updated_at
            WHERE sources.raw_json != excluded.raw_json`
-        ).bind(subId, bsUrl, name, group, rawJson);
+        ).bind(subId, bsUrl, name, group, rawJson, testUrl);
       });
     if (stmts.length > 0) {
       await env.DB.batch(stmts);

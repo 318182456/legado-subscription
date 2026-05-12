@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Search, Zap, ShieldCheck, Upload, BookOpen, CheckCircle2, AlertCircle, MoreVertical, Copy, Trash2 } from 'lucide-react';
+import { RefreshCw, Search, Zap, ShieldCheck, Upload, BookOpen, CheckCircle2, AlertCircle, MoreVertical, Copy, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as api from '../api';
 import { StatCard } from '../components/StatCard';
 
@@ -183,7 +183,7 @@ export default function SourceListView({
           </button>
 
           <button 
-            onClick={() => fetchSources(query, 1)}
+            onClick={() => fetchSources(query, page, filter)}
             className="p-1.5 border border-outline-variant rounded-lg bg-surface-container-lowest hover:bg-surface-container-low transition-colors"
           >
             <RefreshCw size={16} className={loading && testingIds.size === 0 ? 'animate-spin' : ''} />
@@ -307,6 +307,39 @@ export default function SourceListView({
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination */}
+        <div className="px-4 py-3 border-t border-outline-variant/30 flex flex-col sm:flex-row items-center justify-between gap-4 bg-surface-container-lowest">
+          <div className="text-xs text-secondary font-medium">
+            共 <span className="text-on-surface font-bold">{total.toLocaleString()}</span> 条书源
+            <span className="mx-2 opacity-30">|</span>
+            第 <span className="text-on-surface font-bold">{page}</span> / {totalPages} 页
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => fetchSources(query, page - 1, filter)}
+              disabled={page <= 1 || loading}
+              className="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container-low disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="上一页"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            
+            <div className="flex items-center px-3 h-8 rounded-lg border border-outline-variant bg-surface-container-low text-xs font-bold min-w-[3rem] justify-center">
+              {page}
+            </div>
+            
+            <button
+              onClick={() => fetchSources(query, page + 1, filter)}
+              disabled={page >= totalPages || loading}
+              className="p-1.5 rounded-lg border border-outline-variant hover:bg-surface-container-low disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="下一页"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ export const SCHEMA_STATEMENTS = [
     group_name      TEXT    DEFAULT '',
     enabled         INTEGER NOT NULL DEFAULT 1,
     raw_json        TEXT    NOT NULL,
+    test_url        TEXT    DEFAULT NULL,
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     is_available    INTEGER NOT NULL DEFAULT 1,
     last_checked    TEXT    DEFAULT NULL,
@@ -49,6 +50,7 @@ export const SCHEMA_STATEMENTS = [
   )`,
   `ALTER TABLE sources ADD COLUMN is_available INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE sources ADD COLUMN last_checked TEXT DEFAULT NULL`,
+  `ALTER TABLE sources ADD COLUMN test_url TEXT DEFAULT NULL`,
   `CREATE TABLE IF NOT EXISTS custom_themes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
