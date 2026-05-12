@@ -683,7 +683,7 @@ function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: 
                         fontSize: `${config.textSize}px`, 
                         lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize,
                         marginBottom: `${config.paragraphSpacing}px`,
-                        textIndent: config.paragraphIndent
+                        textIndent: `${config.paragraphIndent?.length || 0}em`
                       }}
                     >
                       这是模拟手机端的排版预览。Legado 支持极细致的参数调节，包括行间距、段间距、页边距以及首行缩进。
