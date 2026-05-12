@@ -122,9 +122,7 @@ export async function handleTestSources(env: Env, request: Request, ctx: Executi
     await env.DB.batch(updateBatch);
   }
 
-  // 异步重建订阅缓存，不阻塞响应
-  ctx.waitUntil(rebuildCache(env, "source"));
-
+  // 测试不修改书源定义 (raw_json)，因此不需要重建 KV 缓存，大幅节省内存和 CPU
   return ok(testResults);
 }
 

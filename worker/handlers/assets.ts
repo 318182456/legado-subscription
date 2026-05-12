@@ -209,13 +209,13 @@ class ZipWriter {
     chunks.push(this.writeU32(centralDirOffset));
     chunks.push(this.writeU16(0)); // Comment length
 
-    // 合并所有 chunks
+    // 合并所有 chunks：一次性申请内存，避免多次拷贝
     const totalSize = chunks.reduce((acc, c) => acc + c.length, 0);
     const result = new Uint8Array(totalSize);
-    let pos = 0;
-    for (const c of chunks) {
-      result.set(c, pos);
-      pos += c.length;
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
     }
     return result;
   }
