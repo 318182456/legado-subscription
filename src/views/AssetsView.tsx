@@ -14,52 +14,65 @@ import { StyleSandbox } from '../components/StyleSandbox';
 import { argbToCss } from '../utils/color';
 
 function ThemePreview({ config }: { config: any }) {
-  const [fontFamily, setFontFamily] = useState('inherit');
+  const [fontFamily, setFontFamily] = useState<string>('inherit');
+  const [selectedFontName, setSelectedFontName] = useState<string>('');
 
   useEffect(() => {
     if (config.textFont) {
+      const fontName = config.textFont.split('/').pop()?.split('.')[0] || 'CustomFont';
       const fontUrl = `${window.location.origin}/repo/${config.textFont}`;
-      const name = `ThemeFont_${Math.random().toString(36).substring(7)}`;
-      const font = new FontFace(name, `url(${fontUrl})`);
-      font.load().then(loaded => {
-        (document.fonts as any).add(loaded);
-        setFontFamily(name);
-      }).catch(e => console.error('Preview font load failed', e));
+      const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+      fontFace.load().then((loadedFace) => {
+        (document.fonts as any).add(loadedFace);
+        setFontFamily(fontName);
+        setSelectedFontName(fontName);
+      }).catch(e => console.error('Font load failed', e));
+    } else {
+      setFontFamily('inherit');
+      setSelectedFontName('');
     }
   }, [config.textFont]);
 
   const style: React.CSSProperties = {
-    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white',
-    color: argbToCss(config.textColor),
+    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white',
+    color: argbToCss(config.textColor || '#3E3D3B'),
     fontFamily: fontFamily,
     backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     fontWeight: config.textBold ? 'bold' : 'normal',
-    letterSpacing: `${(config.letterSpacing || 0) * 4}px`,
+    letterSpacing: `${(config.letterSpacing || 0.1)}em`,
   };
 
-  const tipStyle = { color: argbToCss(config.tipColor || '#80000000'), fontSize: '8px', opacity: 0.8 };
+  const tipStyle = { color: argbToCss(config.tipColor || '#803E3D3B'), fontSize: '8px', opacity: 0.8 };
+  
+  // 逻辑缩放补偿系数
+  const COMP = 0.82;
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden" style={style}>
       {/* 模拟页眉 */}
       {config.headerMode !== 2 && (
-        <div className="flex items-center justify-between px-4 pt-4 pb-1 border-b border-current/5 shrink-0" style={tipStyle}>
-          <span>书籍名称</span><span>章节名称</span>
+        <div className={`flex items-center justify-between px-4 pt-4 pb-1 shrink-0 ${config.showHeaderLine ? 'border-b border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
+          <span>17:36</span><span>75%</span>
         </div>
       )}
 
       {/* 主体内容 */}
-      <div className="flex-1 p-4 overflow-hidden">
+      <div className="flex-1 overflow-hidden" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
         {config.titleMode !== 2 && (
-          <div className={`font-bold mb-2 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: '12px' }}>
-            第一章 预览样式
+          <div className={`font-bold mb-2 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: `${config.textSize * 0.6 * COMP}px` }}>
+            预览章节标题
           </div>
         )}
         <div className="space-y-2 opacity-90">
           {[1, 2, 3].map(i => (
-            <p key={i} style={{ fontSize: '9px', lineHeight: 1.5, textIndent: `${config.paragraphIndent?.length || 0}em` }}>
+            <p key={i} style={{ 
+              fontSize: `${config.textSize * 0.45 * COMP}px`, 
+              lineHeight: 1.5, 
+              marginBottom: `${config.paragraphSpacing * COMP}px`,
+              textIndent: `${config.paragraphIndent?.length || 0}em` 
+            }}>
               这是生成的自定义主题效果预览。排版比例已按真实效果进行等比例缩放。
             </p>
           ))}
@@ -68,8 +81,8 @@ function ThemePreview({ config }: { config: any }) {
 
       {/* 模拟页脚 */}
       {config.footerMode !== 2 && (
-        <div className="flex items-center justify-between px-4 pt-1 pb-4 border-t border-current/5 shrink-0" style={tipStyle}>
-          <span>17:28</span><span>85%</span><span>1 / 1</span>
+        <div className={`flex items-center justify-between px-4 pt-1 pb-4 shrink-0 ${config.showFooterLine ? 'border-t border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
+          <span>预览章节名称</span><span>1 / 18</span>
         </div>
       )}
     </div>

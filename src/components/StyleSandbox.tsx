@@ -16,35 +16,37 @@ declare const Tesseract: any;
 export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
     name: initialBase.name + ' 定制',
-    bgStr: '#ffffff',
+    bgStr: '#EEEEEE',
     bgType: 0,
-    textColor: '#000000',
+    textColor: '#3E3D3B',
     textSize: 20,
     lineSpacingExtra: 12,
     paragraphSpacing: 2,
     paragraphIndent: '　　',
     paddingLeft: 16,
     paddingRight: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 6,
     titleMode: 0,
-    titleSize: 1,
+    titleSize: 0,
     titleTopSpacing: 0,
     titleBottomSpacing: 0,
     headerMode: 1,
     headerPaddingTop: 0,
     headerPaddingBottom: 0,
-    headerPaddingLeft: 0,
-    headerPaddingRight: 0,
+    headerPaddingLeft: 16,
+    headerPaddingRight: 16,
     footerMode: 1,
-    footerPaddingTop: 0,
-    footerPaddingBottom: 0,
-    footerPaddingLeft: 0,
-    footerPaddingRight: 0,
-    tipColor: '#80000000', // 默认半透明黑
+    footerPaddingTop: 6,
+    footerPaddingBottom: 6,
+    footerPaddingLeft: 16,
+    footerPaddingRight: 16,
+    showHeaderLine: false,
+    showFooterLine: true,
+    tipColor: '#803E3D3B', // 默认文字颜色的半透明
     textFont: '',
     bgAlpha: 100,
-    letterSpacing: 0,
+    letterSpacing: 0.1,
     textBold: 0,
     darkStatusIcon: true
   });
@@ -249,67 +251,93 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     >
       {/* 左侧预览 */}
       <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col items-center justify-center min-h-0 relative">
-        <div className="absolute top-6 left-6 flex items-center gap-3"><Zap className="text-primary" size={20} /><h3 className="font-bold text-lg">样式实验室</h3></div>
-        <div className="absolute top-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
-          <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
-          一加 Ace 6T 模拟
+        <div className="absolute top-6 left-6 flex items-center gap-3"><Zap className="text-primary" size={20} /><h3 className="font-bold text-lg text-primary">样式实验室</h3></div>
+        
+        <div className="absolute top-6 right-6 flex items-center gap-3 z-[110]">
+          <button onClick={onClose} className="px-5 py-2 bg-surface-container text-secondary rounded-full text-xs font-bold hover:bg-surface-container-high transition-all border border-outline-variant/30 shadow-sm">取消</button>
+          <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-primary text-on-primary rounded-full text-xs font-bold shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+            {saving ? <RefreshCw className="animate-spin" size={14} /> : <Share2 size={14} />} 保存并同步
+          </button>
+        </div>
+
+        <div className="absolute bottom-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2 z-10 border border-outline-variant/30">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+          一加 Ace 6T 模拟 (20:9)
         </div>
         
-        <div className="relative w-[320px] h-[704px] bg-[#1a1a1a] rounded-[48px] p-2.5 shadow-[0_0_0_2px_rgba(255,255,255,0.1),0_20px_50px_rgba(0,0,0,0.4)] border-4 border-[#2a2a2a] overflow-hidden flex flex-col scale-[0.8] lg:scale-[0.85] xl:scale-[0.9] transition-transform origin-center">
-          {/* 模拟摄像头/挖孔 */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-3 h-3 bg-black rounded-full z-20 shadow-inner"></div>
+        <div className="relative w-[360px] h-[800px] bg-[#0c0c0c] rounded-[56px] p-1.5 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col scale-[0.7] lg:scale-[0.75] xl:scale-[0.8] transition-transform origin-center">
+          {/* 旗舰级极窄边框挖孔 */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>
           
           <div 
-            className="flex-1 rounded-[38px] relative bg-white flex flex-col overflow-hidden"
+            className="flex-1 rounded-[48px] relative bg-white flex flex-col overflow-hidden"
             style={{ 
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
               backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
               backgroundSize: 'cover', backgroundPosition: 'center',
-              letterSpacing: `${config.letterSpacing * 10}px`, fontWeight: config.textBold ? 'bold' : 'normal'
+              letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}
           >
-            {config.headerMode !== 2 && (
-              <div className="flex items-center justify-between text-[8px] border-b border-black/5 shrink-0" style={{ paddingLeft: `${config.headerPaddingLeft}px`, paddingRight: `${config.headerPaddingRight}px`, paddingTop: `${config.headerPaddingTop + 24}px`, paddingBottom: `${config.headerPaddingBottom + 4}px`, color: argbToCss(config.tipColor || '#80000000') }}>
-                <span>书籍名称</span><span>章节名称</span>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto scrollbar-none" style={{ paddingLeft: `${config.paddingLeft}px`, paddingRight: `${config.paddingRight}px`, paddingTop: `${config.paddingTop}px`, paddingBottom: `${config.paddingBottom}px` }}>
-              {loading ? <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm"><RefreshCw className="animate-spin text-primary" /></div> : (
+            {/* 逻辑缩放补偿系数 (320px / 393dp ≈ 0.82) */}
+            {(() => {
+              const COMP = 0.82;
+              return (
                 <>
-                  {config.titleMode !== 2 && <h1 className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1)}px`, marginTop: `${config.titleTopSpacing}px`, marginBottom: `${config.titleBottomSpacing}px` }}>第一章 极简主义的排版</h1>}
-                  <div className="space-y-6">
-                    {[1, 2, 3, 4, 5].map(i => <p key={i} style={{ fontSize: `${config.textSize}px`, lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize, marginBottom: `${config.paragraphSpacing}px`, textIndent: `${config.paragraphIndent?.length || 0}em` }}>这是模拟手机端的排版预览。Legado 支持极细致的参数调节。</p>)}
-                  </div>
-                </>
-              )}
-            </div>
+                  {config.headerMode !== 2 && (
+                    <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showHeaderLine ? 'border-b border-black/10' : ''}`} style={{ paddingLeft: `${config.headerPaddingLeft * COMP}px`, paddingRight: `${config.headerPaddingRight * COMP}px`, paddingTop: `${(config.headerPaddingTop + 24) * COMP}px`, paddingBottom: `${(config.headerPaddingBottom + 4) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
+                      <span>17:36</span><span>75%</span>
+                    </div>
+                  )}
 
-            {config.footerMode !== 2 && (
-              <div className="flex items-center justify-between text-[8px] border-t border-black/5 shrink-0" style={{ paddingLeft: `${config.footerPaddingLeft}px`, paddingRight: `${config.footerPaddingRight}px`, paddingTop: `${config.footerPaddingTop + 4}px`, paddingBottom: `${config.footerPaddingBottom + 16}px`, color: argbToCss(config.tipColor || '#80000000') }}>
-                <span>21:08</span><span>75%</span><span>1 / 12</span>
-              </div>
-            )}
+                  <div className="flex-1 overflow-y-auto scrollbar-none" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
+                    {loading ? <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm"><RefreshCw className="animate-spin text-primary" /></div> : (
+                      <>
+                        {config.titleMode !== 2 && (
+                          <h1 className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ 
+                            fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1) * COMP}px`, 
+                            marginTop: `${config.titleTopSpacing * COMP}px`, 
+                            marginBottom: `${config.titleBottomSpacing * COMP}px` 
+                          }}>
+                            第一章 极简主义的排版
+                          </h1>
+                        )}
+                        <div className="space-y-6">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <p key={i} style={{ 
+                              fontSize: `${config.textSize * COMP}px`, 
+                              lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize, 
+                              marginBottom: `${config.paragraphSpacing * COMP}px`, 
+                              textIndent: `${config.paragraphIndent?.length || 0}em` 
+                            }}>
+                              这是模拟手机端的排版预览。Legado 支持极细致的参数调节。
+                            </p>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {config.footerMode !== 2 && (
+                    <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showFooterLine ? 'border-t border-black/10' : ''}`} style={{ paddingLeft: `${config.footerPaddingLeft * COMP}px`, paddingRight: `${config.footerPaddingRight * COMP}px`, paddingTop: `${(config.footerPaddingTop + 4) * COMP}px`, paddingBottom: `${(config.footerPaddingBottom + 16) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
+                      <span>第一章 极简主义的排版</span><span>1 / 18</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
 
       {/* 右侧控制面板 */}
-      <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0 relative">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-secondary uppercase">主题设置</label>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="px-3 py-1.5 bg-surface-container text-secondary rounded-lg text-[10px] font-bold hover:bg-surface-container-high transition-colors">取消</button>
-            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 bg-primary text-on-primary rounded-lg text-[10px] font-bold shadow-md shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5">
-              {saving ? <RefreshCw className="animate-spin" size={12} /> : <Share2 size={12} />} 保存
-            </button>
-          </div>
-        </div>
-
+      <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0 relative pt-20">
         <div className="space-y-4">
-          <label className="text-xs font-bold text-secondary uppercase">主题名称</label>
-          <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+          <label className="text-xs font-bold text-secondary uppercase">主题设置</label>
+          <div className="space-y-4 pt-2">
+            <label className="text-xs font-bold text-secondary uppercase">主题名称</label>
+            <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -375,6 +403,18 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary">提示文字颜色</span><input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-12 h-6 rounded cursor-pointer" /></div>
                <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页眉间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} /><Slider label="下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} /></div></div>
                <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页脚间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} /><Slider label="下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} /></div></div>
+               <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
+                 <span className="text-[10px] font-bold text-secondary uppercase">页眉分割线</span>
+                 <button onClick={() => setConfig({...config, showHeaderLine: !config.showHeaderLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showHeaderLine ? 'bg-primary' : 'bg-outline-variant'}`}>
+                   <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showHeaderLine ? 'left-4.5' : 'left-0.5'}`}></div>
+                 </button>
+               </div>
+               <div className="flex items-center justify-between">
+                 <span className="text-[10px] font-bold text-secondary uppercase">页脚分割线</span>
+                 <button onClick={() => setConfig({...config, showFooterLine: !config.showFooterLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showFooterLine ? 'bg-primary' : 'bg-outline-variant'}`}>
+                   <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showFooterLine ? 'left-4.5' : 'left-0.5'}`}></div>
+                 </button>
+               </div>
              </div>
           </div>
         </div>
