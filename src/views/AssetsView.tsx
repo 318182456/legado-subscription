@@ -376,8 +376,8 @@ export default function AssetsView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {customThemes.map((item) => {
                 const config = JSON.parse(item.config);
-                const b64 = btoa(unescape(encodeURIComponent(item.config)));
-                const importUrl = 'legado://import/theme?src=' + b64;
+                const exportUrl = `${window.location.origin}/api/custom-themes/${item.id}/export`;
+                const importUrl = 'legado://import/readConfig?src=' + encodeURIComponent(exportUrl);
                 return (
                   <div key={item.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden group hover:shadow-xl transition-all">
                     <div className="aspect-[4/3] relative bg-surface-container flex items-center justify-center">

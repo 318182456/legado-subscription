@@ -57,7 +57,12 @@ export default {
 
       // ── 鉴权检查 ──────────────────────────────────────────────────
       if (path.startsWith("/api/")) {
-        const isPublicGet = method === "GET" && (path === "/api/custom-themes" || path === "/api/resources" || path === "/api/stats");
+        const isPublicGet = method === "GET" && (
+          path === "/api/custom-themes" || 
+          path === "/api/resources" || 
+          path === "/api/stats" ||
+          path.endsWith("/export")
+        );
         if (!isPublicGet && !auth.isAuthed(request, env)) return err("Unauthorized", 401);
       }
 
@@ -133,6 +138,11 @@ export default {
       if (path.startsWith("/api/custom-themes/") && method === "DELETE") {
         const id = Number(path.split("/").pop());
         return assets.handleDeleteCustomTheme(id, env);
+      }
+
+      const themeExportMatch = path.match(/^\/api\/custom-themes\/(\d+)\/export$/);
+      if (themeExportMatch && method === "GET") {
+        return assets.handleExportCustomTheme(Number(themeExportMatch[1]), env);
       }
 
       return err("Not Found", 404);

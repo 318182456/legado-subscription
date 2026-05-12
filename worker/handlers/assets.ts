@@ -103,3 +103,20 @@ export async function handleDeleteCustomTheme(id: number, env: Env): Promise<Res
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
+
+export async function handleExportCustomTheme(id: number, env: Env): Promise<Response> {
+  const result = await env.DB.prepare(
+    "SELECT config FROM custom_themes WHERE id = ?"
+  ).bind(id).first() as any;
+  
+  if (!result) return err("Theme Not Found", 404);
+  
+  // 这里的 result.config 已经是 JSON 字符串
+  return new Response(result.config, {
+    headers: { 
+      "Content-Type": "application/json; charset=utf-8", 
+      "Access-Control-Allow-Origin": "*",
+      "Content-Disposition": `attachment; filename="readConfig.json"`
+    }
+  });
+}

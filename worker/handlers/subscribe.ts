@@ -241,8 +241,8 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                 let html = '<div class="card"><h3>🎨 精选推荐</h3><div class="grid">';
                 items.forEach(item => {
                     const config = JSON.parse(item.config);
-                    const b64 = btoa(unescape(encodeURIComponent(item.config)));
-                    const importUrl = 'legado://import/theme?src=' + b64;
+                    const exportUrl = origin + '/api/custom-themes/' + item.id + '/export';
+                    const importUrl = 'legado://import/readConfig?src=' + encodeURIComponent(exportUrl);
                     
                     const preview = item.preview_url ? '<img class="res-preview" src="' + item.preview_url + '">' : 
                                    (config.backgroundColor ? '<div class="res-preview" style="background:' + config.backgroundColor + '"></div>' : '');
