@@ -28,13 +28,13 @@ async function sync() {
   // 通过 Worker API 一次性获取 R2 完整文件清单
   console.log('☁️ 正在通过 Worker API 获取 R2 文件清单...');
   try {
-    // 需要管理员 token，从环境变量或命令行参数读取
     const token = process.env.ADMIN_TOKEN || process.argv[2];
     if (!token) {
       console.warn('⚠️ 未提供 ADMIN_TOKEN，跳过 R2 清单获取');
       console.warn('   提示: node scripts/sync-assets.mjs <your-admin-token>');
     } else {
-      const WORKER_URL = process.env.WORKER_URL || 'https://legado-subscription.318182456.workers.dev';
+      const WORKER_URL = process.env.WORKER_URL || 'https://legado.wangxy.us.kg';
+      console.log(`   请求地址: ${WORKER_URL}/api/r2-list`);
       const resp = await fetch(`${WORKER_URL}/api/r2-list`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -43,11 +43,15 @@ async function sync() {
         result.data.forEach(key => existingR2Keys.add(key));
         console.log(`✅ R2 已有 ${existingR2Keys.size} 个文件，将自动跳过`);
       } else {
-        console.warn(`⚠️ Worker API 返回错误: ${resp.status}`);
+        const body = await resp.text();
+        console.warn(`⚠️ Worker API 返回错误 ${resp.status}: ${body}`);
       }
     }
   } catch (e) {
     console.warn(`⚠️ Worker API 请求失败: ${e.message}`);
+    if (e.cause) console.warn(`   原因: ${e.cause}`);
+    console.warn('   请确认: 1) npx wrangler deploy 已执行  2) WORKER_URL 正确');
+    console.warn('   设置方式: $env:WORKER_URL="https://你的域名"; node scripts/sync-assets.mjs <token>');
   }
 
   const index = { fonts: [], themes: [], layouts: [], rules: [], rss: [] };
