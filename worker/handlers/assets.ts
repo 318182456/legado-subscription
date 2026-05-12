@@ -230,36 +230,51 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
   
   const config = JSON.parse(result.config);
   const zip = new ZipWriter();
-  
-  // 处理资源文件
-  if (config.textFont && (config.textFont.startsWith('fonts/') || config.textFont.startsWith('http'))) {
-    const fontKey = config.textFont.startsWith('http') ? config.textFont.split('/repo/').pop() : config.textFont;
-    if (fontKey) {
-      const obj = await env.ASSETS_R2.get(decodeURIComponent(fontKey));
-      if (obj) {
-        const data = await obj.arrayBuffer();
-        const fileName = fontKey.split('/').pop()!;
-        zip.addFile(`fonts/${fileName}`, new Uint8Array(data));
-        config.textFont = fileName; // 阅读 App 导入 ZIP 后会自动寻找 fonts/ 目录，JSON 留文件名即可
-      }
+
+  // 辅助函数：从 R2 抓取资源并添加到 ZIP
+  const processResource = async (path: string, type: 'fonts' | 'bg') => {
+    if (!path || path.startsWith('#')) return path;
+    
+    // 提取 key (去除 http 前缀)
+    let key = path.startsWith('http') ? path.split('/repo/').pop() : path;
+    if (!key) return path;
+
+    key = decodeURIComponent(key);
+    
+    // 尝试多种路径匹配 (逻辑同步自 handleRepoProxy)
+    let obj = await env.ASSETS_R2.get(key);
+    if (!obj && key.includes(' ')) {
+      obj = await env.ASSETS_R2.get(key.replace(/ /g, '+'));
+    }
+    if (!obj && key.includes('+')) {
+      obj = await env.ASSETS_R2.get(key.replace(/\+/g, ' '));
+    }
+
+    if (obj) {
+      const data = await obj.arrayBuffer();
+      const fileName = key.split('/').pop()!;
+      zip.addFile(`${type === 'fonts' ? 'fonts' : 'bg'}/${fileName}`, new Uint8Array(data));
+      return fileName;
+    }
+    
+    // 如果没找到，至少返回文件名，防止带路径导致 App 查找彻底失败
+    return key.split('/').pop()!;
+  };
+
+  // 1. 处理字体
+  if (config.textFont) {
+    config.textFont = await processResource(config.textFont, 'fonts');
+  }
+
+  // 2. 处理三个背景字段 (只有在 bgType 为 2 时处理图片)
+  const bgFields = ['bgStr', 'bgStrNight', 'bgStrEInk'];
+  for (const field of bgFields) {
+    if (config.bgType === 2 && config[field]) {
+      config[field] = await processResource(config[field], 'bg');
     }
   }
 
-  // 处理背景图片
-  if (config.bgType === 2 && config.bgStr && (config.bgStr.startsWith('backgrounds/') || config.bgStr.startsWith('http'))) {
-    const bgKey = config.bgStr.startsWith('http') ? config.bgStr.split('/repo/').pop() : config.bgStr;
-    if (bgKey) {
-      const obj = await env.ASSETS_R2.get(decodeURIComponent(bgKey));
-      if (obj) {
-        const data = await obj.arrayBuffer();
-        const fileName = bgKey.split('/').pop()!;
-        zip.addFile(`bg/${fileName}`, new Uint8Array(data));
-        config.bgStr = fileName; // 同理，背景图放在 bg/ 目录下
-      }
-    }
-  }
-
-  // 添加 JSON 配置
+  // 3. 添加 JSON 配置 (确保在文件最后添加，以便拿到更新后的 config)
   zip.addFile('readConfig.json', JSON.stringify(config, null, 2));
 
   return new Response(zip.generate(), {
