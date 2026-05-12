@@ -48,13 +48,22 @@ export default function App() {
   const [isTestingAll, setIsTestingAll] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = api.getToken();
     if (token) setIsLoggedIn(true);
     setCheckingAuth(false);
+
+    // 监听 401 认证失效事件
+    const handleUnauthorized = () => {
+      setIsLoggedIn(false);
+      setActiveTab('dashboard'); // 重置到默认页
+    };
+
+    window.addEventListener('unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('unauthorized', handleUnauthorized);
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    api.clearToken();
     setIsLoggedIn(false);
   };
 
