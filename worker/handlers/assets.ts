@@ -253,7 +253,8 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
     if (obj) {
       const data = await obj.arrayBuffer();
       const fileName = key.split('/').pop()!;
-      zip.addFile(`${type === 'fonts' ? 'fonts' : 'bg'}/${fileName}`, new Uint8Array(data));
+      // Legado 源码显示它会从解压后的根目录找文件，所以不要带 fonts/ 或 bg/ 前缀
+      zip.addFile(fileName, new Uint8Array(data));
       return fileName;
     }
     
