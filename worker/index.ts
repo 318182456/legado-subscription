@@ -141,7 +141,7 @@ export default {
       if (path.startsWith("/repo/")) {
         const key = path.replace("/repo/", "");
         const object = await env.ASSETS_R2.get(key);
-        if (!object) return err("Resource Not Found", 404);
+        if (!object) return err(`Resource Not Found: ${key}`, 404);
         
         const headers = new Headers();
         object.writeHttpMetadata(headers);
@@ -157,6 +157,22 @@ export default {
         const json = data ? JSON.parse(data) : {};
         return new Response(JSON.stringify({ ok: true, data: json }), { 
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } 
+        });
+      }
+
+      // ── /api/r2-list (R2 完整文件清单，供同步脚本使用) ─────────────
+      if (path === "/api/r2-list" && method === "GET") {
+        await checkAuth(request, env); // 需要鉴权，防止公开暴露
+        const keys: string[] = [];
+        let cursor: string | undefined;
+        // R2 list 每次最多返回 1000 条，循环分页获取全部
+        do {
+          const listed = await env.ASSETS_R2.list({ limit: 1000, cursor });
+          listed.objects.forEach(obj => keys.push(obj.key));
+          cursor = listed.truncated ? listed.cursor : undefined;
+        } while (cursor);
+        return new Response(JSON.stringify({ ok: true, data: keys, total: keys.length }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
         });
       }
 
