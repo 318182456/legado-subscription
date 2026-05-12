@@ -1,0 +1,326 @@
+import { Env } from "../types";
+
+export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
+  try {
+    const table = type === "sources" ? "sources" : "rules";
+    const { results } = await env.DB.prepare(
+      `SELECT raw_json FROM ${table} WHERE enabled=1 ORDER BY id`
+    ).all();
+    
+    const jsonArray = "[" + results.map(r => r.raw_json).join(",") + "]";
+    
+    return new Response(jsonArray, {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (e) {
+    console.error(`输出订阅失败 (${type}):`, e);
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+}
+
+export async function handleSubscribeIndex(request: Request, env: Env): Promise<Response> {
+  const origin = new URL(request.url).origin;
+  const html = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legado 资源中心</title>
+    <style>
+        :root {
+            --primary: #6750A4;
+            --on-primary: #ffffff;
+            --surface: #fef7ff;
+            --surface-container: #f3edf7;
+            --outline: #79747e;
+            --secondary: #625b71;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+            background: var(--surface);
+            color: #1c1b1f;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .app-bar {
+            width: 100%;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 2px 4px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-align: center;
+        }
+        h1 { font-size: 1.4rem; color: var(--primary); font-weight: 800; }
+        
+        .tabs {
+            display: flex;
+            background: #eee;
+            padding: 4px;
+            border-radius: 12px;
+            margin: 20px 0;
+            width: 90%;
+            max-width: 400px;
+        }
+        .tab {
+            flex: 1;
+            padding: 8px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab.active { background: white; color: var(--primary); box-shadow: 0 2px 6px var(--shadow); }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            padding: 0 20px 40px;
+            display: none;
+        }
+        .container.active { display: block; }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px var(--shadow);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .card h3 { font-size: 1rem; margin-bottom: 15px; color: #555; border-left: 4px solid var(--primary); padding-left: 10px; }
+        
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 12px;
+            transition: transform 0.2s;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-p { background: var(--primary); color: white; }
+        .btn-s { background: #EADDFF; color: #21005D; }
+        .btn-o { background: #FFD8E4; color: #31111D; }
+        .btn-d { background: #FFDAD6; color: #410002; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        .res-item {
+            background: var(--surface-container);
+            padding: 12px;
+            border-radius: 18px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .res-preview {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: #eee;
+        }
+        .res-name { font-size: 0.8rem; font-weight: 700; margin-bottom: 8px; color: #444; word-break: break-all; }
+        .res-btn {
+            font-size: 0.75rem;
+            padding: 6px;
+            background: white;
+            border-radius: 8px;
+            color: var(--primary);
+            text-decoration: none;
+            border: 1px solid var(--primary);
+        }
+
+        #status-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 12px;
+            border-radius: 12px;
+            background: #333;
+            color: white;
+            font-size: 0.85rem;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-bar">
+        <h1>📚 Legado 资源中心</h1>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">订阅整合</div>
+        <div class="tab" onclick="switchTab(1)">资源仓库</div>
+    </div>
+
+    <!-- Tab 0: 订阅整合 -->
+    <div id="tab-0" class="container active">
+        <div class="card">
+            <a href="legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}" class="btn btn-p">📦 导入全量整合书源</a>
+            <a href="legado://import/replaceRule?src=${encodeURIComponent(origin + '/subscribe/rules')}" class="btn btn-s">✨ 导入全量净化规则</a>
+            <a href="legado://import/rssSource?src=${encodeURIComponent(origin + '/subscribe/info.json')}" class="btn btn-o">📌 添加到阅读发现</a>
+        </div>
+        <div class="card">
+            <p style="font-size:0.8rem; color:var(--outline); margin-bottom:12px;">高级操作</p>
+            <a href="#" onclick="clearAndImport(); return false;" class="btn btn-d">🗑️ 清空并重新订阅</a>
+        </div>
+    </div>
+
+    <!-- Tab 1: 资源仓库 -->
+    <div id="tab-1" class="container">
+        <div id="res-loading" style="text-align:center; padding:40px; color:var(--outline);">正在加载资源索引...</div>
+        <div id="res-content"></div>
+    </div>
+
+    <div id="status-bar"></div>
+
+    <script>
+        function switchTab(idx) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+            document.querySelectorAll('.container').forEach((c, i) => c.classList.toggle('active', i === idx));
+            if (idx === 1) loadResources();
+        }
+
+        async function loadResources() {
+            const container = document.getElementById('res-content');
+            if (container.innerHTML !== '') return;
+
+            try {
+                const res = await fetch('/api/resources');
+                const json = await res.json();
+                const data = json.data || {};
+                let html = '';
+
+                const renderGrid = (title, items, protocol, icon) => {
+                    if (!items || !items.length) return '';
+                    let section = \`<div class="card"><h3>\${icon} \${title}</h3><div class="grid">\`;
+                    items.forEach(item => {
+                        const url = window.location.origin + '/repo/' + item.path;
+                        const isImg = item.path.match(/\\.(png|jpg|jpeg|webp)$/i);
+                        const preview = isImg ? \`<img class="res-preview" src="\${url}">\` : '';
+                        
+                        section += \`
+                            <div class="res-item">
+                                \${preview}
+                                <div class="res-name">\${item.name}</div>
+                                <a href="\${protocol ? (protocol + encodeURIComponent(url)) : url}" 
+                                   class="res-btn" \${!protocol ? 'download' : ''}>
+                                   \${protocol ? '一键导入' : '点击下载'}
+                                </a>
+                            </div>\`;
+                    });
+                    return section + '</div></div>';
+                };
+
+                html += renderGrid('精美主题', data.themes, 'legado://import/theme?src=', '🎨');
+                html += renderGrid('排版方案', data.layouts, 'legado://import/readConfig?src=', '📏');
+                html += renderGrid('净化规则', data.rules, 'legado://import/replaceRule?src=', '🧹');
+                html += renderGrid('发现源', data.rss, 'legado://import/rssSource?src=', '📌');
+                html += renderGrid('优选字体', data.fonts, null, '🔤');
+
+                container.innerHTML = html || '<div style="text-align:center;color:#999;padding:40px;">暂无资源，请先运行同步脚本</div>';
+                document.getElementById('res-loading').style.display = 'none';
+            } catch (e) {
+                container.innerHTML = '<div style="color:red;padding:20px;">加载失败: ' + e.message + '</div>';
+            }
+        }
+
+        function showStatus(msg) {
+            const bar = document.getElementById('status-bar');
+            bar.textContent = msg;
+            bar.style.display = 'block';
+            setTimeout(() => bar.style.display = 'none', 3000);
+        }
+
+        async function clearAndImport() {
+            if (!confirm('将清空本地所有书源并同步云端，确定吗？')) return;
+            const port = 1122;
+            const base = 'http://127.0.0.1:' + port;
+            showStatus('正在尝试连接本地服务...');
+            try {
+                const res = await fetch(base + '/getBookSources');
+                const sources = await res.json();
+                const list = Array.isArray(sources) ? sources : (sources.data || []);
+                if (list.length > 0) {
+                    showStatus('正在删除 ' + list.length + ' 个书源...');
+                    await fetch(base + '/deleteBookSources', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(list)
+                    });
+                }
+                showStatus('✅ 已清空，正在拉起导入...');
+                setTimeout(() => {
+                    location.href = 'legado://import/bookSource?src=${encodeURIComponent(origin + '/subscribe/sources')}';
+                }, 1000);
+            } catch (e) {
+                showStatus('❌ 失败: 请确保阅读 Web 服务已开启 (端口 ' + port + ')');
+            }
+        }
+    </script>
+</body>
+</html>
+  `;
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" },
+  });
+}
+
+export function handleSubscribeInfo(request: Request): Response {
+  const origin = new URL(request.url).origin;
+  const icon = "https://files.catbox.moe/p9p3f2.png";
+  
+  const source = [
+    {
+      "sourceName": "✨ Legado 订阅中心",
+      "sourceUrl": `${origin}/subscribe/index`,
+      "sourceIcon": icon,
+      "sourceGroup": "整合",
+      "articleStyle": 0,
+      "enableJs": true,
+      "enabled": true,
+      "enabledCookieJar": false,
+      "loadWithBaseUrl": true,
+      "singleUrl": true,
+      "header": JSON.stringify({
+        "User-Agent": "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; MI 8 Lite Build/OPM1.171019.019) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.108 UCBrowser/13.2.0.1100 Mobile Safari/537.36"
+      }),
+      "sortUrl": `首页::${origin}/subscribe/index`,
+      "ruleArticles": ".container@h3",
+      "ruleTitle": "a@textNodes",
+      "ruleLink": "a@href",
+      "type": 0
+    }
+  ];
+
+  return new Response(JSON.stringify(source), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
