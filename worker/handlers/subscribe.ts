@@ -1,5 +1,6 @@
 import { Env } from "../types";
 import { PREVIEW_TITLE, PREVIEW_PARAS } from "../../src/utils/constants";
+import { generatePreviewHTML, getTipText } from "../../src/utils/preview";
 
 export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
   try {
@@ -320,40 +321,24 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             } catch(e) { return argb; }
         }
 
+        ${getTipText.toString()}
+        ${generatePreviewHTML.toString()}
+
         function renderThemePreview(id, config) {
             const el = document.getElementById('preview-' + id);
             if (!el) return;
 
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
-            const textColor = argbToCss(config.textColor || '#3E3D3B');
-            const tipColor = argbToCss(config.tipColor || '#803E3D3B');
             const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
 
-            let html = '<div class="preview-body" style="background-color:' + bgColor + '; color:' + textColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center;">' +
-                       '<div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2;">' +
+            let html = '<div class="preview-body" style="background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden;">' +
+                       '<div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2; flex-shrink:0;">' +
                        '<div style="width:12px; height:1.5px; background:currentColor; border-radius:1px;"></div>' +
                        '</div>';
 
-            if (config.headerMode !== 2) {
-                html += '<div class="preview-header" style="color:' + tipColor + ';"><span>17:36</span><span>章节名</span><span>75%</span></div>';
-            }
-
-            html += '<div class="preview-content" style="padding: ' + (config.paddingTop*0.2) + 'px ' + (config.paddingRight*0.2) + 'px;">' +
-                    '<div class="preview-title" style="font-size:' + (config.textSize*0.4) + 'px; margin-bottom:4px; ' + (config.titleMode === 1 ? 'text-align:center' : '') + '">' + ${JSON.stringify(PREVIEW_TITLE)} + '</div>';
-
-            var paras = ${JSON.stringify(PREVIEW_PARAS)};
-            for (var i = 0; i < paras.length; i++) {
-                html += '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">' + paras[i] + '</div>';
-            }
+            html += generatePreviewHTML(config, 0.2, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)});
             html += '</div>';
 
-
-
-            if (config.footerMode !== 2) {
-                html += '<div class="preview-footer" style="color:' + tipColor + ';"><span>1/18</span><span>5.2%</span></div>';
-            }
-
-            html += '</div>';
             el.innerHTML = html;
         }
 

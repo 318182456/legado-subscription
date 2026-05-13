@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { argbToCss } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
+import { generatePreviewHTML, getTipText } from '../utils/preview';
 
 function TipView({ value }: { value: number }) {
   if (value === 0) return <span></span>;
@@ -116,46 +117,7 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
           <div className="w-6 h-1 bg-black/20 rounded-full"></div>
         </div>
 
-        {config.headerMode !== 2 && (
-          <div className={`flex items-center justify-between px-2 pt-0.5 pb-0.5 shrink-0 ${config.showHeaderLine ? 'border-b border-current/10' : ''}`} style={tipStyle}>
-            <TipView value={config.tipHeaderLeft ?? 2} />
-            <TipView value={config.tipHeaderMiddle ?? 0} />
-            <TipView value={config.tipHeaderRight ?? 3} />
-          </div>
-        )}
-
-        <div className="flex-1 overflow-hidden" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
-          {config.titleMode !== 2 && (
-            <div className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ 
-              fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1) * COMP}px`,
-              marginTop: `${(config.titleTopSpacing || 0) * COMP}px`, 
-              marginBottom: `${(config.titleBottomSpacing || 0) * COMP}px`
-            }}>
-              {PREVIEW_TITLE}
-            </div>
-          )}
-          <div className="space-y-1 opacity-90">
-            {PREVIEW_PARAS.map((para, i) => (
-
-              <p key={i} style={{ 
-                fontSize: `${config.textSize * COMP}px`, 
-                lineHeight: (config.textSize + (config.lineSpacingExtra || 0)) / config.textSize, 
-                marginBottom: `${(config.paragraphSpacing || 0) * COMP}px`,
-                textIndent: `${config.paragraphIndent?.length || 0}em` 
-              }}>
-                {para}
-              </p>
-            ))}
-          </div>
-        </div>
-
-        {config.footerMode !== 2 && (
-          <div className={`flex items-center justify-between px-2 pt-0.5 pb-2 shrink-0 ${config.showFooterLine ? 'border-t border-current/10' : ''}`} style={tipStyle}>
-            <TipView value={config.tipFooterLeft ?? 1} />
-            <TipView value={config.tipFooterMiddle ?? 0} />
-            <TipView value={config.tipFooterRight ?? 6} />
-          </div>
-        )}
+        <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
       </div>
     </div>
   );

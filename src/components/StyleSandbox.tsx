@@ -9,6 +9,7 @@ import { Slider } from './Slider';
 import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
+import { generatePreviewHTML, getTipText } from '../utils/preview';
 
 // 外部库引用
 declare const fflate: any;
@@ -351,55 +352,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}
           >
-            {/* 逻辑缩放补偿系数 (320px / 393dp ≈ 0.82) */}
             {(() => {
               const COMP = 0.82;
               return (
                 <>
-                  {config.headerMode !== 2 && (
-                    <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showHeaderLine ? 'border-b border-black/10' : ''}`} style={{ paddingLeft: `${config.headerPaddingLeft * COMP}px`, paddingRight: `${config.headerPaddingRight * COMP}px`, paddingTop: `${(config.headerPaddingTop + 24) * COMP}px`, paddingBottom: `${(config.headerPaddingBottom + 4) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
-                      <TipView value={config.tipHeaderLeft} />
-                      <TipView value={config.tipHeaderMiddle} />
-                      <TipView value={config.tipHeaderRight} />
-                    </div>
-                  )}
-
-                  <div className="flex-1 overflow-y-auto scrollbar-none" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
-                    {loading ? <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm"><RefreshCw className="animate-spin text-primary" /></div> : (
-                      <>
-                        {config.titleMode !== 2 && (
-                          <h1 className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ 
-                            fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1) * COMP}px`, 
-                            marginTop: `${config.titleTopSpacing * COMP}px`, 
-                            marginBottom: `${config.titleBottomSpacing * COMP}px` 
-                          }}>
-                            {PREVIEW_TITLE}
-                          </h1>
-                        )}
-                        <div className="space-y-6">
-                          {PREVIEW_PARAS.map((para, i) => (
-
-                            <p key={i} style={{ 
-                              fontSize: `${config.textSize * COMP}px`, 
-                              lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize, 
-                              marginBottom: `${config.paragraphSpacing * COMP}px`, 
-                              textIndent: `${config.paragraphIndent?.length || 0}em` 
-                            }}>
-                              {para}
-                            </p>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {config.footerMode !== 2 && (
-                    <div className={`flex items-center justify-between text-[8px] shrink-0 ${config.showFooterLine ? 'border-t border-black/10' : ''}`} style={{ paddingLeft: `${config.footerPaddingLeft * COMP}px`, paddingRight: `${config.footerPaddingRight * COMP}px`, paddingTop: `${(config.footerPaddingTop + 4) * COMP}px`, paddingBottom: `${(config.footerPaddingBottom + 16) * COMP}px`, color: argbToCss(config.tipColor || '#803E3D3B') }}>
-                      <TipView value={config.tipFooterLeft} />
-                      <TipView value={config.tipFooterMiddle} />
-                      <TipView value={config.tipFooterRight} />
-                    </div>
-                  )}
+                  {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm z-[100]"><RefreshCw className="animate-spin text-primary" /></div>}
+                  <div className="w-full h-full flex flex-col overflow-hidden" dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }}></div>
                 </>
               );
             })()}
@@ -580,6 +538,22 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                         <TipSelector label="中" value={config.tipFooterMiddle} onChange={v => setConfig({...config, tipFooterMiddle: v})} />
                         <TipSelector label="右" value={config.tipFooterRight} onChange={v => setConfig({...config, tipFooterRight: v})} />
                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">系统 UI (状态栏/导航栏)</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">隐藏状态栏</span>
+                      <button onClick={() => setConfig({...config, hideStatusBar: !config.hideStatusBar})} className={`w-8 h-4 rounded-full transition-all relative ${config.hideStatusBar ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.hideStatusBar ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">隐藏导航栏</span>
+                      <button onClick={() => setConfig({...config, hideNavigationBar: !config.hideNavigationBar})} className={`w-8 h-4 rounded-full transition-all relative ${config.hideNavigationBar ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.hideNavigationBar ? 'left-4.5' : 'left-0.5'}`}></div></button>
                     </div>
                   </div>
                 </div>
