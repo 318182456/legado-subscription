@@ -321,7 +321,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                 fontName = 'Font_' + id;
                 const fontUrl = '/repo/' + config.textFont;
                 const style = document.createElement('style');
-                style.textContent = `@font-face { font-family: "${fontName}"; src: url("${fontUrl}"); }`;
+                style.textContent = \`@font-face { font-family: "\${fontName}"; src: url("\${fontUrl}"); }\`;
                 document.head.appendChild(style);
             }
 
