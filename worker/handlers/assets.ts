@@ -18,9 +18,9 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
     } catch (e) {}
   }
 
-  if (!object && rawKey.includes('+')) {
+  if (!object && rawKey.includes("+")) {
     try {
-      const spaceKey = decodeURIComponent(rawKey.replace(/\+/g, ' '));
+      const spaceKey = decodeURIComponent(rawKey.replace(/\+/g, " "));
       object = await env.ASSETS_R2.get(spaceKey);
     } catch (e) {}
   }
@@ -30,19 +30,23 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("etag", object.httpEtag);
   
-  const ext = rawKey.split('.').pop()?.toLowerCase();
+  // 强缓存策略：对于仓库资源，设置为 1 年长缓存且不可变
+  // 如果是中文字体或背景图，这能极大减少重复下载
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("ETag", object.httpEtag);
+  
+  const ext = rawKey.split(".").pop()?.toLowerCase();
   const mimeTypes: Record<string, string> = {
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'webp': 'image/webp',
-    'gif': 'image/gif',
-    'ttf': 'font/ttf',
-    'otf': 'font/otf',
-    'woff': 'font/woff',
-    'woff2': 'font/woff2'
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+    "gif": "image/gif",
+    "ttf": "font/ttf",
+    "otf": "font/otf",
+    "woff": "font/woff",
+    "woff2": "font/woff2"
   };
   if (ext && mimeTypes[ext]) {
     headers.set("Content-Type", mimeTypes[ext]);

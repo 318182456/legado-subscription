@@ -319,12 +319,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col items-center justify-center min-h-0 relative">
         <div className="absolute top-6 left-6 flex items-center gap-3"><Zap className="text-primary" size={20} /><h3 className="font-bold text-lg text-primary">样式实验室</h3></div>
         
-        <div className="absolute top-6 right-6 flex items-center gap-3 z-[110]">
-          <button onClick={onClose} className="px-5 py-2 bg-surface-container text-secondary rounded-full text-xs font-bold hover:bg-surface-container-high transition-all border border-outline-variant/30 shadow-sm">取消</button>
-          <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-primary text-on-primary rounded-full text-xs font-bold shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-            {saving ? <RefreshCw className="animate-spin" size={14} /> : <Share2 size={14} />} 保存并同步
-          </button>
-        </div>
 
         <div className="absolute bottom-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2 z-10 border border-outline-variant/30">
           <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
@@ -599,13 +593,13 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         </div>
       </div>
 
-      <div className="fixed bottom-8 right-[420px] flex gap-3 z-50">
-        <button onClick={onClose} className="px-6 py-3 bg-surface-container rounded-2xl text-secondary font-bold shadow-lg hover:bg-surface-container-high transition-all border border-outline-variant">取消</button>
-        <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-primary text-white rounded-2xl font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center gap-2">
-          {saving ? <RefreshCw size={16} className="animate-spin" /> : <Share2 size={16} />}
-          保存并更新
-        </button>
-      </div>
+        <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+          <button onClick={onClose} className="px-4 py-2 bg-surface-container/50 backdrop-blur-sm rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
+          <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center gap-2">
+            {saving ? <RefreshCw size={16} className="animate-spin" /> : <Share2 size={16} />}
+            保存并同步
+          </button>
+        </div>
 
       {showPicker && (
         <div className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end">

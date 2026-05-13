@@ -11,105 +11,14 @@ import * as api from '../api';
 import { PreviewModal } from '../components/PreviewModal';
 import { FontPreview } from '../components/FontPreview';
 import { StyleSandbox } from '../components/StyleSandbox';
+import { ThemeThumbnail } from '../components/ThemeThumbnail';
 import { argbToCss } from '../utils/color';
 
-function TipView({ value }: { value: number }) {
-  if (value === 0) return <span></span>;
-  const labelMap: Record<number, string> = {
-    7: '书名',
-    1: '章节名',
-    2: '17:36',
-    3: '75%',
-    10: '75%',
-    4: '1',
-    5: '5.2%',
-    11: '5.2%',
-    6: '1 / 18',
-    8: '17:36 75%',
-    9: '17:36 75%'
-  };
-  return <span>{labelMap[value] || ''}</span>;
-}
-
-function ThemePreview({ config }: { config: any }) {
-  const [fontFamily, setFontFamily] = useState<string>('inherit');
-  const [selectedFontName, setSelectedFontName] = useState<string>('');
-
-  useEffect(() => {
-    if (config.textFont && !config.textFont.startsWith('content://')) {
-      const fontName = config.textFont.split('/').pop()?.split('.')[0] || 'CustomFont';
-      const fontUrl = `${window.location.origin}/repo/${config.textFont}`;
-      const fontFace = new FontFace(fontName, `url(${fontUrl})`);
-      fontFace.load().then((loadedFace) => {
-        (document.fonts as any).add(loadedFace);
-        setFontFamily(fontName);
-        setSelectedFontName(fontName);
-      }).catch(e => console.error('Font load failed', e));
-    } else {
-      setFontFamily('inherit');
-      setSelectedFontName('');
-    }
-  }, [config.textFont]);
-
-  const style: React.CSSProperties = {
-    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white',
-    color: argbToCss(config.textColor || '#3E3D3B'),
-    fontFamily: fontFamily,
-    backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    fontWeight: config.textBold ? 'bold' : 'normal',
-    letterSpacing: `${(config.letterSpacing || 0.1)}em`,
-  };
-
-  const tipStyle = { color: argbToCss(config.tipColor || '#803E3D3B'), fontSize: '8px', opacity: 0.8 };
-  
-  // 逻辑缩放补偿系数
-  const COMP = 0.82;
-
-  return (
-    <div className="w-full h-full flex flex-col overflow-hidden" style={style}>
-      {/* 模拟页眉 */}
-      {config.headerMode !== 2 && (
-        <div className={`flex items-center justify-between px-4 pt-4 pb-1 shrink-0 ${config.showHeaderLine ? 'border-b border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
-          <TipView value={config.tipHeaderLeft ?? 2} />
-          <TipView value={config.tipHeaderMiddle ?? 0} />
-          <TipView value={config.tipHeaderRight ?? 3} />
-        </div>
-      )}
-
-      {/* 主体内容 */}
-      <div className="flex-1 overflow-hidden" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
-        {config.titleMode !== 2 && (
-          <div className={`font-bold mb-2 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: `${config.textSize * 0.6 * COMP}px` }}>
-            预览章节标题
-          </div>
-        )}
-        <div className="space-y-2 opacity-90">
-          {[1, 2, 3].map(i => (
-            <p key={i} style={{ 
-              fontSize: `${config.textSize * 0.45 * COMP}px`, 
-              lineHeight: 1.5, 
-              marginBottom: `${config.paragraphSpacing * COMP}px`,
-              textIndent: `${config.paragraphIndent?.length || 0}em` 
-            }}>
-              这是生成的自定义主题效果预览。
-            </p>
-          ))}
-        </div>
-      </div>
-
-      {/* 模拟页脚 */}
-      {config.footerMode !== 2 && (
-        <div className={`flex items-center justify-between px-4 pt-1 pb-4 shrink-0 ${config.showFooterLine ? 'border-t border-current/10' : ''}`} style={{ ...tipStyle, paddingLeft: `${16 * COMP}px`, paddingRight: `${16 * COMP}px` }}>
-          <TipView value={config.tipFooterLeft ?? 1} />
-          <TipView value={config.tipFooterMiddle ?? 0} />
-          <TipView value={config.tipFooterRight ?? 6} />
-        </div>
-      )}
-    </div>
-  );
-}
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+};
 
 export default function AssetsView() {
   const [data, setData] = useState<any>(null);
@@ -288,22 +197,24 @@ export default function AssetsView() {
     <div className="space-y-6 pb-20 relative h-full flex flex-col">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant/30 pb-6 shrink-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-on-surface">资源管理 (R2)</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-on-surface flex items-center gap-3">
+            <span className="text-4xl">📚</span> Legado 资源中心
+          </h2>
           <p className="text-sm text-secondary mt-1">
-            {viewMode === 'explorer' ? '通过文件夹结构浏览所有云端资源。' : '查看已保存到云端的精选定制主题。'}
+            {viewMode === 'explorer' ? '整合全网优质书源与规则资源。' : '查看已保存到云端的精选定制主题。'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="bg-surface-container p-1 rounded-xl flex gap-1">
+          <div className="bg-surface-container p-1 rounded-xl flex gap-1 shadow-inner">
             <button 
               onClick={() => setViewMode('explorer')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${viewMode === 'explorer' ? 'bg-surface-bright shadow-sm text-primary' : 'text-secondary hover:bg-surface-bright/50'}`}
+              className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'explorer' ? 'bg-surface-bright shadow-md text-primary scale-105' : 'text-secondary hover:bg-surface-bright/50'}`}
             >
-              资源浏览器
+              订阅整合
             </button>
             <button 
               onClick={() => setViewMode('featured')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${viewMode === 'featured' ? 'bg-surface-bright shadow-sm text-primary' : 'text-secondary hover:bg-surface-bright/50'}`}
+              className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'featured' ? 'bg-surface-bright shadow-md text-primary scale-105' : 'text-secondary hover:bg-surface-bright/50'}`}
             >
               精选主题 ({customThemes.length})
             </button>
@@ -411,7 +322,21 @@ export default function AssetsView() {
                   return (
                     <div key={idx} onClick={() => isFolder && navigateTo([...currentPath, item.name])} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-2xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
                       <div className="relative aspect-video rounded-xl bg-surface-container overflow-hidden flex items-center justify-center mb-3">
-                        {isFolder ? <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" /> : isImg ? <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" /> : ['ttf', 'otf', 'woff', 'woff2'].includes(item.extension) ? <FontPreview path={item.path} name={item.name} /> : <div className="text-primary/30 font-bold text-lg uppercase">{item.extension || 'FILE'}</div>}
+                        {isFolder ? (
+                          <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" />
+                        ) : isImg ? (
+                          <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        ) : (item.extension === 'json' || item.category === 'themes') ? (
+                          <div className="w-full h-full p-2 flex items-center justify-center bg-surface-container-low">
+                            <div className="w-[60px] transform origin-center transition-transform group-hover:scale-110">
+                              <ThemeThumbnail path={item.path} name={item.name} />
+                            </div>
+                          </div>
+                        ) : ['ttf', 'otf', 'woff', 'woff2'].includes(item.extension) ? (
+                          <FontPreview path={item.path} name={item.name} />
+                        ) : (
+                          <div className="text-primary/30 font-bold text-lg uppercase">{item.extension || 'FILE'}</div>
+                        )}
                         {!isFolder && (
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                              <button onClick={(e) => { e.stopPropagation(); setPreviewItem({ ...item, url }); }} className="p-2 bg-white text-on-surface rounded-full hover:bg-primary hover:text-white transition-all shadow-lg"><Maximize2 size={18} /></button>
@@ -478,26 +403,36 @@ export default function AssetsView() {
           {customThemes.length === 0 ? (
             <div className="py-20 text-center text-secondary border border-dashed border-outline-variant rounded-2xl"><Sparkles size={48} className="mx-auto mb-4 opacity-10" /><p>暂无精选主题。</p></div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
               {customThemes.map((item) => {
                 const config = JSON.parse(item.config);
-                const exportUrl = `${window.location.origin}/api/custom-themes/${item.id}/export`;
-                const importUrl = 'legado://import/readConfig?src=' + encodeURIComponent(exportUrl);
                 return (
-                  <div key={item.id} onClick={() => editTheme(item)} className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden group hover:shadow-xl transition-all cursor-pointer">
-                    <div className="aspect-[4/3] relative bg-surface-container flex items-center justify-center">
-                       {item.preview_url ? <img src={item.preview_url} className="w-full h-full object-cover" /> : <ThemePreview config={config} />}
-                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); deleteTheme(item.id); }} className="p-1.5 bg-red-500 text-white rounded-lg shadow-lg hover:scale-105 transition-transform"><Trash2 size={14} /></button></div>
-                    </div>
-                    <div className="p-4" onClick={(e) => e.stopPropagation()}>
-                      <h3 className="font-bold text-sm mb-1">{item.name}</h3>
-                      <p className="text-[10px] text-secondary mb-4">创建于 {new Date(item.created_at).toLocaleString()}</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => { navigator.clipboard.writeText(importUrl); alert('导入链接已复制'); }} className="flex-1 py-2 bg-surface-container text-primary rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"><Copy size={12} /> 复制</button>
-                        <a href={importUrl} className="flex-1 py-2 bg-primary text-on-primary rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"><Download size={12} /> 导入</a>
+                  <motion.div 
+                    layout
+                    key={item.id} 
+                    className="bg-surface-container-lowest border border-outline-variant rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all group relative flex flex-col"
+                  >
+                    <div className="p-4 bg-surface-container-low/30 flex justify-center cursor-pointer" onClick={() => editTheme(item)}>
+                      <div className="w-full max-w-[120px] transition-transform group-hover:scale-[1.02] duration-500">
+                        <ThemeThumbnail name={item.name} config={config} />
                       </div>
                     </div>
-                  </div>
+
+                    <div className="p-5 flex-1 flex flex-col">
+                      <div className="flex items-center justify-between min-w-0 mb-4">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-lg truncate text-on-surface group-hover:text-primary transition-colors">{item.name}</h4>
+                          <p className="text-[10px] text-secondary mt-1">创建于 {formatDate(item.created_at)}</p>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); deleteTheme(item.id); }} className="p-2 text-secondary hover:text-error hover:bg-error-container/20 rounded-full transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-2 mt-auto">
+                        <button onClick={() => editTheme(item)} className="flex items-center justify-center gap-2 py-2.5 bg-surface-container text-primary rounded-xl text-xs font-bold hover:bg-primary/10 transition-all border border-primary/20"><Copy size={14} /> 复制并编辑</button>
+                        <button onClick={() => { window.location.href = `legado://import/readConfig?src=${encodeURIComponent(JSON.stringify(config))}`; }} className="flex items-center justify-center gap-2 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-primary/20"><Download size={14} /> 一键导入</button>
+                      </div>
+                    </div>
+                  </motion.div>
                 );
               })}
             </div>
