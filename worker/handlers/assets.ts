@@ -356,7 +356,7 @@ export async function handleEnsureAsset(request: Request, env: Env): Promise<Res
   const existsInIndex = index[category].some((item: any) => item.path === r2Key);
   if (!existsInIndex) {
     index[category].push({
-      name: originalName,
+      name: decodedName,
       path: r2Key,
       size: file.size,
       mtime: new Date().toISOString()

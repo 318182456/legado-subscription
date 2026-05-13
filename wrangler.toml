@@ -31,3 +31,8 @@ database_name = "legado-subscription"
 [[r2_buckets]]
 binding = "ASSETS_R2"
 bucket_name = "legado-assets"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true

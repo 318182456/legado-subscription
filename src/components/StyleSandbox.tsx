@@ -254,8 +254,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             const decodedFont = decodeURIComponent(data.textFont).split('/').pop() || '';
             api.getResources().then(res => {
               const foundFont = res.fonts?.find((f: any) => {
-                const fDecoded = decodeURIComponent(f.path).split('/').pop();
-                return fDecoded === decodedFont || f.path === data.textFont;
+                return f.name === decodedFont || decodeURIComponent(f.path).split('/').pop() === decodedFont || f.path === data.textFont;
               });
               if (foundFont) {
                 loadFont(foundFont.path, foundFont.name);
@@ -313,12 +312,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                   });
                   
                   if (fontFile) {
-                    const fileName = fontFile.split('/').pop() || '';
+                    const fileName = decodeURIComponent(fontFile.split('/').pop() || '');
                     // 1. 优先尝试从云端资源中匹配同名文件
                     api.getResources().then(res => {
                       const cloudMatch = res.fonts?.find((f: any) => {
-                        const fName = decodeURIComponent(f.path).split('/').pop();
-                        return fName === fileName;
+                        return f.name === fileName || decodeURIComponent(f.path).split('/').pop() === fileName;
                       });
 
                       if (cloudMatch) {
@@ -345,8 +343,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     // 如果 ZIP 内没找到，去项目资源里找 (按主题内的原始路径找)
                     api.getResources().then(res => {
                       const foundFont = res.fonts?.find((f: any) => {
-                         const fDecoded = decodeURIComponent(f.path).split('/').pop();
-                         return fDecoded === decodedTextFont || f.path === data.textFont;
+                         return f.name === decodedTextFont || decodeURIComponent(f.path).split('/').pop() === decodedTextFont || f.path === data.textFont;
                       });
                       if (foundFont) loadFont(foundFont.path, foundFont.name);
                     });
@@ -360,11 +357,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     return kDecoded === decodedBgStr || k.includes(decodedBgStr);
                   });
                   if (bgFile) {
-                    const fileName = bgFile.split('/').pop() || '';
+                    const fileName = decodeURIComponent(bgFile.split('/').pop() || '');
                     api.getResources().then(res => {
                       const cloudMatch = res.backgrounds?.find((b: any) => {
-                        const bName = decodeURIComponent(b.path).split('/').pop();
-                        return bName === fileName;
+                        return b.name === fileName || decodeURIComponent(b.path).split('/').pop() === fileName;
                       });
 
                       if (cloudMatch) {
