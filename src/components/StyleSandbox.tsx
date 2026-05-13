@@ -145,6 +145,29 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   });
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
+  const [localBgUrl, setLocalBgUrl] = useState('');
+
+  // 预加载背景图为 Blob，确保 html-to-image 能够无障碍抓取
+  useEffect(() => {
+    let active = true;
+    if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('blob:') && !config.bgStr.startsWith('content://')) {
+      const url = `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      fetch(url)
+        .then(r => r.blob())
+        .then(blob => {
+          if (!active) return;
+          const blobUrl = URL.createObjectURL(blob);
+          setLocalBgUrl(blobUrl);
+        })
+        .catch(err => console.warn('Failed to pre-cache background', err));
+    } else {
+      setLocalBgUrl('');
+    }
+    return () => { 
+      active = false;
+      if (localBgUrl.startsWith('blob:')) URL.revokeObjectURL(localBgUrl); 
+    };
+  }, [config.bgStr, config.bgType]);
   const [manualAssets, setManualAssets] = useState(() => ({
     bg: initialType === 'bg',
     font: initialType === 'font'
@@ -532,14 +555,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       if (previewRef.current) {
         try {
           const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
-          const toJpeg = mod.toJpeg || (mod.default && mod.default.toJpeg);
-          if (toJpeg) {
-            previewUrl = await toJpeg(previewRef.current, { 
-              quality: 0.8,
+          const toPng = mod.toPng || (mod.default && mod.default.toPng);
+          if (toPng) {
+            previewUrl = await toPng(previewRef.current, { 
               pixelRatio: 1,
-              backgroundColor: '#000000',
-              skipFonts: true,
-              fontEmbedCSS: '',
+              skipFonts: false, // 开启字体抓取
               cacheBust: true,
               style: { transform: 'none' }
             });
@@ -608,7 +628,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'transparent', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
               backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
-                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`}")` : 'none',
+                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : (localBgUrl || `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`)}")` : 'none',
               backgroundSize: 'cover', backgroundPosition: 'center',
               letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}
