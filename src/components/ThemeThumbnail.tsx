@@ -125,12 +125,13 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   return (
     <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative">
       <div 
-        className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden rounded-[14px] origin-center" 
+        className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
         style={{ 
           ...style, 
           width: '320px', 
           height: '675.56px', 
-          transform: `translate(-50%, -50%) scale(${scale})` 
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          borderRadius: `${14 / scale}px` // Account for scale to keep visual radius at 14px
         }}
       >
         <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
