@@ -51,11 +51,11 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   }, []);
 
   useEffect(() => {
-    if (initialConfig && initialConfig !== lastInitialConfig) {
+    if (initialConfig) {
       setConfig(initialConfig);
-      setLastInitialConfig(initialConfig);
+      setLoading(false);
     }
-  }, [initialConfig, lastInitialConfig]);
+  }, [initialConfig]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
