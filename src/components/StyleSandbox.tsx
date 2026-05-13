@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2, Smartphone, ChevronRight
+  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
@@ -146,23 +146,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [localBgUrl, setLocalBgUrl] = useState('');
-  const [localFontData, setLocalFontData] = useState('');
 
-  // 预加载字体为 Base64，确保 html-to-image 能够无障碍抓取
-  useEffect(() => {
-    let active = true;
-    if (config.textFont && !config.textFont.startsWith('blob:') && !config.textFont.startsWith('content://')) {
-      const url = `${window.location.origin}/repo/${config.textFont.split('/').map(s => encodeURIComponent(s)).join('/')}`;
-      fetch(url).then(r => r.blob()).then(blob => {
-        const reader = new FileReader();
-        reader.onloadend = () => { if (active) setLocalFontData(reader.result as string); };
-        reader.readAsDataURL(blob);
-      }).catch(err => console.warn('Font pre-cache failed', err));
-    } else {
-      setLocalFontData('');
-    }
-    return () => { active = false; };
-  }, [config.textFont]);
+
 
   // 预加载背景图为 Base64，确保 html-to-image 能够无障碍抓取
   useEffect(() => {
@@ -560,7 +545,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const generateThumbnail = async (
     cfg: any,
     bgBase64: string,
-    _fontBase64: string, // 保留参数签名兼容，Canvas 直接用 selectedFontName
   ): Promise<string> => {
     // 全分辨率离屏画布（与设备同比例）
     const RENDER_W = 360, RENDER_H = 640;
@@ -780,8 +764,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       setSyncStatus('正在生成预览图...');
       let previewUrl = '';
       try {
-        previewUrl = await generateThumbnail(finalConfig, localBgUrl, localFontData);
-        console.log('Thumbnail generated via html-to-image, length:', previewUrl?.length);
+        previewUrl = await generateThumbnail(finalConfig, localBgUrl);
+        console.log('Thumbnail generated via Canvas 2D, length:', previewUrl?.length);
       } catch (err) {
         console.error('Thumbnail generation failed, skipping', err);
         setSyncStatus('缩略图生成失败，已跳过');
