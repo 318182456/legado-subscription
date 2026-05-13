@@ -156,8 +156,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         .then(r => r.blob())
         .then(blob => {
           if (!active) return;
-          const blobUrl = URL.createObjectURL(blob);
-          setLocalBgUrl(blobUrl);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (active) setLocalBgUrl(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
         })
         .catch(err => console.warn('Failed to pre-cache background', err));
     } else {
@@ -165,7 +168,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
     return () => { 
       active = false;
-      if (localBgUrl.startsWith('blob:')) URL.revokeObjectURL(localBgUrl); 
+      // Base64 不需要手动释放资源
     };
   }, [config.bgStr, config.bgType]);
   const [manualAssets, setManualAssets] = useState(() => ({
@@ -564,9 +567,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           const toPng = mod.toPng || (mod.default && mod.default.toPng);
           if (toPng) {
             previewUrl = await toPng(previewRef.current, { 
-              pixelRatio: 1.5, // 恢复清晰度
-              skipFonts: false, 
-              // 关键：禁止缓存击穿参数，防止破坏 blob: 链接
+              pixelRatio: 1, 
+              skipFonts: true, 
               cacheBust: false, 
               style: { transform: 'none' }
             });
