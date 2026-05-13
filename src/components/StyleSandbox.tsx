@@ -146,8 +146,25 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [localBgUrl, setLocalBgUrl] = useState('');
+  const [localFontData, setLocalFontData] = useState('');
 
-  // 预加载背景图为 Blob，确保 html-to-image 能够无障碍抓取
+  // 预加载字体为 Base64，确保 html-to-image 能够无障碍抓取
+  useEffect(() => {
+    let active = true;
+    if (config.textFont && !config.textFont.startsWith('blob:') && !config.textFont.startsWith('content://')) {
+      const url = `${window.location.origin}/repo/${config.textFont.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      fetch(url).then(r => r.blob()).then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => { if (active) setLocalFontData(reader.result as string); };
+        reader.readAsDataURL(blob);
+      }).catch(err => console.warn('Font pre-cache failed', err));
+    } else {
+      setLocalFontData('');
+    }
+    return () => { active = false; };
+  }, [config.textFont]);
+
+  // 预加载背景图为 Base64，确保 html-to-image 能够无障碍抓取
   useEffect(() => {
     let active = true;
     if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('blob:') && !config.bgStr.startsWith('content://')) {
@@ -566,15 +583,23 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
           const toPng = mod.toPng || (mod.default && mod.default.toPng);
           if (toPng) {
+            // 构造内联字体 CSS
+            const fontName = 'PreviewFont';
+            const fontCSS = localFontData ? `@font-face { font-family: "${fontName}"; src: url(${localFontData}); }` : '';
+            
             // 使用更稳定的抓取流程：先转 Canvas 再转 DataURL
             const canvas = await mod.toCanvas(previewRef.current, {
               pixelRatio: 1,
-              skipFonts: true,
+              skipFonts: false, 
+              fontEmbedCSS: fontCSS,
               cacheBust: false,
-              style: { transform: 'none' }
+              style: { 
+                transform: 'none',
+                fontFamily: localFontData ? `"${fontName}", sans-serif` : 'sans-serif'
+              }
             });
             previewUrl = canvas.toDataURL('image/jpeg', 0.8);
-            console.log('Preview generated via Canvas, length:', previewUrl?.length);
+            console.log('Preview generated with inline assets, length:', previewUrl?.length);
           }
         } catch (err) {
           console.error('Failed to generate preview image', err);
