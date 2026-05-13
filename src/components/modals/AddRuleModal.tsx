@@ -6,13 +6,26 @@ interface AddRuleModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdded: () => void;
+  editData?: { id: number; name: string; pattern: string; replacement: string } | null;
 }
 
-export function AddRuleModal({ isOpen, onClose, onAdded }: AddRuleModalProps) {
+export function AddRuleModal({ isOpen, onClose, onAdded, editData }: AddRuleModalProps) {
   const [name, setName] = useState('');
   const [pattern, setPattern] = useState('');
   const [replacement, setReplacement] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (editData) {
+      setName(editData.name);
+      setPattern(editData.pattern);
+      setReplacement(editData.replacement || '');
+    } else {
+      setName('');
+      setPattern('');
+      setReplacement('');
+    }
+  }, [editData, isOpen]);
 
   if (!isOpen) return null;
 
@@ -21,13 +34,17 @@ export function AddRuleModal({ isOpen, onClose, onAdded }: AddRuleModalProps) {
     if (!name || !pattern) return;
     setLoading(true);
     try {
-      await api.addRule({ name, pattern, replacement });
+      if (editData) {
+        await api.updateRule(editData.id, { name, pattern, replacement });
+      } else {
+        await api.addRule({ name, pattern, replacement });
+      }
       setName('');
       setPattern('');
       setReplacement('');
       onAdded();
     } catch (e) {
-      alert('添加失败: ' + String(e));
+      alert((editData ? '更新' : '添加') + '失败: ' + String(e));
     } finally {
       setLoading(false);
     }
@@ -37,7 +54,7 @@ export function AddRuleModal({ isOpen, onClose, onAdded }: AddRuleModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-outline-variant animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 border-b border-outline-variant bg-surface-bright flex justify-between items-center">
-          <h3 className="text-lg font-bold text-on-surface">手动添加净化规则</h3>
+          <h3 className="text-lg font-bold text-on-surface">{editData ? '修改净化规则' : '手动添加净化规则'}</h3>
           <button onClick={onClose} className="p-1 hover:bg-surface-container rounded-full transition-colors text-secondary hover:text-on-surface"><X size={20} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -87,7 +104,7 @@ export function AddRuleModal({ isOpen, onClose, onAdded }: AddRuleModalProps) {
               className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
             >
               {loading && <RefreshCw size={16} className="animate-spin" />}
-              保存规则
+              {editData ? '更新规则' : '保存规则'}
             </button>
           </div>
         </form>

@@ -120,6 +120,7 @@ export default {
         const id = Number(ruleMatch[1]);
         if (method === "DELETE") return rules.handleRuleAction(env, id, "delete");
         if (method === "PATCH") return rules.handleRuleAction(env, id, "toggle", request);
+        if (method === "PUT") return rules.handleRuleAction(env, id, "update", request);
       }
 
       // ── /repo/* (R2 资源代理) ───────────────────────────────────

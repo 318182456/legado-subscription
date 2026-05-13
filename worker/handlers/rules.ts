@@ -18,7 +18,7 @@ export async function handleListRules(env: Env, url: URL): Promise<Response> {
 }
 
 export async function handleAddRule(request: Request, env: Env): Promise<Response> {
-  const body = await parseBody<{ name: string; pattern: string; replacement: string }>(request);
+  const body = await parseBody<{ name: string; pattern: string; replacement: string; group?: string }>(request);
   if (!body?.name || !body?.pattern) return err("名称和模式不能为空");
 
   let manualSub = (await env.DB.prepare("SELECT id FROM subscriptions WHERE url = 'manual_rules'").first()) as any;
@@ -29,10 +29,12 @@ export async function handleAddRule(request: Request, env: Env): Promise<Respons
 
   const rawJson = JSON.stringify({
     name: body.name,
-    ruleName: body.name,
-    regex: body.pattern,
+    group: body.group || "手动添加",
+    pattern: body.pattern,
     replacement: body.replacement || "",
-    enabled: true
+    isRegex: true,
+    isEnabled: true,
+    ruleType: 0
   });
 
   await env.DB.prepare(
@@ -49,6 +51,35 @@ export async function handleRuleAction(env: Env, id: number, action: string, req
   } else if (action === "toggle" && request) {
     const { enabled } = await request.json() as { enabled: number };
     await env.DB.prepare("UPDATE rules SET enabled = ? WHERE id = ?").bind(enabled, id).run();
+    
+    // 同步更新 raw_json 中的 isEnabled 字段
+    const rule = await env.DB.prepare("SELECT raw_json FROM rules WHERE id = ?").bind(id).first() as any;
+    if (rule) {
+      try {
+        const json = JSON.parse(rule.raw_json);
+        json.isEnabled = !!enabled;
+        await env.DB.prepare("UPDATE rules SET raw_json = ? WHERE id = ?").bind(JSON.stringify(json), id).run();
+      } catch (e) {}
+    }
+  } else if (action === "update" && request) {
+    const body = await request.json() as { name: string; pattern: string; replacement: string; group?: string };
+    if (!body.name || !body.pattern) return err("名称和模式不能为空");
+
+    const rawJson = JSON.stringify({
+      name: body.name,
+      group: body.group || "手动添加",
+      pattern: body.pattern,
+      replacement: body.replacement || "",
+      isRegex: true,
+      isEnabled: true,
+      ruleType: 0
+    });
+
+    await env.DB.prepare(
+      "UPDATE rules SET name = ?, pattern = ?, replacement = ?, raw_json = ? WHERE id = ?"
+    ).bind(body.name, body.pattern, body.replacement || "", rawJson, id).run();
   }
+  
+  await rebuildCache(env, "rule");
   return ok();
 }

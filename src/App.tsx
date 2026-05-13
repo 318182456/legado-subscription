@@ -40,6 +40,7 @@ export default function App() {
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddRuleModalOpen, setIsAddRuleModalOpen] = useState(false);
+  const [editRuleData, setEditRuleData] = useState<any>(null);
   const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
 
   // Global Testing State (Shared for consistency)
@@ -172,7 +173,18 @@ export default function App() {
           onTestAll={handleTestAll}
         />
       );
-      case 'rules': return <RulesView onAdd={() => setIsAddRuleModalOpen(true)} />;
+      case 'rules': return (
+        <RulesView 
+          onAdd={() => {
+            setEditRuleData(null);
+            setIsAddRuleModalOpen(true);
+          }} 
+          onEdit={(rule) => {
+            setEditRuleData(rule);
+            setIsAddRuleModalOpen(true);
+          }}
+        />
+      );
       case 'assets': return <AssetsView />;
       case 'settings': return <SettingsView />;
       default: return <DashboardView onImport={() => setIsAddModalOpen(true)} />;
@@ -272,9 +284,14 @@ export default function App() {
 
       <AddRuleModal
         isOpen={isAddRuleModalOpen}
-        onClose={() => setIsAddRuleModalOpen(false)}
+        editData={editRuleData}
+        onClose={() => {
+          setIsAddRuleModalOpen(false);
+          setEditRuleData(null);
+        }}
         onAdded={() => {
           setIsAddRuleModalOpen(false);
+          setEditRuleData(null);
           window.dispatchEvent(new CustomEvent('refresh-data'));
         }}
       />

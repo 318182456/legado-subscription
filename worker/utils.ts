@@ -189,7 +189,18 @@ export async function syncRuleSubscription(
         const name = String(rule["name"] ?? rule["ruleName"] ?? "").trim();
         const pattern = String(rule["regex"] ?? rule["pattern"] ?? "").trim();
         const replacement = String(rule["replacement"] ?? rule["replace"] ?? "");
-        const rawJson = JSON.stringify(rule);
+        
+        // 归一化 JSON 格式，确保阅读 App 能识别名称和模式
+        const normalizedRule = {
+          ...rule,
+          name,
+          pattern,
+          replacement,
+          isRegex: rule["isRegex"] ?? true,
+          isEnabled: rule["isEnabled"] ?? rule["enabled"] ?? true
+        };
+        
+        const rawJson = JSON.stringify(normalizedRule);
         return env.DB.prepare(
           `INSERT INTO rules (subscription_id, name, pattern, replacement, raw_json, updated_at)
            VALUES (?, ?, ?, ?, ?, datetime('now'))

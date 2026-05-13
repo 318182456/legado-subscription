@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Trash2, ShieldCheck, MoreVertical } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, ShieldCheck, MoreVertical, Pencil } from 'lucide-react';
 import * as api from '../api';
 
 interface RulesViewProps {
   onAdd: () => void;
+  onEdit: (rule: any) => void;
 }
 
-export default function RulesView({ onAdd }: RulesViewProps) {
+export default function RulesView({ onAdd, onEdit }: RulesViewProps) {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
@@ -36,6 +37,11 @@ export default function RulesView({ onAdd }: RulesViewProps) {
     } catch (e) {
       alert('操作失败: ' + String(e));
     }
+  };
+
+  const handleEdit = (rule: any) => {
+    onEdit(rule);
+    setActiveMenu(null);
   };
 
   const handleDelete = async (id: number) => {
@@ -141,6 +147,12 @@ export default function RulesView({ onAdd }: RulesViewProps) {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
                           <div className="absolute right-6 top-10 w-24 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl z-20 py-1 overflow-hidden">
+                            <button 
+                              onClick={() => handleEdit(rule)}
+                              className="w-full text-left px-4 py-2 text-xs hover:bg-surface-container transition-colors flex items-center gap-2"
+                            >
+                              <Pencil size={14} /> 修正
+                            </button>
                             <button 
                               onClick={() => handleDelete(rule.id)}
                               className="w-full text-left px-4 py-2 text-xs hover:bg-error-container/20 text-error transition-colors flex items-center gap-2"
