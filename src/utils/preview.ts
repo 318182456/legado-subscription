@@ -206,7 +206,7 @@ export function generatePreviewHTML(
             10 * comp +
             "px 0 " +
             8 * comp +
-            "px 0; flex-shrink: 0; position: relative; z-index: 50;">" +
+            'px 0; flex-shrink: 0; position: relative; z-index: 50;">' +
             '<div style="width:' +
             40 * comp +
             "px; height:" +
