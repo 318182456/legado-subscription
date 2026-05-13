@@ -566,13 +566,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
           const toPng = mod.toPng || (mod.default && mod.default.toPng);
           if (toPng) {
-            previewUrl = await toPng(previewRef.current, { 
-              pixelRatio: 1, 
-              skipFonts: true, 
-              cacheBust: false, 
+            // 使用更稳定的抓取流程：先转 Canvas 再转 DataURL
+            const canvas = await mod.toCanvas(previewRef.current, {
+              pixelRatio: 1,
+              skipFonts: true,
+              cacheBust: false,
               style: { transform: 'none' }
             });
-            console.log('Preview generated, length:', previewUrl?.length);
+            previewUrl = canvas.toDataURL('image/jpeg', 0.8);
+            console.log('Preview generated via Canvas, length:', previewUrl?.length);
           }
         } catch (err) {
           console.error('Failed to generate preview image', err);
