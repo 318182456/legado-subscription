@@ -125,18 +125,19 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   return (
     <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative">
       <div 
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden rounded-[14px] origin-center" 
+        style={{ 
+          ...style, 
+          width: '320px', 
+          height: '675.56px', 
+          transform: `translate(-50%, -50%) scale(${scale})` 
+        }}
       >
-        <div 
-          className="flex flex-col overflow-hidden rounded-[14px] origin-center" 
-          style={{ ...style, width: '320px', height: '675.56px', transform: `scale(${scale})` }}
-        >
-          <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
-            <div className="w-6 h-1 bg-black/20 rounded-full"></div>
-          </div>
-
-          <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
+        <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
+          <div className="w-6 h-1 bg-black/20 rounded-full"></div>
         </div>
+
+        <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
       </div>
     </div>
   );
