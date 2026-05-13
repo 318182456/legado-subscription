@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
@@ -135,7 +135,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [saving, setSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
   const [loading, setLoading] = useState(false);
-  const previewRef = useRef<HTMLDivElement>(null);
+
   const [selectedFontName, setSelectedFontName] = useState('');
   const [selectedLayoutName, setSelectedLayoutName] = useState(() => {
     if (initialType === 'theme' || initialType === 'zip' || initialType === 'saved') {
@@ -545,6 +545,120 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
   };
 
+  /**
+   * 离屏 div 缩略图生成器 — 高保真方案
+   *
+   * 原理：在 document.body 中创建一个固定尺寸的隐藏容器，注入与预览完全相同的 HTML
+   * （generatePreviewHTML），同时通过内联 @font-face Base64 嵌入字体、通过 inline style
+   * 嵌入 Base64 背景图，再用 html-to-image 截图后缩小，确保缩略图与预览像素级一致。
+   *
+   * 解决的三大问题：
+   * 1. transform:scale 干扰 → 独立离屏容器，不受父级 scale 影响
+   * 2. 跨域 / Base64 竞争 → 字体和背景均使用已预缓存的 Base64 data URL
+   * 3. @font-face 未注入 → 在容器内 <style> 标签中直接 embed Base64 字体
+   */
+  const generateThumbnail = async (
+    cfg: any,
+    bgBase64: string,
+    fontBase64: string,
+  ): Promise<string> => {
+    // 离屏渲染尺寸（和设备同比例，便于 comp 计算）
+    const RENDER_W = 360, RENDER_H = 640;
+    // 最终缩略图尺寸
+    const THUMB_W  = 240, THUMB_H  = 427;
+
+    // ── 构建 @font-face 内联样式 ──
+    // fontBase64 是已预加载的 data:font/... base64 字符串
+    const fontFaceName = fontBase64 ? `ThumbFont_${Math.random().toString(36).slice(2)}` : '';
+    const fontFaceCSS  = fontFaceName
+      ? `@font-face { font-family: '${fontFaceName}'; src: url('${fontBase64}'); font-display: block; }`
+      : '';
+
+    // ── 构建背景内联样式 ──
+    let bgInlineStyle = '';
+    if (cfg.bgType === 2 && cfg.bgStr && !cfg.bgStr.startsWith('content://')) {
+      const src = bgBase64
+        || (cfg.bgStr.startsWith('blob:') ? cfg.bgStr
+          : `${window.location.origin}/repo/${cfg.bgStr.split('/').map((s: string) => encodeURIComponent(s)).join('/')}`);
+      bgInlineStyle = `background-image:url("${src}");background-size:cover;background-position:center;`;
+    } else if (cfg.bgType === 0) {
+      bgInlineStyle = `background-color:${argbToCss(cfg.bgStr)};`;
+    } else {
+      bgInlineStyle = 'background-color:#eeeeee;';
+    }
+
+    // ── 生成与预览一致的 HTML（comp=1，因容器就是 360px 宽）──
+    const innerHtml = generatePreviewHTML(
+      cfg,
+      1,               // comp = 1（容器本身就是 360px）
+      getTipText,
+      argbToCss,
+      PREVIEW_TITLE,
+      PREVIEW_PARAS,
+      fontFaceName || selectedFontName,
+    );
+
+    // ── 创建离屏容器 ──
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = [
+      `position:fixed`,
+      `left:-${RENDER_W + 100}px`, // 完全移出视口
+      `top:0`,
+      `width:${RENDER_W}px`,
+      `height:${RENDER_H}px`,
+      `overflow:hidden`,
+      `pointer-events:none`,
+      `z-index:-1`,
+      `color:${argbToCss(cfg.textColor)}`,
+      `letter-spacing:${cfg.letterSpacing ?? 0}em`,
+      `font-weight:${cfg.textBold ? 'bold' : 'normal'}`,
+      bgInlineStyle,
+    ].join(';');
+
+    wrapper.innerHTML = `<style>${fontFaceCSS}</style>
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;">
+        ${innerHtml}
+      </div>`;
+
+    document.body.appendChild(wrapper);
+    try {
+      // 等待字体就绪（仅在有自定义字体时）
+      if (fontFaceName) await document.fonts.ready;
+
+      const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
+      const toCanvas = mod.toCanvas ?? mod.default?.toCanvas;
+      if (!toCanvas) throw new Error('html-to-image toCanvas not found');
+
+      const fullCanvas = await toCanvas(wrapper, {
+        pixelRatio: 1,
+        cacheBust: false,
+        skipFonts: false,   // 字体已内联，允许抓取
+        width: RENDER_W,
+        height: RENDER_H,
+      });
+
+      // 缩放到缩略图尺寸
+      const thumb = document.createElement('canvas');
+      thumb.width  = THUMB_W;
+      thumb.height = THUMB_H;
+      const tctx = thumb.getContext('2d')!;
+
+      // 圆角裁剪
+      const rr = 16;
+      tctx.beginPath();
+      tctx.moveTo(rr, 0); tctx.lineTo(THUMB_W - rr, 0); tctx.arcTo(THUMB_W, 0, THUMB_W, rr, rr);
+      tctx.lineTo(THUMB_W, THUMB_H - rr); tctx.arcTo(THUMB_W, THUMB_H, THUMB_W - rr, THUMB_H, rr);
+      tctx.lineTo(rr, THUMB_H); tctx.arcTo(0, THUMB_H, 0, THUMB_H - rr, rr);
+      tctx.lineTo(0, rr); tctx.arcTo(0, 0, rr, 0, rr);
+      tctx.closePath(); tctx.clip();
+
+      tctx.drawImage(fullCanvas, 0, 0, THUMB_W, THUMB_H);
+      return thumb.toDataURL('image/jpeg', 0.85);
+    } finally {
+      document.body.removeChild(wrapper);
+    }
+  };
+
   const handleSave = async () => {
     if (!config.name) return alert('请输入名称');
     setSaving(true);
@@ -578,24 +692,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
       setSyncStatus('正在生成预览图...');
       let previewUrl = '';
-      if (previewRef.current) {
-        try {
-          // 切换到 html2canvas：避开 SVG 沙箱，直接绘制 Canvas
-          const html2canvas = (await import('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/+esm')).default;
-          if (html2canvas && previewRef.current) {
-            const canvas = await html2canvas(previewRef.current, {
-              scale: 1,
-              useCORS: true,
-              allowTaint: true,
-              backgroundColor: null, // 透明背景
-              logging: false,
-            });
-            previewUrl = canvas.toDataURL('image/jpeg', 0.8);
-            console.log('Preview generated via html2canvas, length:', previewUrl?.length);
-          }
-        } catch (err) {
-          console.error('Failed to generate preview image', err);
-        }
+      try {
+        previewUrl = await generateThumbnail(finalConfig, localBgUrl, localFontData);
+        console.log('Thumbnail generated via html-to-image, length:', previewUrl?.length);
+      } catch (err) {
+        console.error('Thumbnail generation failed, skipping', err);
+        setSyncStatus('缩略图生成失败，已跳过');
       }
 
       setSyncStatus('正在保存主题配置...');
@@ -644,7 +746,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             transform: `scale(${device.width > 400 ? 0.6 : 0.75})` 
           }}
         >
-          <div ref={previewRef} className="w-full h-full relative overflow-hidden flex flex-col bg-black">
+          <div className="w-full h-full relative overflow-hidden flex flex-col bg-black">
             {/* 模拟刘海/挖孔 */}
             {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
             {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
