@@ -191,9 +191,13 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     const decoded = safeDecode(path);
     const fileName = decoded.split('/').pop() || decoded;
     
-    if (!resources || !resources[category]) return fileName;
-    const found = resources[category].find((r: any) => r.path === path);
-    return found ? found.name : fileName;
+    let result = fileName;
+    if (resources && resources[category]) {
+      const found = resources[category].find((r: any) => r.path === path);
+      if (found) result = found.name;
+    }
+    
+    return safeDecode(result);
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
