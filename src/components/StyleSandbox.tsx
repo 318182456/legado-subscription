@@ -574,13 +574,30 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       ? `@font-face { font-family: '${fontFaceName}'; src: url('${fontBase64}'); font-display: block; }`
       : '';
 
-    // ── 构建背景内联样式 ──
+    // ── 背景 Base64 解析（html-to-image 的 SVG foreignObject 无法访问网络 URL，必须全部转成 data:）──
+    let resolvedBgBase64 = bgBase64; // 优先使用调用方预缓存的 Base64
+    if (cfg.bgType === 2 && cfg.bgStr && !cfg.bgStr.startsWith('content://') && !resolvedBgBase64) {
+      // 预缓存未就绪时，在此自行 fetch 一次
+      try {
+        const networkSrc = cfg.bgStr.startsWith('blob:')
+          ? cfg.bgStr
+          : `${window.location.origin}/repo/${cfg.bgStr.split('/').map((s: string) => encodeURIComponent(s)).join('/')}`;
+        const resp = await fetch(networkSrc);
+        const blob = await resp.blob();
+        resolvedBgBase64 = await new Promise<string>((res) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn('[Thumbnail] Failed to resolve background to Base64, fallback to solid color', e);
+      }
+    }
+
+    // ── 构建背景内联样式（只使用 data: URL 或纯色，绝不使用网络 URL）──
     let bgInlineStyle = '';
-    if (cfg.bgType === 2 && cfg.bgStr && !cfg.bgStr.startsWith('content://')) {
-      const src = bgBase64
-        || (cfg.bgStr.startsWith('blob:') ? cfg.bgStr
-          : `${window.location.origin}/repo/${cfg.bgStr.split('/').map((s: string) => encodeURIComponent(s)).join('/')}`);
-      bgInlineStyle = `background-image:url("${src}");background-size:cover;background-position:center;`;
+    if (cfg.bgType === 2 && resolvedBgBase64) {
+      bgInlineStyle = `background-image:url("${resolvedBgBase64}");background-size:cover;background-position:center;`;
     } else if (cfg.bgType === 0) {
       bgInlineStyle = `background-color:${argbToCss(cfg.bgStr)};`;
     } else {
