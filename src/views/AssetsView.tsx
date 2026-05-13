@@ -431,7 +431,7 @@ export default function AssetsView() {
                   >
                     <div className="p-4 bg-surface-container-low/30 flex justify-center cursor-pointer" onClick={() => editTheme(item)}>
                       <div className="w-full max-w-[120px] transition-transform group-hover:scale-[1.02] duration-500">
-                        <ThemeThumbnail name={item.name} config={config} />
+                        <ThemeThumbnail name={item.name} config={config} previewUrl={item.preview_url} />
                       </div>
                     </div>
 

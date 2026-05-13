@@ -22,7 +22,7 @@ function TipView({ value }: { value: number }) {
   return <span>{labelMap[value] || ''}</span>;
 }
 
-export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: string; name: string; config?: any }) {
+export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: initialPreviewUrl }: { path?: string; name: string; config?: any; previewUrl?: string }) {
   const [config, setConfig] = useState<any>(initialConfig);
   const [loading, setLoading] = useState(!initialConfig);
   const [error, setError] = useState(false);
@@ -149,11 +149,11 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   return (
     <div 
       ref={containerRef} 
-      className={`w-full aspect-[9/19] rounded-2xl shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative ${config.preview_url ? 'bg-surface-container-low' : 'bg-black p-[2px]'}`}
+      className={`w-full aspect-[9/19] rounded-2xl shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : 'bg-black p-[2px]'}`}
     >
-      {config.preview_url ? (
+      {(initialPreviewUrl || config.preview_url) ? (
         <img 
-          src={config.preview_url} 
+          src={initialPreviewUrl || config.preview_url} 
           alt={name} 
           className="w-full h-full object-cover"
           loading="lazy"
