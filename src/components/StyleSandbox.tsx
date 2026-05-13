@@ -119,6 +119,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [manualAssets, setManualAssets] = useState({ bg: false, font: false });
+  const [activeTab, setActiveTab] = useState<'visual' | 'text' | 'layout' | 'extra'>('visual');
 
   useEffect(() => {
     api.getResources().then(setResources);
@@ -417,105 +418,193 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       </div>
 
       {/* 右侧控制面板 */}
-      <div className="w-full md:w-96 bg-surface-container-high border-l border-outline-variant p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 shrink-0 relative pt-20">
-        <div className="space-y-4">
-          <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Smartphone size={14} /> 模拟机型</label>
-          <div className="grid grid-cols-2 gap-2">
-             {DEVICES.map(d => (
-               <button key={d.id} onClick={() => setDevice(d)} className={`py-2 px-1 rounded-xl text-[10px] font-bold transition-all border ${device.id === d.id ? 'bg-primary text-white border-primary shadow-md' : 'bg-surface-container-lowest text-secondary border-outline-variant hover:bg-surface-container'}`}>
-                 {d.name}
-               </button>
-             ))}
-          </div>
+      <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative">
+        {/* 顶部标签栏 */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-surface-container-high border-b border-outline-variant flex items-center px-4 gap-1 z-20">
+          {[
+            { id: 'visual', icon: <Palette size={16} />, label: '视觉' },
+            { id: 'text', icon: <Type size={16} />, label: '文字' },
+            { id: 'layout', icon: <Layout size={16} />, label: '布局' },
+            { id: 'extra', icon: <Settings2 size={16} />, label: '组件' },
+          ].map(tab => (
+            <button 
+              key={tab.id} 
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${activeTab === tab.id ? 'bg-primary text-white shadow-md' : 'text-secondary hover:bg-surface-container'}`}
+            >
+              {tab.icon}
+              <span className="text-[10px] font-bold">{tab.label}</span>
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-4">
-          <label className="text-xs font-bold text-secondary uppercase">主题设置</label>
-          <div className="space-y-4 pt-2">
-            <label className="text-xs font-bold text-secondary uppercase">主题名称</label>
-            <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-          </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-20 space-y-8">
+          {activeTab === 'visual' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">主题信息</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-secondary">名称</span>
+                    <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">色彩与资源</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><span className="text-[10px] text-secondary">背景色</span><input type="color" value={getHex6(config.bgStr)} onChange={(e) => { setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0}); setManualAssets(p => ({ ...p, bg: true })); }} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
+                    <div className="space-y-1.5"><span className="text-[10px] text-secondary">文字色</span><input type="color" value={getHex6(config.textColor)} onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2">
+                    <button onClick={() => setShowPicker('layout')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><AlignLeft size={16} className="mb-1" /> 选排版</button>
+                    <button onClick={() => setShowPicker('bg')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><ImageIcon size={16} className="mb-1" /> 选背景</button>
+                    <button onClick={() => setShowPicker('font')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><FontIcon size={16} className="mb-1" /> 选字体</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'text' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">核心参数</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <Slider label="字号" value={config.textSize} min={12} max={40} unit="px" onChange={v => setConfig({...config, textSize: v})} />
+                  <Slider label="行间距" value={config.lineSpacingExtra} min={0} max={30} unit="px" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
+                  <Slider label="字距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
+                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={40} unit="px" onChange={v => setConfig({...config, paragraphSpacing: v})} />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">排版习惯</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-secondary">文字加粗</span>
+                    <button onClick={() => setConfig({...config, textBold: config.textBold ? 0 : 1})} className={`w-10 h-5 rounded-full transition-all relative ${config.textBold ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.textBold ? 'left-6' : 'left-1'}`}></div></button>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-outline font-bold uppercase">首行缩进</span>
+                    <select value={config.paragraphIndent} onChange={e => setConfig({...config, paragraphIndent: e.target.value})} className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-xs outline-none">
+                      <option value="">无缩进</option><option value="　">1字符</option><option value="　　">2字符</option><option value="　　　　">4字符</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'layout' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">物理环境</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEVICES.map(d => (
+                      <button key={d.id} onClick={() => setDevice(d)} className={`py-3 px-1 rounded-xl text-[10px] font-bold transition-all border ${device.id === d.id ? 'bg-primary text-white border-primary shadow-sm' : 'bg-surface-container text-secondary border-outline-variant hover:bg-surface-container'}`}>
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">全局边距</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    <Slider label="左" value={config.paddingLeft} min={0} max={100} onChange={v => setConfig({...config, paddingLeft: v})} />
+                    <Slider label="右" value={config.paddingRight} min={0} max={100} onChange={v => setConfig({...config, paddingRight: v})} />
+                    <Slider label="上" value={config.paddingTop} min={0} max={100} onChange={v => setConfig({...config, paddingTop: v})} />
+                    <Slider label="下" value={config.paddingBottom} min={0} max={100} onChange={v => setConfig({...config, paddingBottom: v})} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'extra' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">标题风格</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="flex bg-surface-container p-1 rounded-xl gap-1">
+                    {['居左', '居中', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, titleMode: i})} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${config.titleMode === i ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}
+                  </div>
+                  {config.titleMode !== 2 && (
+                    <>
+                      <Slider label="缩放系数" value={config.titleSize} min={0} max={10} onChange={v => setConfig({...config, titleSize: v})} />
+                      <div className="grid grid-cols-2 gap-4">
+                        <Slider label="上间距" value={config.titleTopSpacing} min={0} max={100} onChange={v => setConfig({...config, titleTopSpacing: v})} />
+                        <Slider label="下间距" value={config.titleBottomSpacing} min={0} max={100} onChange={v => setConfig({...config, titleBottomSpacing: v})} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">状态信息栏 (页眉页脚)</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-secondary font-bold uppercase">页眉显示</span>
+                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, headerMode: i === 0 ? 1 : 2})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.headerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-secondary font-bold uppercase">页脚显示</span>
+                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 1 : 2})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.footerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">页眉线</span>
+                      <button onClick={() => setConfig({...config, showHeaderLine: !config.showHeaderLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showHeaderLine ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showHeaderLine ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">页脚线</span>
+                      <button onClick={() => setConfig({...config, showFooterLine: !config.showFooterLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showFooterLine ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showFooterLine ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5 pt-2 border-t border-outline-variant/30">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-bold uppercase text-secondary">提示色</span>
+                       <input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-10 h-6 rounded cursor-pointer" />
+                    </div>
+                    <div className="space-y-4">
+                      <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block text-center">页眉内容</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <TipSelector label="左" value={config.tipHeaderLeft} onChange={v => setConfig({...config, tipHeaderLeft: v})} />
+                        <TipSelector label="中" value={config.tipHeaderMiddle} onChange={v => setConfig({...config, tipHeaderMiddle: v})} />
+                        <TipSelector label="右" value={config.tipHeaderRight} onChange={v => setConfig({...config, tipHeaderRight: v})} />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block text-center">页脚内容</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <TipSelector label="左" value={config.tipFooterLeft} onChange={v => setConfig({...config, tipFooterLeft: v})} />
+                        <TipSelector label="中" value={config.tipFooterMiddle} onChange={v => setConfig({...config, tipFooterMiddle: v})} />
+                        <TipSelector label="右" value={config.tipFooterRight} onChange={v => setConfig({...config, tipFooterRight: v})} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={() => setShowPicker('layout')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold"><AlignLeft size={16} /> 选排版</button>
-          <button onClick={() => setShowPicker('bg')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold"><ImageIcon size={16} /> 选背景</button>
-          <button onClick={() => setShowPicker('font')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold"><FontIcon size={16} /> 选字体</button>
-        </div>
-
-        <div className="space-y-8">
-          <div className="space-y-4">
-             <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Palette size={14} /> 基础属性</label>
-             <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><span className="text-[10px] text-outline">背景色</span><input type="color" value={getHex6(config.bgStr)} onChange={(e) => { setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0}); setManualAssets(p => ({ ...p, bg: true })); }} className="w-full h-8 rounded-lg cursor-pointer" /></div>
-                <div className="space-y-1.5"><span className="text-[10px] text-outline">文字色</span><input type="color" value={getHex6(config.textColor)} onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} className="w-full h-8 rounded-lg cursor-pointer" /></div>
-             </div>
-             <Slider label="字号" value={config.textSize} min={12} max={40} unit="px" onChange={v => setConfig({...config, textSize: v})} />
-             <Slider label="行距" value={config.lineSpacingExtra} min={0} max={30} unit="px" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
-             <Slider label="字间距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
-             <Slider label="段间距" value={config.paragraphSpacing} min={0} max={40} unit="px" onChange={v => setConfig({...config, paragraphSpacing: v})} />
-             <div className="flex items-center justify-between p-3 bg-surface-container rounded-xl">
-                <span className="text-xs font-bold text-secondary">文本加粗</span>
-                <button onClick={() => setConfig({...config, textBold: config.textBold ? 0 : 1})} className={`w-10 h-5 rounded-full transition-all relative ${config.textBold ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.textBold ? 'left-6' : 'left-1'}`}></div></button>
-             </div>
-          </div>
-
-          <div className="space-y-4">
-             <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Layout size={14} /> 页面布局</label>
-             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <Slider label="左边距" value={config.paddingLeft} min={0} max={100} onChange={v => setConfig({...config, paddingLeft: v})} />
-                <Slider label="右边距" value={config.paddingRight} min={0} max={100} onChange={v => setConfig({...config, paddingRight: v})} />
-                <Slider label="上边距" value={config.paddingTop} min={0} max={100} onChange={v => setConfig({...config, paddingTop: v})} />
-                <Slider label="下边距" value={config.paddingBottom} min={0} max={100} onChange={v => setConfig({...config, paddingBottom: v})} />
-             </div>
-             <div className="space-y-2">
-                <span className="text-[10px] text-outline font-bold">首行缩进</span>
-                <select value={config.paragraphIndent} onChange={e => setConfig({...config, paragraphIndent: e.target.value})} className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2 text-xs">
-                  <option value="">无缩进</option><option value="　">1字符</option><option value="　　">2字符</option><option value="　　　　">4字符</option>
-                </select>
-             </div>
-          </div>
-
-          <div className="space-y-4">
-             <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Type size={14} /> 标题样式</label>
-             <div className="flex bg-surface-container p-1 rounded-xl gap-1">
-                {['居左', '居中', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, titleMode: i})} className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${config.titleMode === i ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}
-             </div>
-             {config.titleMode !== 2 && (
-               <div className="space-y-4">
-                 <Slider label="标题缩放" value={config.titleSize} min={0} max={10} onChange={v => setConfig({...config, titleSize: v})} />
-                 <div className="grid grid-cols-2 gap-3">
-                   <Slider label="标题上间距" value={config.titleTopSpacing} min={0} max={100} unit="px" onChange={v => setConfig({...config, titleTopSpacing: v})} />
-                   <Slider label="标题下间距" value={config.titleBottomSpacing} min={0} max={100} unit="px" onChange={v => setConfig({...config, titleBottomSpacing: v})} />
-                 </div>
-               </div>
-             )}
-          </div>
-
-          <div className="space-y-4">
-             <label className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><Settings2 size={14} /> 页眉与页脚</label>
-             <div className="p-3 bg-surface-container rounded-xl space-y-4">
-               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary uppercase">页眉状态</span><div className="flex bg-surface-container-lowest p-1 rounded-lg gap-1">{['显示', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, headerMode: i === 0 ? 1 : 2})} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${config.headerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white' : 'text-secondary'}`}>{l}</button>)}</div></div>
-               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary uppercase">页脚状态</span><div className="flex bg-surface-container-lowest p-1 rounded-lg gap-1">{['显示', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 1 : 2})} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${config.footerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white' : 'text-secondary'}`}>{l}</button>)}</div></div>
-               <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-secondary">提示文字颜色</span><input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-12 h-6 rounded cursor-pointer" /></div>
-               <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页眉间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} /><Slider label="下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} /></div></div>
-               <div className="space-y-3"><span className="text-[10px] text-outline font-bold">页脚间距</span><div className="grid grid-cols-2 gap-x-3 gap-y-1"><Slider label="上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} /><Slider label="下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} /></div></div>
-               <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30">
-                 <span className="text-[10px] font-bold text-secondary uppercase">页眉分割线</span>
-                 <button onClick={() => setConfig({...config, showHeaderLine: !config.showHeaderLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showHeaderLine ? 'bg-primary' : 'bg-outline-variant'}`}>
-                   <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showHeaderLine ? 'left-4.5' : 'left-0.5'}`}></div>
-                 </button>
-               </div>
-               <div className="flex items-center justify-between">
-                 <span className="text-[10px] font-bold text-secondary uppercase">页脚分割线</span>
-                 <button onClick={() => setConfig({...config, showFooterLine: !config.showFooterLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showFooterLine ? 'bg-primary' : 'bg-outline-variant'}`}>
-                   <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showFooterLine ? 'left-4.5' : 'left-0.5'}`}></div>
-                 </button>
-               </div>
-             </div>
-          </div>
-        </div>
-
+      <div className="fixed bottom-8 right-[420px] flex gap-3 z-50">
+        <button onClick={onClose} className="px-6 py-3 bg-surface-container rounded-2xl text-secondary font-bold shadow-lg hover:bg-surface-container-high transition-all border border-outline-variant">取消</button>
+        <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-primary text-white rounded-2xl font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center gap-2">
+          {saving ? <RefreshCw size={16} className="animate-spin" /> : <Share2 size={16} />}
+          保存并更新
+        </button>
       </div>
 
       {showPicker && (
