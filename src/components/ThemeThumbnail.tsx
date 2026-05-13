@@ -107,12 +107,27 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
     letterSpacing: `${(config.letterSpacing || 0.1)}em`,
   };
 
-  const tipStyle = { color: argbToCss(config.tipColor || '#803E3D3B'), fontSize: '4px', opacity: 0.8 };
-  const COMP = 0.45;
+  const [scale, setScale] = useState(0.45);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setScale((entry.contentRect.width - 4) / 320);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const COMP = 0.82; // Matches StyleSandbox scale
 
   return (
-    <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all">
-      <div className="w-full h-full flex flex-col overflow-hidden rounded-[14px] relative" style={style}>
+    <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative">
+      <div 
+        className="absolute top-[2px] left-[2px] flex flex-col overflow-hidden rounded-[14px] origin-top-left" 
+        style={{ ...style, width: '320px', height: '675.5px', transform: `scale(${scale})` }}
+      >
         <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
           <div className="w-6 h-1 bg-black/20 rounded-full"></div>
         </div>

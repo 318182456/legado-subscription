@@ -1,6 +1,7 @@
 import { Env } from "../types";
 import { PREVIEW_TITLE, PREVIEW_PARAS } from "../../src/utils/constants";
 import { generatePreviewHTML, getTipText } from "../../src/utils/preview";
+import { argbToCss } from "../../src/utils/color";
 
 export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
   try {
@@ -305,41 +306,34 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             }
         }
 
-        function argbToCss(argb) {
-            if (!argb) return 'transparent';
-            if (argb.startsWith('#')) return argb;
-            try {
-                const hex = argb.replace(/^#/, '');
-                if (hex.length === 8) {
-                    const a = parseInt(hex.slice(0, 2), 16) / 255;
-                    const r = parseInt(hex.slice(2, 4), 16);
-                    const g = parseInt(hex.slice(4, 6), 16);
-                    const b = parseInt(hex.slice(6, 8), 16);
-                    return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(2) + ')';
-                }
-                return '#' + hex;
-            } catch(e) { return argb; }
-        }
-
+        ${argbToCss.toString()}
         ${getTipText.toString()}
         ${generatePreviewHTML.toString()}
 
         function renderThemePreview(id, config) {
-            const el = document.getElementById('preview-' + id);
-            if (!el) return;
+            const container = document.getElementById('preview-' + id);
+            if (!container) return;
 
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
             const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
 
-            let html = '<div class="preview-body" style="background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden;">' +
-                       '<div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2; flex-shrink:0;">' +
-                       '<div style="width:12px; height:1.5px; background:currentColor; border-radius:1px;"></div>' +
+            let html = '<div id="inner-preview-' + id + '" style="width:320px; height:675.5px; transform-origin: top left; background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden;">' +
+                       '<div style="height:14px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2; flex-shrink:0;">' +
+                       '<div style="width:24px; height:4px; background:currentColor; border-radius:4px;"></div>' +
                        '</div>';
 
-            html += generatePreviewHTML(config, 0.2, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)});
+            html += generatePreviewHTML(config, 0.82, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)});
             html += '</div>';
 
-            el.innerHTML = html;
+            container.innerHTML = html;
+
+            const inner = document.getElementById('inner-preview-' + id);
+            const resize = () => {
+                const w = container.clientWidth;
+                inner.style.transform = 'scale(' + (w / 320) + ')';
+            };
+            new ResizeObserver(resize).observe(container);
+            resize();
         }
 
 
