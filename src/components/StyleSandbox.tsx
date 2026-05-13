@@ -168,13 +168,20 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const getAssetName = (path: string, category: string, preferredName?: string) => {
     if (!path) return '默认';
     if (path.startsWith('blob:')) {
-      const name = preferredName ? decodeURIComponent(preferredName) : '本地资源';
-      return name + ' (待上传)';
+      const name = preferredName ? decodeURIComponent(decodeURIComponent(preferredName)) : '本地资源';
+      return (name.split('/').pop() || name) + ' (待上传)';
     }
-    const decodedPath = decodeURIComponent(path);
-    if (!resources || !resources[category]) return decodedPath.split('/').pop() || '';
-    const found = resources[category].find((r: any) => r.path === path);
-    return found ? found.name : (decodedPath.split('/').pop() || '');
+    // 彻底解码并剥离路径
+    try {
+      const fullDecoded = decodeURIComponent(decodeURIComponent(path));
+      const fileName = fullDecoded.split('/').pop() || fullDecoded;
+      
+      if (!resources || !resources[category]) return fileName;
+      const found = resources[category].find((r: any) => r.path === path);
+      return found ? found.name : fileName;
+    } catch (e) {
+      return path.split('/').pop() || path;
+    }
   };
 
   const loadBaseConfig = async (type: string, base: any) => {

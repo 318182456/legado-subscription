@@ -321,7 +321,7 @@ export async function handleEnsureAsset(request: Request, env: Env): Promise<Res
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   
-  const decodedName = decodeURIComponent(originalName);
+  const decodedName = decodeURIComponent(originalName).split('/').pop() || originalName;
   const ext = decodedName.split('.').pop()?.toLowerCase() || '';
   const r2Key = `uploads/${category}/${decodedName}`;
 
