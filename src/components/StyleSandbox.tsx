@@ -165,8 +165,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     loadBaseConfig(initialType, initialBase);
   }, [initialBase, initialType]);
 
-  const getAssetName = (path: string, category: string) => {
+  const getAssetName = (path: string, category: string, preferredName?: string) => {
     if (!path) return '默认';
+    if (path.startsWith('blob:')) {
+      return (preferredName || '本地资源') + ' (待上传)';
+    }
     if (!resources || !resources[category]) return decodeURIComponent(path.split('/').pop() || '');
     const found = resources[category].find((r: any) => r.path === path);
     return found ? found.name : decodeURIComponent(path.split('/').pop() || '');
@@ -289,8 +292,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     fontFace.load().then(f => {
                       (document.fonts as any).add(f);
                       setSelectedFontName(fontName);
-                      // 寄存原始文件名
-                      setConfig((prev: any) => ({ ...prev, _textFontName: fontFile.split('/').pop() }));
+                      // 寄存原始文件名，并切换路径为 blob: 以便后续上传
+                      setConfig((prev: any) => ({ 
+                        ...prev, 
+                        textFont: fontUrl,
+                        _textFontName: fontFile.split('/').pop() 
+                      }));
                     });
                   } else {
                     // 如果 ZIP 内没找到，去项目资源里找
@@ -619,7 +626,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                       <div className="flex-1 text-left">
                         <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">背景资源</div>
                         <div className="truncate">
-                          {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds')}
+                          {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds', config._bgStrName)}
                         </div>
                       </div>
                       <ChevronRight size={16} className="text-outline opacity-40" />
@@ -631,7 +638,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                       </div>
                       <div className="flex-1 text-left">
                         <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">字体资源</div>
-                        <div className="truncate">{getAssetName(config.textFont, 'fonts')}</div>
+                        <div className="truncate">{getAssetName(config.textFont, 'fonts', config._textFontName)}</div>
                       </div>
                       <ChevronRight size={16} className="text-outline opacity-40" />
                     </button>
