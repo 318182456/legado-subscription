@@ -176,17 +176,23 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   React.useEffect(() => { manualAssetsRef.current = manualAssets; }, [manualAssets]);
   const [activeTab, setActiveTab] = useState<'visual' | 'text' | 'layout' | 'extra'>('visual');
 
+  // 初始化：并行加载资源清单和基础配置
   useEffect(() => {
-    api.getResources().then(res => {
+    let active = true;
+    Promise.all([
+      api.getResources(),
+      loadBaseConfig(initialType, initialBase)
+    ]).then(([res]) => {
+      if (!active) return;
       setResources(res);
-      // 如果 initialBase 是 theme，尝试从资源中找它的名字
+      
       if (initialType === 'theme' || initialType === 'zip') {
         const cat = initialType === 'theme' ? 'themes' : 'zips';
         const found = res[cat]?.find((t: any) => t.path === initialBase.path);
         if (found) setSelectedLayoutName(found.name);
       }
     });
-    loadBaseConfig(initialType, initialBase);
+    return () => { active = false; };
   }, [initialBase, initialType]);
 
   const getAssetName = (path: string, category: string, preferredName?: string) => {
@@ -558,9 +564,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           const toPng = mod.toPng || (mod.default && mod.default.toPng);
           if (toPng) {
             previewUrl = await toPng(previewRef.current, { 
-              pixelRatio: 1,
-              skipFonts: false, // 开启字体抓取
-              cacheBust: true,
+              pixelRatio: 1.5, // 恢复清晰度
+              skipFonts: false, 
+              // 关键：禁止缓存击穿参数，防止破坏 blob: 链接
+              cacheBust: false, 
               style: { transform: 'none' }
             });
             console.log('Preview generated, length:', previewUrl?.length);
