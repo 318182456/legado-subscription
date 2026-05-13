@@ -168,30 +168,43 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const getAssetName = (path: string, category: string, preferredName?: string) => {
     if (!path) return '默认';
+    
+    const safeDecode = (str: string) => {
+      let current = str;
+      try {
+        // 最多尝试解码 3 次，防止死循环
+        for (let i = 0; i < 3; i++) {
+          if (!current.includes('%')) break;
+          const next = decodeURIComponent(current);
+          if (next === current) break;
+          current = next;
+        }
+      } catch (e) {}
+      return current;
+    };
+
     if (path.startsWith('blob:')) {
-      const name = preferredName ? decodeURIComponent(decodeURIComponent(preferredName)) : '本地资源';
+      const name = preferredName ? safeDecode(preferredName) : '本地资源';
       return (name.split('/').pop() || name) + ' (待上传)';
     }
-    // 彻底解码并剥离路径
-    try {
-      const fullDecoded = decodeURIComponent(decodeURIComponent(path));
-      const fileName = fullDecoded.split('/').pop() || fullDecoded;
-      
-      if (!resources || !resources[category]) return fileName;
-      const found = resources[category].find((r: any) => r.path === path);
-      return found ? found.name : fileName;
-    } catch (e) {
-      return path.split('/').pop() || path;
-    }
+
+    const decoded = safeDecode(path);
+    const fileName = decoded.split('/').pop() || decoded;
+    
+    if (!resources || !resources[category]) return fileName;
+    const found = resources[category].find((r: any) => r.path === path);
+    return found ? found.name : fileName;
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
     if (type === 'saved') {
-      // 已经在 useState 初始值中处理过，这里仅作为二次保险或热更新
       const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
       setConfig(prev => ({ ...DEFAULT_CONFIG, ...data, id: base.id }));
       if (data.textFont) {
-        loadFont(data.textFont, data.textFont.split('/').pop() || 'CustomFont');
+        // 对初始路径也进行一次安全提取
+        let decoded = data.textFont;
+        try { decoded = decodeURIComponent(data.textFont); } catch(e){}
+        loadFont(data.textFont, decoded.split('/').pop() || 'CustomFont');
       }
       return;
     }
