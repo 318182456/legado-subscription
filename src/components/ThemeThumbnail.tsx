@@ -30,6 +30,18 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   const containerRef = useRef<HTMLDivElement>(null);
   const [fontFamily, setFontFamily] = useState<string>('inherit');
   const [lastInitialConfig, setLastInitialConfig] = useState(initialConfig);
+  const [scale, setScale] = useState(0.45);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setScale((entry.contentRect.width - 4) / 320);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (initialConfig && initialConfig !== lastInitialConfig) {
@@ -106,19 +118,6 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
     fontWeight: config.textBold ? 'bold' : 'normal',
     letterSpacing: `${(config.letterSpacing || 0.1)}em`,
   };
-
-  const [scale, setScale] = useState(0.45);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        setScale((entry.contentRect.width - 4) / 320);
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const COMP = 0.82; // Matches StyleSandbox scale
 

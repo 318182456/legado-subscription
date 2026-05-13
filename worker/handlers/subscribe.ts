@@ -144,7 +144,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
         .btn-o { background: #FFD8E4; color: #31111D; }
         .btn-d { background: #FFDAD6; color: #410002; }
 
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 10px; }
         .res-item {
             background: var(--surface-container);
             padding: 12px;
@@ -175,8 +175,9 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
 
         /* 预览相关样式 */
         .preview-container {
-            width: 100%;
-            aspect-ratio: 9/16;
+            width: 100px;
+            margin: 0 auto 10px;
+            aspect-ratio: 9/19;
             background: #eee;
             border-radius: 12px;
             margin-bottom: 10px;
