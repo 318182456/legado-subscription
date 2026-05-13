@@ -412,7 +412,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       </div>
 
       {/* 右侧控制面板 */}
-      <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative">
+      <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative overflow-hidden">
         {/* 顶部标签栏 */}
         <div className="absolute top-0 left-0 right-0 h-16 bg-surface-container-high border-b border-outline-variant flex items-center px-4 gap-1 z-20">
           {[
@@ -432,7 +432,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-20 space-y-8">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-20 pb-24 space-y-8">
           {activeTab === 'visual' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="space-y-3">
@@ -591,15 +591,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             </div>
           )}
         </div>
-      </div>
-
-        <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
-          <button onClick={onClose} className="px-4 py-2 bg-surface-container/50 backdrop-blur-sm rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
-          <button onClick={handleSave} disabled={saving} className="px-6 py-2 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center gap-2">
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface-container-high border-t border-outline-variant flex items-center gap-3 z-20 backdrop-blur-md">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-surface-container/50 rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
+          <button onClick={handleSave} disabled={saving} className="flex-[2] px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2">
             {saving ? <RefreshCw size={16} className="animate-spin" /> : <Share2 size={16} />}
             保存并同步
           </button>
         </div>
+      </div>
 
       {showPicker && (
         <div className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end">

@@ -27,6 +27,14 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   const [inView, setInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [fontFamily, setFontFamily] = useState<string>('inherit');
+  const [lastInitialConfig, setLastInitialConfig] = useState(initialConfig);
+
+  useEffect(() => {
+    if (initialConfig && initialConfig !== lastInitialConfig) {
+      setConfig(initialConfig);
+      setLastInitialConfig(initialConfig);
+    }
+  }, [initialConfig, lastInitialConfig]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

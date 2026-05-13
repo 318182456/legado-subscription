@@ -170,6 +170,45 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             border: 1px solid var(--primary);
         }
 
+        /* 预览相关样式 */
+        .preview-container {
+            width: 100%;
+            aspect-ratio: 9/16;
+            background: #eee;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+        }
+        .preview-body {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-size: 6px;
+        }
+        .preview-header, .preview-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            font-size: 4px;
+            opacity: 0.8;
+        }
+        .preview-content {
+            flex: 1;
+            padding: 8px;
+            line-height: 1.4;
+        }
+        .preview-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .preview-para {
+            margin-bottom: 4px;
+        }
+
         #status-bar {
             position: fixed;
             bottom: 20px;
@@ -244,11 +283,8 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                     const exportUrl = origin + '/api/custom-themes/' + item.id + '/export';
                     const importUrl = 'legado://import/readConfig?src=' + encodeURIComponent(exportUrl);
                     
-                    const preview = item.preview_url ? '<img class="res-preview" src="' + item.preview_url + '">' : 
-                                   (config.backgroundColor ? '<div class="res-preview" style="background:' + config.backgroundColor + '"></div>' : '');
-                    
                     html += '<div class="res-item">' +
-                            preview +
+                            '<div class="preview-container" id="preview-' + item.id + '"></div>' +
                             '<div class="res-name">' + item.name + '</div>' +
                             '<a href="' + importUrl + '" class="res-btn">一键导入</a>' +
                             '</div>';
@@ -256,10 +292,67 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                 html += '</div></div>';
 
                 container.innerHTML = html;
+                
+                // 渲染预览
+                items.forEach(item => {
+                    renderThemePreview(item.id, JSON.parse(item.config));
+                });
                 document.getElementById('res-loading').style.display = 'none';
             } catch (e) {
                 container.innerHTML = '<div style="color:red;padding:20px;">加载失败: ' + e.message + '</div>';
             }
+        }
+
+        function argbToCss(argb) {
+            if (!argb) return 'transparent';
+            if (argb.startsWith('#')) return argb;
+            try {
+                const hex = argb.replace(/^#/, '');
+                if (hex.length === 8) {
+                    const a = parseInt(hex.slice(0, 2), 16) / 255;
+                    const r = parseInt(hex.slice(2, 4), 16);
+                    const g = parseInt(hex.slice(4, 6), 16);
+                    const b = parseInt(hex.slice(6, 8), 16);
+                    return `rgba(${r},${g},${b},${a.toFixed(2)})`;
+                }
+                return '#' + hex;
+            } catch(e) { return argb; }
+        }
+
+        function renderThemePreview(id, config) {
+            const el = document.getElementById('preview-' + id);
+            if (!el) return;
+
+            const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
+            const textColor = argbToCss(config.textColor || '#3E3D3B');
+            const tipColor = argbToCss(config.tipColor || '#803E3D3B');
+            const bgImg = (config.bgType === 2 && config.bgStr) ? `url(/repo/${config.bgStr})` : 'none';
+
+            let html = `
+                <div class="preview-body" style="background-color:${bgColor}; color:${textColor}; background-image:${bgImg}; background-size:cover; background-position:center;">
+                    <div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2;">
+                        <div style="width:12px; height:1.5px; background:currentColor; border-radius:1px;"></div>
+                    </div>
+            `;
+
+            if (config.headerMode !== 2) {
+                html += `<div class="preview-header" style="color:${tipColor};"><span>17:36</span><span>章节名</span><span>75%</span></div>`;
+            }
+
+            html += `
+                <div class="preview-content" style="padding: ${config.paddingTop*0.2}px ${config.paddingRight*0.2}px;">
+                    <div class="preview-title" style="font-size:${config.textSize*0.4}px; margin-bottom:4px; ${config.titleMode === 1 ? 'text-align:center' : ''}">预览章节标题</div>
+                    <div class="preview-para" style="font-size:${config.textSize*0.3}px; text-indent:2em;">这是一段主题效果预览文字，用于展示字体、颜色、间距以及整体排版风格。</div>
+                    <div class="preview-para" style="font-size:${config.textSize*0.3}px; text-indent:2em;">极简主义不仅仅是一种视觉风格，更是一种对待生活的态度。</div>
+                </div>
+            `;
+
+            if (config.footerMode !== 2) {
+                html += `<div class="preview-footer" style="color:${tipColor};"><span>1/18</span><span>5.2%</span></div>`;
+            }
+
+            html += `</div>`;
+            el.innerHTML = html;
         }
 
         function showStatus(msg) {
