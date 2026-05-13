@@ -168,11 +168,13 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const getAssetName = (path: string, category: string, preferredName?: string) => {
     if (!path) return '默认';
     if (path.startsWith('blob:')) {
-      return (preferredName || '本地资源') + ' (待上传)';
+      const name = preferredName ? decodeURIComponent(preferredName) : '本地资源';
+      return name + ' (待上传)';
     }
-    if (!resources || !resources[category]) return decodeURIComponent(path.split('/').pop() || '');
+    const decodedPath = decodeURIComponent(path);
+    if (!resources || !resources[category]) return decodedPath.split('/').pop() || '';
     const found = resources[category].find((r: any) => r.path === path);
-    return found ? found.name : decodeURIComponent(path.split('/').pop() || '');
+    return found ? found.name : (decodedPath.split('/').pop() || '');
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
