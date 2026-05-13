@@ -341,17 +341,32 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   };
 
   const recognizeLayoutFromImage = async (url: string) => {
-    let t = (window as any).Tesseract;
-    if (!t) {
-       const mod = await import('https://cdn.skypack.dev/tesseract.js');
-       t = mod.default;
-       (window as any).Tesseract = t;
-    }
-    if (!t) return alert('OCR 引擎加载失败');
     setLoading(true);
+    let worker: any = null;
     try {
-      const result = await t.recognize(url, 'chi_sim+eng');
-      const lines = result.data.lines;
+      let t = (window as any).Tesseract;
+      if (!t) {
+        console.log('正在从 CDN 加载 Tesseract.js v5.1.1...');
+        const mod = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/+esm');
+        t = mod.default || mod;
+        (window as any).Tesseract = t;
+      }
+      
+      if (!t || !t.createWorker) {
+        throw new Error('无法初始化 OCR 引擎 (Tesseract.js)');
+      }
+
+      console.log('正在创建 OCR Worker...');
+      worker = await t.createWorker('chi_sim+eng', 1, {
+        logger: (m: any) => console.log('OCR 进度:', m),
+        // 强制使用稳定的 v5 核心和 worker 路径，防止 v7 core 自动加载导致的参数错误
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.0.0/tesseract-core-relaxedsimd-lstm.wasm.js',
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/dist/worker.min.js',
+      });
+
+      console.log('正在识别图片内容...', url);
+      const { data: { lines } } = await worker.recognize(url);
+      
       const newConfig: any = {};
       let currentSection: 'main' | 'title' | 'header' | 'footer' = 'main';
 
@@ -363,7 +378,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         else if (text.includes('正文') && !text.includes('标题')) currentSection = 'main';
 
         const findValue = () => {
-          const matches = text.match(/[\d.]+/g);
+          // 增强匹配逻辑：匹配冒号或空格后的数字
+          const matches = text.match(/[-?]?\d+(\.\d+)?/g);
           return (matches && matches.length > 0) ? parseFloat(matches[matches.length - 1]) : null;
         };
 
@@ -391,20 +407,25 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         } else if (currentSection === 'footer') {
           if (text.includes('上边距')) newConfig.footerPaddingTop = val;
           else if (text.includes('下边距')) newConfig.footerPaddingBottom = val;
-          else if (text.includes('左边距')) newConfig.headerPaddingLeft = val;
-          else if (text.includes('右边距')) newConfig.headerPaddingRight = val;
+          else if (text.includes('左边距')) newConfig.footerPaddingLeft = val; // 修复：之前误写为 headerPaddingLeft
+          else if (text.includes('右边距')) newConfig.footerPaddingRight = val; // 修复：之前误写为 headerPaddingRight
         }
       });
 
       if (Object.keys(newConfig).length > 0) {
-        setConfig(prev => ({ ...prev, ...newConfig }));
+        setConfig((prev: any) => ({ ...prev, ...newConfig }));
         alert(`识别成功！提取了 ${Object.keys(newConfig).length} 项参数`);
       } else {
-        alert('未能从图片中提取到有效参数。');
+        alert('未能从图片中提取到有效参数。请确保图片清晰且包含参数数值。');
       }
     } catch (e) {
-      alert('识别失败: ' + String(e));
+      console.error('OCR 识别过程发生异常:', e);
+      alert('识别失败: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
+      if (worker) {
+        await worker.terminate();
+        console.log('OCR Worker 已终止');
+      }
       setLoading(false);
     }
   };
