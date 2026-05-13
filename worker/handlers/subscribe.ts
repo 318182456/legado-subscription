@@ -313,7 +313,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                     const r = parseInt(hex.slice(2, 4), 16);
                     const g = parseInt(hex.slice(4, 6), 16);
                     const b = parseInt(hex.slice(6, 8), 16);
-                    return `rgba(${r},${g},${b},${a.toFixed(2)})`;
+                    return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(2) + ')';
                 }
                 return '#' + hex;
             } catch(e) { return argb; }
@@ -326,34 +326,31 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
             const textColor = argbToCss(config.textColor || '#3E3D3B');
             const tipColor = argbToCss(config.tipColor || '#803E3D3B');
-            const bgImg = (config.bgType === 2 && config.bgStr) ? `url(/repo/${config.bgStr})` : 'none';
+            const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
 
-            let html = `
-                <div class="preview-body" style="background-color:${bgColor}; color:${textColor}; background-image:${bgImg}; background-size:cover; background-position:center;">
-                    <div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2;">
-                        <div style="width:12px; height:1.5px; background:currentColor; border-radius:1px;"></div>
-                    </div>
-            `;
+            let html = '<div class="preview-body" style="background-color:' + bgColor + '; color:' + textColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center;">' +
+                       '<div style="height:4px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2;">' +
+                       '<div style="width:12px; height:1.5px; background:currentColor; border-radius:1px;"></div>' +
+                       '</div>';
 
             if (config.headerMode !== 2) {
-                html += `<div class="preview-header" style="color:${tipColor};"><span>17:36</span><span>章节名</span><span>75%</span></div>`;
+                html += '<div class="preview-header" style="color:' + tipColor + ';"><span>17:36</span><span>章节名</span><span>75%</span></div>';
             }
 
-            html += `
-                <div class="preview-content" style="padding: ${config.paddingTop*0.2}px ${config.paddingRight*0.2}px;">
-                    <div class="preview-title" style="font-size:${config.textSize*0.4}px; margin-bottom:4px; ${config.titleMode === 1 ? 'text-align:center' : ''}">预览章节标题</div>
-                    <div class="preview-para" style="font-size:${config.textSize*0.3}px; text-indent:2em;">这是一段主题效果预览文字，用于展示字体、颜色、间距以及整体排版风格。</div>
-                    <div class="preview-para" style="font-size:${config.textSize*0.3}px; text-indent:2em;">极简主义不仅仅是一种视觉风格，更是一种对待生活的态度。</div>
-                </div>
-            `;
+            html += '<div class="preview-content" style="padding: ' + (config.paddingTop*0.2) + 'px ' + (config.paddingRight*0.2) + 'px;">' +
+                    '<div class="preview-title" style="font-size:' + (config.textSize*0.4) + 'px; margin-bottom:4px; ' + (config.titleMode === 1 ? 'text-align:center' : '') + '">预览章节标题</div>' +
+                    '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">这是一段主题效果预览文字，用于展示字体、颜色、间距以及整体排版风格。</div>' +
+                    '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">极简主义不仅仅是一种视觉风格，更是一种对待生活的态度。</div>' +
+                    '</div>';
 
             if (config.footerMode !== 2) {
-                html += `<div class="preview-footer" style="color:${tipColor};"><span>1/18</span><span>5.2%</span></div>`;
+                html += '<div class="preview-footer" style="color:' + tipColor + ';"><span>1/18</span><span>5.2%</span></div>';
             }
 
-            html += `</div>`;
+            html += '</div>';
             el.innerHTML = html;
         }
+
 
         function showStatus(msg) {
             const bar = document.getElementById('status-bar');
