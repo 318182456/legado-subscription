@@ -7,17 +7,17 @@ import { generatePreviewHTML, getTipText } from '../utils/preview';
 function TipView({ value }: { value: number }) {
   if (value === 0) return <span></span>;
   const labelMap: Record<number, string> = {
-    7: '书名',
-    1: '章节名',
-    2: '17:36',
-    3: '75%',
-    10: '75%',
+    7: '影视世界当神探',
+    1: '第1353章 1369章会面...',
+    2: '11:00',
+    3: '■',
+    10: '69%',
     4: '1',
-    5: '5.2%',
-    11: '5.2%',
-    6: '1/18',
-    8: '17:36 75%',
-    9: '17:36 75%'
+    5: '60.5%',
+    11: '1/13',
+    6: '1/13 60.5%',
+    8: '11:00 ■',
+    9: '11:00 69%'
   };
   return <span>{labelMap[value] || ''}</span>;
 }
@@ -29,8 +29,14 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   const [inView, setInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [fontFamily, setFontFamily] = useState<string>('inherit');
-  const [lastInitialConfig, setLastInitialConfig] = useState(initialConfig);
   const [scale, setScale] = useState(0.45);
+  const [resources, setResources] = useState<any>(null);
+
+  useEffect(() => {
+    import('../api').then(api => {
+      api.getResources().then(setResources);
+    });
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -82,16 +88,33 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   }, [inView, path]);
 
   useEffect(() => {
-    if (config?.textFont && !config.textFont.startsWith('content://')) {
-      const fontName = config.textFont.split('/').pop()?.split('.')[0] || 'ThemeFont';
-      const fontUrl = `${window.location.origin}/repo/${config.textFont}`;
-      const fontFace = new (window as any).FontFace(fontName, `url(${fontUrl})`);
+    if (!config?.textFont) return;
+    
+    const decodedFont = decodeURIComponent(config.textFont).split('/').pop() || '';
+    
+    // 尝试在资源中找这个字体
+    const tryLoad = (path: string, name: string) => {
+      const fontUrl = path.startsWith('blob:') ? path : `${window.location.origin}/repo/${path}`;
+      const fontFace = new (window as any).FontFace(name, `url(${fontUrl})`);
       fontFace.load().then((loadedFace: any) => {
         (document.fonts as any).add(loadedFace);
-        setFontFamily(fontName);
+        setFontFamily(name);
       }).catch((e: any) => console.error('Theme font load failed', e));
+    };
+
+    if (config.textFont.startsWith('blob:')) {
+      tryLoad(config.textFont, 'BlobFont_' + Math.random().toString(36).substring(7));
+    } else if (!config.textFont.startsWith('content://')) {
+      const fontName = decodedFont.split('.')[0] || 'ThemeFont';
+      tryLoad(config.textFont, fontName);
+    } else if (resources) {
+      const foundFont = resources.fonts?.find((f: any) => {
+        const fDecoded = decodeURIComponent(f.path).split('/').pop();
+        return fDecoded === decodedFont || f.path === config.textFont;
+      });
+      if (foundFont) tryLoad(foundFont.path, foundFont.name);
     }
-  }, [config?.textFont]);
+  }, [config?.textFont, resources]);
 
   if (!inView) return <div ref={containerRef} className="w-full aspect-[9/19] bg-surface-container animate-pulse rounded-xl" />;
 
@@ -110,10 +133,11 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   );
 
   const style: React.CSSProperties = {
-    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white',
+    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'transparent',
     color: argbToCss(config.textColor || '#3E3D3B'),
     fontFamily: fontFamily,
-    backgroundImage: config.bgType === 2 ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+    backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
+      `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr}`}")` : 'none',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     fontWeight: config.textBold ? 'bold' : 'normal',
@@ -124,22 +148,31 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
 
   return (
     <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative">
-      <div 
-        className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
-        style={{ 
-          ...style, 
-          width: '320px', 
-          height: '675.56px', 
-          transform: `translate(-50%, -50%) scale(${scale})`,
-          borderRadius: `${14 / scale}px` // Account for scale to keep visual radius at 14px
-        }}
-      >
-        <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
-          <div className="w-6 h-1 bg-black/20 rounded-full"></div>
-        </div>
+      {config.preview_url ? (
+        <img 
+          src={config.preview_url} 
+          alt={name} 
+          className="w-full h-full object-cover rounded-[14px]"
+          loading="lazy"
+        />
+      ) : (
+        <div 
+          className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
+          style={{ 
+            ...style, 
+            width: '320px', 
+            height: '675.56px', 
+            transform: `translate(-50%, -50%) scale(${scale})`,
+            borderRadius: `${14 / scale}px` // Account for scale to keep visual radius at 14px
+          }}
+        >
+          <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
+            <div className="w-6 h-1 bg-black/20 rounded-full"></div>
+          </div>
 
-        <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
-      </div>
+          <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
+        </div>
+      )}
     </div>
   );
 }

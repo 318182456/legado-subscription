@@ -49,7 +49,10 @@ export function PreviewModal({ item, onClose }: { item: any; onClose: () => void
   }, [item]);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-on-background/40 backdrop-blur-sm">
+    <div 
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-on-background/40 backdrop-blur-sm"
+    >
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

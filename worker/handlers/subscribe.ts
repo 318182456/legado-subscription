@@ -315,6 +315,11 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             const container = document.getElementById('preview-' + id);
             if (!container) return;
 
+            if (config.preview_url) {
+                container.innerHTML = '<img src="' + config.preview_url + '" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">';
+                return;
+            }
+
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
             const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
 

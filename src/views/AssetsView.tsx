@@ -460,7 +460,10 @@ export default function AssetsView() {
       {/* 定制沙盒 */}
       <AnimatePresence>
         {sandboxConfig && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-on-background/60 backdrop-blur-md">
+          <div 
+            onClick={(e) => e.target === e.currentTarget && setSandboxConfig(null)}
+            className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-on-background/60 backdrop-blur-md"
+          >
             <StyleSandbox initialBase={sandboxConfig.base} initialType={sandboxConfig.type} fileTree={fileTree} onClose={() => setSandboxConfig(null)} onSaved={() => { setSandboxConfig(null); fetchAll(); }} />
           </div>
         )}
@@ -471,7 +474,10 @@ export default function AssetsView() {
 
       {/* 图片用途确认弹窗 */}
       {confirmItem && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+        <div 
+          onClick={(e) => e.target === e.currentTarget && setConfirmItem(null)}
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
+        >
           <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
             <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
             <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>

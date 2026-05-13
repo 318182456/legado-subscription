@@ -18,32 +18,32 @@ declare const Tesseract: any;
 const TIP_OPTIONS = [
   { value: 0, label: '无' },
   { value: 7, label: '书名' },
-  { value: 1, label: '章节名' },
+  { value: 1, label: '标题' },
   { value: 2, label: '时间' },
-  { value: 3, label: '电池' },
-  { value: 10, label: '电池%' },
+  { value: 3, label: '电量' },
+  { value: 10, label: '电量%' },
   { value: 4, label: '页数' },
-  { value: 5, label: '总进度' },
-  { value: 11, label: '总进度1' },
-  { value: 6, label: '页数/总进度' },
-  { value: 8, label: '时间+电池' },
-  { value: 9, label: '时间+电池%' },
+  { value: 5, label: '进度(%)' },
+  { value: 11, label: '进度(xx/yyy)' },
+  { value: 6, label: '页数及进度' },
+  { value: 8, label: '时间及电量' },
+  { value: 9, label: '时间及电量%' },
 ];
 
 function TipView({ value }: { value: number }) {
   if (value === 0) return <span></span>;
   const labelMap: Record<number, string> = {
-    7: '书名',
-    1: '章节名',
-    2: '17:36',
-    3: '75%',
-    10: '75%',
+    7: '影视世界当神探',
+    1: '第1353章 1369章会面...',
+    2: '11:00',
+    3: '■',
+    10: '69%',
     4: '1',
-    5: '5.2%',
-    11: '5.2%',
-    6: '1 / 18',
-    8: '17:36 75%',
-    9: '17:36 75%'
+    5: '60.5%',
+    11: '1/13',
+    6: '1/13 60.5%',
+    8: '11:00 ■',
+    9: '11:00 69%'
   };
   return <span>{labelMap[value] || ''}</span>;
 }
@@ -134,6 +134,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [selectedFontName, setSelectedFontName] = useState('');
   const [selectedLayoutName, setSelectedLayoutName] = useState(() => {
     if (initialType === 'theme' || initialType === 'zip' || initialType === 'saved') {
@@ -412,8 +413,28 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     if (!config.name) return alert('请输入名称');
     setSaving(true);
     try {
-      const payload: any = { name: config.name, config: JSON.stringify(config) };
+      let previewUrl = '';
+      if (previewRef.current) {
+        try {
+          const htmlToImage = await import('https://cdn.skypack.dev/html-to-image');
+          previewUrl = await htmlToImage.toJpeg(previewRef.current, { 
+            quality: 0.85,
+            pixelRatio: 1.5,
+            backgroundColor: '#000000'
+          });
+        } catch (err) {
+          console.error('Failed to generate preview image', err);
+        }
+      }
+
+      const payload: any = { 
+        name: config.name, 
+        config: JSON.stringify({ ...config, preview_url: previewUrl }) 
+      };
       if (initialType === 'saved') payload.id = initialBase.id;
+      // 同时在外部传递 preview_url 方便后端更新字段
+      payload.preview_url = previewUrl;
+      
       await api.saveCustomTheme(payload);
       alert(initialType === 'saved' ? '已更新主题' : '已保存到云端精选');
       onSaved();
@@ -440,6 +461,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         </div>
         
         <div 
+          ref={previewRef}
           className="relative bg-[#0c0c0c] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col transition-all duration-500 ease-in-out origin-center"
           style={{ 
             width: `${device.width}px`, 
@@ -715,7 +737,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       </div>
 
       {showPicker && (
-        <div className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end">
+        <div 
+          onClick={(e) => e.target === e.currentTarget && setShowPicker(null)}
+          className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end"
+        >
           <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="w-full md:w-[500px] h-full bg-surface shadow-2xl border-l border-outline-variant flex flex-col">
             <AssetPicker type={showPicker} fileTree={fileTree} onSelect={(r: any) => {
                 if (r._action === 'ocr') {
