@@ -212,4 +212,3 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
     </div>
   );
 }
-}

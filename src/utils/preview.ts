@@ -28,35 +28,41 @@ export function generatePreviewHTML(
     if (!config.hideStatusBar) {
         html +=
             '<div style="display:flex; justify-content:space-between; align-items:center; padding: ' +
-            4 * comp +
+            6 * comp +
             "px " +
-            8 * comp +
-            "px; font-size:" +
-            10 * comp +
-            "px; opacity:0.8; color:" +
-            tipColor +
-            '; flex-shrink: 0; font-weight: bold; position: relative; z-index: 50;">' +
-            "<span>12:30</span>" +
-            '<div style="display:flex; align-items:center; gap:' +
-            4 * comp +
-            'px;">' +
-            "<span>5G</span>" +
-            '<div style="width:' +
-            14 * comp +
-            "px; height:" +
-            8 * comp +
-            "px; border:1px solid currentColor; border-radius:" +
+            16 * comp +
+            "px " +
             2 * comp +
-            'px; position:relative;">' +
-            '<div style="position:absolute; top:1px; bottom:1px; left:1px; right:3px; background:currentColor; border-radius:' +
+            "px; font-size:" +
+            11 * comp +
+            "px; color:" +
+            tipColor +
+            '; flex-shrink: 0; font-family: sans-serif; position: relative; z-index: 50; letter-spacing: -0.2px;">' +
+            '<span style="font-weight: 600;">12:30</span>' +
+            '<div style="display:flex; align-items:center; gap:' +
+            5 * comp +
+            'px;">' +
+            // Signal
+            '<svg width="' + 14 * comp + '" height="' + 10 * comp + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 20V4"/></svg>' +
+            // WiFi
+            '<svg width="' + 14 * comp + '" height="' + 10 * comp + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a10 10 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/></svg>' +
+            // Battery
+            '<div style="width:' +
+            18 * comp +
+            "px; height:" +
+            9 * comp +
+            "px; border:1.5px solid currentColor; border-radius:" +
+            2.5 * comp +
+            'px; position:relative; opacity: 0.9; margin-left: ' + 2 * comp + 'px;">' +
+            '<div style="position:absolute; top:1.5px; bottom:1.5px; left:1.5px; width: 70%; background:currentColor; border-radius:' +
             1 * comp +
             'px;"></div>' +
             '<div style="position:absolute; top:50%; right:-' +
-            2 * comp +
+            2.5 * comp +
             "px; transform:translateY(-50%); width:" +
-            2 * comp +
+            1.5 * comp +
             "px; height:" +
-            4 * comp +
+            3 * comp +
             "px; background:currentColor; border-radius:0 " +
             1 * comp +
             "px " +
@@ -78,7 +84,7 @@ export function generatePreviewHTML(
             (config.headerPaddingRight || 0) * comp +
             "px; " +
             " padding-top:" +
-            ((config.headerPaddingTop || 0) + (config.hideStatusBar ? 24 : 4)) * comp +
+            ((config.headerPaddingTop || 0) + (config.hideStatusBar ? 24 : 2)) * comp +
             "px; " +
             " padding-bottom:" +
             ((config.headerPaddingBottom || 0) + 4) * comp +
@@ -174,7 +180,7 @@ export function generatePreviewHTML(
             ((config.footerPaddingTop || 0) + 4) * comp +
             "px; " +
             " padding-bottom:" +
-            ((config.footerPaddingBottom || 0) + (config.hideNavigationBar ? 24 : 4)) * comp +
+            ((config.footerPaddingBottom || 0) + (config.hideNavigationBar ? 24 : 2)) * comp +
             "px; " +
             " font-size:" +
             10 * comp +
@@ -193,39 +199,26 @@ export function generatePreviewHTML(
             "</div>";
     }
 
-    // Navigation Bar
+    // Navigation Bar (Modern Gesture Bar)
     if (!config.hideNavigationBar) {
         html +=
-            '<div style="display:flex; justify-content:space-around; align-items:center; padding:' +
-            8 * comp +
+            '<div style="display:flex; justify-content:center; align-items:center; padding:' +
+            10 * comp +
             "px 0 " +
+            8 * comp +
+            "px 0; flex-shrink: 0; position: relative; z-index: 50;">" +
+            '<div style="width:' +
+            40 * comp +
+            "px; height:" +
             4 * comp +
-            "px 0; opacity:0.8; color:" +
+            "px; background:" +
             tipColor +
-            '; flex-shrink: 0; position: relative; z-index: 50;">' +
-            '<div style="width:0; height:0; border-top:' +
-            4 * comp +
-            "px solid transparent; border-bottom:" +
-            4 * comp +
-            "px solid transparent; border-right:" +
-            6 * comp +
-            'px solid currentColor;"></div>' +
-            '<div style="width:' +
-            10 * comp +
-            "px; height:" +
-            10 * comp +
-            'px; border-radius:50%; background:currentColor;"></div>' +
-            '<div style="width:' +
-            10 * comp +
-            "px; height:" +
-            10 * comp +
-            "px; border: " +
-            1.5 * comp +
-            "px solid currentColor; border-radius:" +
+            '; border-radius:' +
             2 * comp +
-            'px;"></div>' +
+            'px; opacity: 0.5;"></div>' +
             "</div>";
     }
+
 
     return html;
 }
