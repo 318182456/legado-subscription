@@ -345,7 +345,7 @@ export default function AssetsView() {
                           <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         ) : (['json', 'zip', 'txt'].includes(item.extension) || item.category === 'themes') ? (
                           <div className="w-full h-full p-2 flex items-center justify-center bg-surface-container-low">
-                            <div className="w-[60px] transform origin-center transition-transform group-hover:scale-110">
+                            <div className="w-[80px] transition-transform group-hover:scale-105">
                               <ThemeThumbnail path={item.path} name={item.name} />
                             </div>
                           </div>
@@ -430,7 +430,7 @@ export default function AssetsView() {
                     className="bg-surface-container-lowest border border-outline-variant rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all group relative flex flex-col"
                   >
                     <div className="p-4 bg-surface-container-low/30 flex justify-center cursor-pointer" onClick={() => editTheme(item)}>
-                      <div className="w-full max-w-[120px] transition-transform group-hover:scale-[1.02] duration-500">
+                      <div className="w-full max-w-[140px] transition-transform group-hover:scale-[1.05] duration-500">
                         <ThemeThumbnail name={item.name} config={config} previewUrl={item.preview_url} />
                       </div>
                     </div>

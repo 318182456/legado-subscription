@@ -149,33 +149,42 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   return (
     <div 
       ref={containerRef} 
-      className={`w-full aspect-[9/19] rounded-2xl shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : 'bg-black p-[2px]'}`}
+      className="w-full aspect-[9/19.5] rounded-[36px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] group-hover:ring-2 ring-primary/30 transition-all relative bg-[#0a0a0a] p-[6px] border border-white/10"
     >
-      {(initialPreviewUrl || config.preview_url) ? (
-        <img 
-          src={initialPreviewUrl || config.preview_url} 
-          alt={name} 
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div 
-          className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
-          style={{ 
-            ...style, 
-            width: '320px', 
-            height: '675.56px', 
-            transform: `translate(-50%, -50%) scale(${scale})`,
-            borderRadius: `${14 / scale}px` // Account for scale to keep visual radius at 14px
-          }}
-        >
-          <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
-            <div className="w-6 h-1 bg-black/20 rounded-full"></div>
-          </div>
+      {/* 顶部中置挖孔镜头 */}
+      <div className="absolute top-[12px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-black rounded-full z-20 border border-white/5 shadow-inner"></div>
+      
+      {/* 底部手势条 */}
+      <div className="absolute bottom-[10px] left-1/2 -translate-x-1/2 w-[25%] h-[3px] bg-white/20 rounded-full z-20"></div>
 
-          <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
-        </div>
-      )}
+      {/* 屏幕内容 */}
+      <div className={`w-full h-full rounded-[30px] overflow-hidden relative bg-black ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : ''}`}>
+        {(initialPreviewUrl || config.preview_url) ? (
+          <img 
+            src={initialPreviewUrl || config.preview_url} 
+            alt={name} 
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div 
+            className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
+            style={{ 
+              ...style, 
+              width: '320px', 
+              height: '693.33px', // Adjust height for 9/19.5
+              transform: `translate(-50%, -50%) scale(${scale})`,
+              borderRadius: `${14 / scale}px` 
+            }}
+          >
+            <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
+              <div className="w-6 h-1 bg-black/20 rounded-full"></div>
+            </div>
+
+            <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
