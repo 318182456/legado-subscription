@@ -133,6 +133,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [device, setDevice] = useState(DEVICES[0]);
 
   const [saving, setSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const [selectedFontName, setSelectedFontName] = useState('');
@@ -457,6 +458,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const handleSave = async () => {
     if (!config.name) return alert('请输入名称');
     setSaving(true);
+    setSyncStatus('准备同步...');
     try {
       const finalConfig = { ...config };
       
@@ -464,9 +466,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       const syncAsset = async (path: string, category: 'fonts' | 'bg', preferredName?: string) => {
         if (!path || !path.startsWith('blob:')) return path;
         try {
+          const decodedName = preferredName ? decodeURIComponent(decodeURIComponent(preferredName)).split('/').pop() : 'asset';
+          setSyncStatus(`正在上传${category === 'fonts' ? '字体' : '背景'}: ${decodedName}...`);
+          
           const res = await fetch(path);
           const blob = await res.blob();
-          // 优先使用寄存的名字，否则降级到随机名
           const name = preferredName || `${category}_${Date.now()}.${category === 'fonts' ? 'ttf' : 'jpg'}`;
           return await api.ensureAsset(blob, category, name);
         } catch (e) {
@@ -482,10 +486,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         finalConfig.bgStr = await syncAsset(finalConfig.bgStr, 'bg', finalConfig._bgStrName);
       }
 
-      // 清理寄存的临时字段
-      delete (finalConfig as any)._textFontName;
-      delete (finalConfig as any)._bgStrName;
-
+      setSyncStatus('正在生成预览图...');
       let previewUrl = '';
       if (previewRef.current) {
         try {
@@ -503,6 +504,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         }
       }
 
+      setSyncStatus('正在保存主题配置...');
       const payload: any = { 
         name: finalConfig.name, 
         config: JSON.stringify({ ...finalConfig, preview_url: previewUrl }) 
@@ -511,12 +513,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       payload.preview_url = previewUrl;
       
       await api.saveCustomTheme(payload);
+      setSyncStatus('同步完成！');
       alert(initialType === 'saved' ? '已更新主题' : '已保存到云端精选');
       onSaved();
+      onClose();
     } catch (e) {
       alert('保存失败: ' + String(e));
     } finally {
       setSaving(false);
+      setSyncStatus('');
     }
   };
 
@@ -811,9 +816,18 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface-container-high border-t border-outline-variant flex items-center gap-3 z-20 backdrop-blur-md">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-surface-container/50 rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
-          <button onClick={handleSave} disabled={saving} className="flex-[2] px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2">
-            {saving ? <RefreshCw size={16} className="animate-spin" /> : <Share2 size={16} />}
-            保存并同步
+          <button onClick={handleSave} disabled={saving} className="flex-[2] px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 relative overflow-hidden group">
+            {saving ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                <span className="animate-pulse">{syncStatus || '正在处理...'}</span>
+              </>
+            ) : (
+              <>
+                <Share2 size={16} className="group-hover:scale-110 transition-transform" />
+                <span>保存并同步</span>
+              </>
+            )}
           </button>
         </div>
       </div>
