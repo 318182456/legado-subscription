@@ -35,6 +35,23 @@ export default function AssetsView() {
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'image' | 'font' | 'theme' | 'zip'>('all');
   const [sortOrder, setSortOrder] = useState<'name' | 'type'>('type');
   const [searchInNameOnly, setSearchInNameOnly] = useState(false);
+  const [confirmItem, setConfirmItem] = useState<any>(null);
+
+  const isImage = (path: string) => {
+    const ext = path?.toLowerCase().split('.').pop();
+    return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext || '');
+  };
+
+  const handlePaletteClick = (item: any) => {
+    if (isImage(item.path)) {
+      setConfirmItem(item);
+    } else {
+      setSandboxConfig({ 
+        base: item, 
+        type: item.extension === 'zip' ? 'zip' : (item.category === 'fonts' ? 'font' : 'theme') 
+      });
+    }
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -130,7 +147,7 @@ export default function AssetsView() {
         if (item.type === 'folder') return true; // 文件夹始终显示
         if (categoryFilter === 'image') return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(item.extension);
         if (categoryFilter === 'font') return ['ttf', 'otf', 'woff', 'woff2'].includes(item.extension);
-        if (categoryFilter === 'theme') return item.extension === 'json' || item.category === 'themes';
+        if (categoryFilter === 'theme') return ['json', 'zip', 'txt'].includes(item.extension) || item.category === 'themes';
         if (categoryFilter === 'zip') return item.extension === 'zip';
         return true;
       });
@@ -144,7 +161,7 @@ export default function AssetsView() {
       }
       return a.name.localeCompare(b.name);
     });
-  }, [fileTree, currentPath, query, categoryFilter, sortOrder]);
+  }, [fileTree, currentPath, query, categoryFilter, sortOrder, searchInNameOnly]);
 
   const navigateTo = (path: string[]) => {
     setCurrentPath(path);
@@ -317,7 +334,7 @@ export default function AssetsView() {
                 {currentContent.map((item: any, idx: number) => {
                   const isFolder = item.type === 'folder';
                   const url = `${window.location.origin}/repo/${item.path}`;
-                  const isImg = !isFolder && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(item.extension);
+                  const isImg = isImage(item.path);
                   
                   return (
                     <div key={idx} onClick={() => isFolder && navigateTo([...currentPath, item.name])} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-2xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
@@ -326,7 +343,7 @@ export default function AssetsView() {
                           <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" />
                         ) : isImg ? (
                           <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        ) : (item.extension === 'json' || item.category === 'themes') ? (
+                        ) : (['json', 'zip', 'txt'].includes(item.extension) || item.category === 'themes') ? (
                           <div className="w-full h-full p-2 flex items-center justify-center bg-surface-container-low">
                             <div className="w-[60px] transform origin-center transition-transform group-hover:scale-110">
                               <ThemeThumbnail path={item.path} name={item.name} />
@@ -340,7 +357,7 @@ export default function AssetsView() {
                         {!isFolder && (
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                              <button onClick={(e) => { e.stopPropagation(); setPreviewItem({ ...item, url }); }} className="p-2 bg-white text-on-surface rounded-full hover:bg-primary hover:text-white transition-all shadow-lg"><Maximize2 size={18} /></button>
-                             <button onClick={(e) => { e.stopPropagation(); setSandboxConfig({ base: item, type: item.extension === 'zip' ? 'zip' : (item.category === 'fonts' ? 'font' : 'theme') }); }} className="p-2 bg-white text-on-surface rounded-full hover:bg-primary hover:text-white transition-all shadow-lg"><Palette size={18} /></button>
+                             <button onClick={(e) => { e.stopPropagation(); handlePaletteClick(item); }} className="p-2 bg-white text-on-surface rounded-full hover:bg-primary hover:text-white transition-all shadow-lg"><Palette size={18} /></button>
                           </div>
                         )}
                       </div>
@@ -384,7 +401,7 @@ export default function AssetsView() {
                             {!isFolder && (
                               <div className="flex items-center justify-end gap-2">
                                 <button onClick={(e) => { e.stopPropagation(); setPreviewItem({ ...item, url }); }} className="p-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors"><Maximize2 size={16} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); setSandboxConfig({ base: item, type: item.extension === 'zip' ? 'zip' : (item.category === 'fonts' ? 'font' : 'theme') }); }} className="p-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors"><Palette size={16} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); handlePaletteClick(item); }} className="p-1.5 hover:bg-primary/10 text-primary rounded-lg transition-colors"><Palette size={16} /></button>
                               </div>
                             )}
                           </td>
@@ -451,6 +468,41 @@ export default function AssetsView() {
 
       {/* 预览弹窗 */}
       <AnimatePresence>{previewItem && <PreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}</AnimatePresence>
+
+      {/* 图片用途确认弹窗 */}
+      {confirmItem && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
+            <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>
+            
+            <div className="aspect-video rounded-xl bg-black/20 mb-6 overflow-hidden border border-outline-variant/30">
+               <img src={`${window.location.origin}/repo/${confirmItem.path}`} className="w-full h-full object-contain" />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => { setSandboxConfig({ base: confirmItem, type: 'image' }); setConfirmItem(null); }}
+                className="w-full py-3 bg-primary text-on-primary rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+              >
+                <Search size={14} /> 识别排版 (OCR)
+              </button>
+              <button 
+                onClick={() => { setSandboxConfig({ base: confirmItem, type: 'bg' }); setConfirmItem(null); }}
+                className="w-full py-3 bg-surface-container-high text-primary rounded-xl text-xs font-bold border border-primary/20 hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
+              >
+                <ImageIcon size={14} /> 设为背景
+              </button>
+              <button 
+                onClick={() => setConfirmItem(null)}
+                className="w-full py-2 text-[10px] text-outline hover:text-secondary transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

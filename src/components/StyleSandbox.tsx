@@ -63,7 +63,7 @@ function TipSelector({ label, value, onChange }: { label: string, value: number,
   );
 }
 
-export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved'; onClose: () => void; onSaved: () => void; fileTree: any }) {
+export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved' | 'image' | 'bg'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>({
     name: initialType === 'saved' ? initialBase.name : (initialBase.name + ' 定制'),
     bgStr: '#EEEEEE',
@@ -142,10 +142,23 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       recognizeLayoutFromImage(url);
       return;
     }
+    if (type === 'bg') {
+      setConfig(prev => ({ ...prev, bgStr: base.path, bgType: 2 }));
+      return;
+    }
     if (type === 'theme') {
       setLoading(true);
       fetch(`${window.location.origin}/repo/${base.path}`)
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON', text.slice(0, 100));
+            throw new Error('所选资源不是有效的 JSON 格式');
+          }
+        })
         .then(data => {
           setConfig(prev => {
             const next = { ...prev, ...data };
@@ -158,6 +171,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             }
             return next;
           });
+        })
+        .catch(err => {
+          console.error('Theme load failed', err);
+          alert('加载失败: ' + err.message);
         })
         .finally(() => setLoading(false));
     } else if (type === 'font') {
@@ -178,32 +195,37 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             const configFile = Object.keys(unzipped).find(k => k.endsWith('readConfig.json'));
             if (configFile) {
               const str = new TextDecoder().decode(unzipped[configFile]);
-              const data = JSON.parse(str);
-              
-              setConfig(prev => {
-                const next = { ...prev, ...data };
-                if (manualAssets.bg) {
-                  next.bgStr = prev.bgStr;
-                  next.bgType = prev.bgType;
+              try {
+                const data = JSON.parse(str);
+                
+                setConfig(prev => {
+                  const next = { ...prev, ...data };
+                  if (manualAssets.bg) {
+                    next.bgStr = prev.bgStr;
+                    next.bgType = prev.bgType;
+                  }
+                  if (manualAssets.font) {
+                    next.textFont = prev.textFont;
+                  }
+                  return next;
+                });
+                
+                if (data.textFont && !manualAssets.font) {
+                  const fontFile = Object.keys(unzipped).find(k => k.includes(data.textFont) || data.textFont.includes(k));
+                  if (fontFile) {
+                    const fontBlob = new Blob([unzipped[fontFile]]);
+                    const fontUrl = URL.createObjectURL(fontBlob);
+                    const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
+                    const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+                    fontFace.load().then(f => {
+                      (document.fonts as any).add(f);
+                      setSelectedFontName(fontName);
+                    });
+                  }
                 }
-                if (manualAssets.font) {
-                  next.textFont = prev.textFont;
-                }
-                return next;
-              });
-              
-              if (data.textFont && !manualAssets.font) {
-                const fontFile = Object.keys(unzipped).find(k => k.includes(data.textFont) || data.textFont.includes(k));
-                if (fontFile) {
-                  const fontBlob = new Blob([unzipped[fontFile]]);
-                  const fontUrl = URL.createObjectURL(fontBlob);
-                  const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
-                  const fontFace = new FontFace(fontName, `url(${fontUrl})`);
-                  fontFace.load().then(f => {
-                    (document.fonts as any).add(f);
-                    setSelectedFontName(fontName);
-                  });
-                }
+              } catch (e) {
+                console.error('Failed to parse readConfig.json in ZIP', e);
+                alert('解析压缩包内的配置文件失败');
               }
             }
           }
@@ -574,9 +596,24 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         <div className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end">
           <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="w-full md:w-[500px] h-full bg-surface shadow-2xl border-l border-outline-variant flex flex-col">
             <AssetPicker type={showPicker} fileTree={fileTree} onSelect={(r: any) => {
-                if (showPicker === 'font') { loadFont(r.path, r.name); setManualAssets(p => ({ ...p, font: true })); }
-                else if (showPicker === 'bg') { setConfig({...config, bgStr: r.path, bgType: 2}); setManualAssets(p => ({ ...p, bg: true })); }
-                else if (showPicker === 'layout') { loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); }
+                if (r._action === 'ocr') {
+                  loadBaseConfig('image', r);
+                } else if (r._action === 'bg') {
+                  setConfig({...config, bgStr: r.path, bgType: 2}); 
+                  setManualAssets(p => ({ ...p, bg: true }));
+                } else {
+                  // 原始逻辑
+                  if (showPicker === 'font') { loadFont(r.path, r.name); setManualAssets(p => ({ ...p, font: true })); }
+                  else if (showPicker === 'bg') { 
+                    if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
+                      loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
+                    } else {
+                      setConfig({...config, bgStr: r.path, bgType: 2}); 
+                      setManualAssets(p => ({ ...p, bg: true })); 
+                    }
+                  }
+                  else if (showPicker === 'layout') { loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); }
+                }
                 setShowPicker(null);
             }} onClose={() => setShowPicker(null)} />
           </motion.div>

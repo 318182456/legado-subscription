@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  X, ChevronRight, Folder, Package, Type, Search 
+  X, ChevronRight, Folder, Package, Type, Search, Image as ImageIcon
 } from 'lucide-react';
 import { FontPreview } from './FontPreview';
 
@@ -9,31 +9,45 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
   const [query, setQuery] = useState('');
   const [searchInNameOnly, setSearchInNameOnly] = useState(true);
   
+  const [confirmItem, setConfirmItem] = useState<any>(null);
+  
+  const extensions = useMemo(() => {
+    if (type === 'font') return ['.ttf', '.otf', '.woff2'];
+    const imgExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+    if (type === 'bg') return [...imgExts, '.zip', '.json'];
+    if (type === 'layout') return ['.json', '.zip', '.txt', ...imgExts];
+    return [];
+  }, [type]);
+
+  const isImage = (path: string) => {
+    const ext = path.toLowerCase().slice(path.lastIndexOf('.'));
+    return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'].includes(ext);
+  };
+
   useEffect(() => {
     // 默认进入对应文件夹
     if (type === 'font') setCurrentPath(['fonts']);
     if (type === 'layout') setCurrentPath(['layouts']);
-    if (type === 'bg') setCurrentPath(['themes']);
+    if (type === 'bg') setCurrentPath([]); // 背景图可能分布在 themes 和 layouts，从根目录开始更方便
   }, [type]);
 
   const currentContent = useMemo(() => {
     if (!fileTree) return [];
     
+    const isMatch = (node: any) => {
+      if (node.type !== 'file') return true; // 始终显示文件夹
+      const ext = node.path.toLowerCase().slice(node.path.lastIndexOf('.'));
+      return extensions.includes(ext);
+    };
+
     // 如果有搜索词，执行全量平铺搜索
     if (query) {
       const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
       const results: any[] = [];
       
-      // 确定搜索起点
-      let startNode = fileTree;
-      // 在 AssetPicker 中，搜索通常限制在当前 type 对应的目录下
-      const baseDir = type === 'font' ? 'fonts' : type === 'layout' ? 'layouts' : 'themes';
-      if (startNode.children && startNode.children[baseDir]) {
-        startNode = startNode.children[baseDir];
-      }
-
       const traverse = (node: any) => {
         if (node.type === 'file') {
+          if (!isMatch(node)) return;
           const target = searchInNameOnly ? node.name.toLowerCase() : node.path.toLowerCase();
           if (keywords.every(kw => target.includes(kw))) {
             results.push(node);
@@ -42,7 +56,7 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
           Object.values(node.children).forEach(traverse);
         }
       };
-      traverse(startNode);
+      traverse(fileTree); // 搜索整个树
       return results;
     }
 
@@ -55,16 +69,30 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
         return [];
       }
     }
-    return Object.values(current.children || {}).sort((a: any, b: any) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [fileTree, currentPath, query, searchInNameOnly, type]);
+
+    return Object.values(current.children || {})
+      .filter((item: any) => {
+        if (item.type === 'folder') return true;
+        return isMatch(item);
+      })
+      .sort((a: any, b: any) => {
+        if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [fileTree, currentPath, query, searchInNameOnly, type, extensions]);
+
+  const handleSelect = (item: any) => {
+    if (isImage(item.path)) {
+      setConfirmItem(item);
+    } else {
+      onSelect(item);
+    }
+  };
 
   const title = type === 'font' ? '选择字体' : type === 'bg' ? '选择背景图' : '选择排版方案';
 
   return (
-    <div className="flex flex-col h-full bg-surface">
+    <div className="flex flex-col h-full bg-surface relative">
       <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-bright">
         <h4 className="font-bold flex items-center gap-2">{title}</h4>
         <button onClick={onClose} className="p-2 hover:bg-surface-container rounded-full transition-colors"><X size={20} /></button>
@@ -121,13 +149,13 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
               return (
                 <div 
                   key={idx}
-                  onClick={() => isFolder ? setCurrentPath([...currentPath, item.name]) : onSelect(item)}
+                  onClick={() => isFolder ? setCurrentPath([...currentPath, item.name]) : handleSelect(item)}
                   className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl p-2 cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
                 >
                   <div className="aspect-video rounded-lg bg-surface-container mb-2 overflow-hidden flex items-center justify-center">
                     {isFolder ? (
                       <Folder size={24} className="text-primary/40 group-hover:scale-110 transition-transform" />
-                    ) : type === 'bg' ? (
+                    ) : isImage(item.path) ? (
                       <img src={`${window.location.origin}/repo/${item.path}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                     ) : type === 'layout' ? (
                       <Package size={24} className="text-primary/30" />
@@ -146,6 +174,42 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
           </div>
         )}
       </div>
+
+      {/* 图片用途确认弹窗 */}
+      {confirmItem && (
+        <div className="absolute inset-0 z-[110] bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
+            <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>
+            
+            <div className="aspect-video rounded-xl bg-black/20 mb-6 overflow-hidden border border-outline-variant/30">
+               <img src={`${window.location.origin}/repo/${confirmItem.path}`} className="w-full h-full object-contain" />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => { onSelect({ ...confirmItem, _action: 'ocr' }); setConfirmItem(null); }}
+                className="w-full py-3 bg-primary text-on-primary rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
+              >
+                <Search size={14} /> 识别排版 (OCR)
+              </button>
+              <button 
+                onClick={() => { onSelect({ ...confirmItem, _action: 'bg' }); setConfirmItem(null); }}
+                className="w-full py-3 bg-surface-container-high text-primary rounded-xl text-xs font-bold border border-primary/20 hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
+              >
+                <ImageIcon size={14} /> 设为背景
+              </button>
+              <button 
+                onClick={() => setConfirmItem(null)}
+                className="w-full py-2 text-[10px] text-outline hover:text-secondary transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
 }
