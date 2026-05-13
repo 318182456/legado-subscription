@@ -121,6 +121,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [manualAssets, setManualAssets] = useState({ bg: false, font: false });
+  const manualAssetsRef = React.useRef(manualAssets);
+  React.useEffect(() => { manualAssetsRef.current = manualAssets; }, [manualAssets]);
   const [activeTab, setActiveTab] = useState<'visual' | 'text' | 'layout' | 'extra'>('visual');
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
     if (type === 'bg') {
       setConfig(prev => ({ ...prev, bgStr: base.path, bgType: 2 }));
+      setManualAssets(p => ({ ...p, bg: true }));
       return;
     }
     if (type === 'theme') {
@@ -162,11 +165,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         .then(data => {
           setConfig(prev => {
             const next = { ...prev, ...data };
-            if (manualAssets.bg) {
+            if (manualAssetsRef.current.bg) {
               next.bgStr = prev.bgStr;
               next.bgType = prev.bgType;
             }
-            if (manualAssets.font) {
+            if (manualAssetsRef.current.font) {
               next.textFont = prev.textFont;
             }
             return next;
@@ -179,6 +182,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         .finally(() => setLoading(false));
     } else if (type === 'font') {
       loadFont(base.path, base.name);
+      setManualAssets(p => ({ ...p, font: true }));
     } else if (type === 'zip') {
       setLoading(true);
       fetch(`${window.location.origin}/repo/${base.path}`)
@@ -200,11 +204,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 
                 setConfig(prev => {
                   const next = { ...prev, ...data };
-                  if (manualAssets.bg) {
+                  if (manualAssetsRef.current.bg) {
                     next.bgStr = prev.bgStr;
                     next.bgType = prev.bgType;
                   }
-                  if (manualAssets.font) {
+                  if (manualAssetsRef.current.font) {
                     next.textFont = prev.textFont;
                   }
                   return next;
@@ -599,16 +603,19 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 if (r._action === 'ocr') {
                   loadBaseConfig('image', r);
                 } else if (r._action === 'bg') {
-                  setConfig({...config, bgStr: r.path, bgType: 2}); 
+                  setConfig(prev => ({ ...prev, bgStr: r.path, bgType: 2 }));
                   setManualAssets(p => ({ ...p, bg: true }));
                 } else {
                   // 原始逻辑
-                  if (showPicker === 'font') { loadFont(r.path, r.name); setManualAssets(p => ({ ...p, font: true })); }
+                  if (showPicker === 'font') { 
+                    loadFont(r.path, r.name); 
+                    setManualAssets(p => ({ ...p, font: true })); 
+                  }
                   else if (showPicker === 'bg') { 
                     if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
                       loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
                     } else {
-                      setConfig({...config, bgStr: r.path, bgType: 2}); 
+                      setConfig(prev => ({ ...prev, bgStr: r.path, bgType: 2 }));
                       setManualAssets(p => ({ ...p, bg: true })); 
                     }
                   }
