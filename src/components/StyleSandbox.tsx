@@ -63,48 +63,65 @@ function TipSelector({ label, value, onChange }: { label: string, value: number,
   );
 }
 
+const DEFAULT_CONFIG = {
+  bgStr: '#EEEEEE',
+  bgType: 0,
+  textColor: '#3E3D3B',
+  textSize: 20,
+  lineSpacingExtra: 12,
+  paragraphSpacing: 2,
+  paragraphIndent: '　　',
+  paddingLeft: 16,
+  paddingRight: 16,
+  paddingTop: 6,
+  paddingBottom: 6,
+  titleMode: 0,
+  titleSize: 0,
+  titleTopSpacing: 0,
+  titleBottomSpacing: 0,
+  headerMode: 1,
+  headerPaddingTop: 0,
+  headerPaddingBottom: 0,
+  headerPaddingLeft: 16,
+  headerPaddingRight: 16,
+  footerMode: 1,
+  footerPaddingTop: 6,
+  footerPaddingBottom: 6,
+  footerPaddingLeft: 16,
+  footerPaddingRight: 16,
+  showHeaderLine: false,
+  showFooterLine: true,
+  tipHeaderLeft: 2, 
+  tipHeaderMiddle: 0,
+  tipHeaderRight: 3, 
+  tipFooterLeft: 1,
+  tipFooterMiddle: 0,
+  tipFooterRight: 6,
+  tipColor: '#803E3D3B',
+  textFont: '',
+  bgAlpha: 100,
+  letterSpacing: 0.1,
+  textBold: 0,
+  darkStatusIcon: true
+};
+
 export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved' | 'image' | 'bg'; onClose: () => void; onSaved: () => void; fileTree: any }) {
-  const [config, setConfig] = useState<any>({
-    name: initialType === 'saved' ? initialBase.name : (initialBase.name + ' 定制'),
-    bgStr: '#EEEEEE',
-    bgType: 0,
-    textColor: '#3E3D3B',
-    textSize: 20,
-    lineSpacingExtra: 12,
-    paragraphSpacing: 2,
-    paragraphIndent: '　　',
-    paddingLeft: 16,
-    paddingRight: 16,
-    paddingTop: 6,
-    paddingBottom: 6,
-    titleMode: 0,
-    titleSize: 0,
-    titleTopSpacing: 0,
-    titleBottomSpacing: 0,
-    headerMode: 1,
-    headerPaddingTop: 0,
-    headerPaddingBottom: 0,
-    headerPaddingLeft: 16,
-    headerPaddingRight: 16,
-    footerMode: 1,
-    footerPaddingTop: 6,
-    footerPaddingBottom: 6,
-    footerPaddingLeft: 16,
-    footerPaddingRight: 16,
-    showHeaderLine: false,
-    showFooterLine: true,
-    tipHeaderLeft: 2, // time
-    tipHeaderMiddle: 0, // none
-    tipHeaderRight: 3, // battery
-    tipFooterLeft: 1, // chapterTitle
-    tipFooterMiddle: 0, // none
-    tipFooterRight: 6, // pageAndTotal
-    tipColor: '#803E3D3B', // 默认文字颜色的半透明
-    textFont: '',
-    bgAlpha: 100,
-    letterSpacing: 0.1,
-    textBold: 0,
-    darkStatusIcon: true
+  const [config, setConfig] = useState<any>(() => {
+    const isSaved = initialType === 'saved';
+    const baseName = initialBase?.name || '未知';
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      name: isSaved ? baseName : (baseName + ' 定制'),
+    };
+    if (initialType === 'bg') {
+      cfg.bgStr = initialBase.path;
+      cfg.bgType = 2;
+    }
+    if (isSaved && initialBase.config) {
+       const savedCfg = typeof initialBase.config === 'string' ? JSON.parse(initialBase.config) : initialBase.config;
+       return { ...cfg, ...savedCfg, id: initialBase.id };
+    }
+    return cfg;
   });
 
   const DEVICES = [
@@ -118,22 +135,42 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedFontName, setSelectedFontName] = useState('');
+  const [selectedLayoutName, setSelectedLayoutName] = useState('');
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
-  const [manualAssets, setManualAssets] = useState({ bg: false, font: false });
+  const [manualAssets, setManualAssets] = useState(() => ({
+    bg: initialType === 'bg',
+    font: initialType === 'font'
+  }));
   const manualAssetsRef = React.useRef(manualAssets);
   React.useEffect(() => { manualAssetsRef.current = manualAssets; }, [manualAssets]);
   const [activeTab, setActiveTab] = useState<'visual' | 'text' | 'layout' | 'extra'>('visual');
 
   useEffect(() => {
-    api.getResources().then(setResources);
+    api.getResources().then(res => {
+      setResources(res);
+      // 如果 initialBase 是 theme，尝试从资源中找它的名字
+      if (initialType === 'theme' || initialType === 'zip') {
+        const cat = initialType === 'theme' ? 'themes' : 'zips';
+        const found = res[cat]?.find((t: any) => t.path === initialBase.path);
+        if (found) setSelectedLayoutName(found.name);
+      }
+    });
     loadBaseConfig(initialType, initialBase);
-  }, [initialBase]);
+  }, [initialBase, initialType]);
+
+  const getAssetName = (path: string, category: string) => {
+    if (!path) return '默认';
+    if (!resources || !resources[category]) return path.split('/').pop();
+    const found = resources[category].find((r: any) => r.path === path);
+    return found ? found.name : path.split('/').pop();
+  };
 
   const loadBaseConfig = async (type: string, base: any) => {
     if (type === 'saved') {
+      // 已经在 useState 初始值中处理过，这里仅作为二次保险或热更新
       const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
-      setConfig({ ...data, id: base.id }); // 保留 ID 用于可能的更新操作，虽然目前后端 save 可能是插入
+      setConfig(prev => ({ ...DEFAULT_CONFIG, ...data, id: base.id }));
       if (data.textFont) {
         loadFont(data.textFont, data.textFont.split('/').pop() || 'CustomFont');
       }
@@ -174,6 +211,21 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             }
             return next;
           });
+
+          // 自动加载排版指定的字体
+          if (data.textFont && !manualAssetsRef.current.font) {
+            // 尝试在资源中找这个字体 (处理编码过的路径)
+            const decodedFont = decodeURIComponent(data.textFont).split('/').pop() || '';
+            api.getResources().then(res => {
+              const foundFont = res.fonts?.find((f: any) => {
+                const fDecoded = decodeURIComponent(f.path).split('/').pop();
+                return fDecoded === decodedFont || f.path === data.textFont;
+              });
+              if (foundFont) {
+                loadFont(foundFont.path, foundFont.name);
+              }
+            });
+          }
         })
         .catch(err => {
           console.error('Theme load failed', err);
@@ -214,8 +266,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                   return next;
                 });
                 
-                if (data.textFont && !manualAssets.font) {
-                  const fontFile = Object.keys(unzipped).find(k => k.includes(data.textFont) || data.textFont.includes(k));
+                const decodedTextFont = data.textFont ? decodeURIComponent(data.textFont).split('/').pop() : '';
+                const decodedBgStr = data.bgStr ? decodeURIComponent(data.bgStr).split('/').pop() : '';
+
+                // 处理 ZIP 内的字体
+                if (data.textFont && !manualAssetsRef.current.font) {
+                  const fontFile = Object.keys(unzipped).find(k => {
+                    const kDecoded = decodeURIComponent(k).split('/').pop();
+                    return kDecoded === decodedTextFont || k.includes(decodedTextFont);
+                  });
                   if (fontFile) {
                     const fontBlob = new Blob([unzipped[fontFile]]);
                     const fontUrl = URL.createObjectURL(fontBlob);
@@ -225,6 +284,28 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                       (document.fonts as any).add(f);
                       setSelectedFontName(fontName);
                     });
+                  } else {
+                    // 如果 ZIP 内没找到，去项目资源里找
+                    api.getResources().then(res => {
+                      const foundFont = res.fonts?.find((f: any) => {
+                         const fDecoded = decodeURIComponent(f.path).split('/').pop();
+                         return fDecoded === decodedTextFont || f.path === data.textFont;
+                      });
+                      if (foundFont) loadFont(foundFont.path, foundFont.name);
+                    });
+                  }
+                }
+
+                // 处理 ZIP 内的背景图
+                if (data.bgStr && (data.bgType === 1 || data.bgType === 2) && !manualAssetsRef.current.bg) {
+                  const bgFile = Object.keys(unzipped).find(k => {
+                    const kDecoded = decodeURIComponent(k).split('/').pop();
+                    return kDecoded === decodedBgStr || k.includes(decodedBgStr);
+                  });
+                  if (bgFile) {
+                    const bgBlob = new Blob([unzipped[bgFile]]);
+                    const bgUrl = URL.createObjectURL(bgBlob);
+                    setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2 }));
                   }
                 }
               } catch (e) {
@@ -368,12 +449,13 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
           
           <div 
-            className="flex-1 relative bg-white flex flex-col overflow-hidden"
+            className="flex-1 relative flex flex-col overflow-hidden"
             style={{ 
               borderRadius: `${device.innerRadius}px`,
-              backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'white', 
+              backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'transparent', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
-              backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? `url(${window.location.origin}/repo/${config.bgStr})` : 'none',
+              backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
+                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr}`}")` : 'none',
               backgroundSize: 'cover', backgroundPosition: 'center',
               letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}
@@ -433,9 +515,23 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     <div className="space-y-1.5"><span className="text-[10px] text-secondary">文字色</span><input type="color" value={getHex6(config.textColor)} onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 pt-2">
-                    <button onClick={() => setShowPicker('layout')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><AlignLeft size={16} className="mb-1" /> 选排版</button>
-                    <button onClick={() => setShowPicker('bg')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><ImageIcon size={16} className="mb-1" /> 选背景</button>
-                    <button onClick={() => setShowPicker('font')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20"><FontIcon size={16} className="mb-1" /> 选字体</button>
+                    <button onClick={() => setShowPicker('layout')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
+                      <AlignLeft size={16} className="mb-1" /> 
+                      <span>选排版</span>
+                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">{selectedLayoutName || '默认'}</span>
+                    </button>
+                    <button onClick={() => setShowPicker('bg')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
+                      <ImageIcon size={16} className="mb-1" /> 
+                      <span>选背景</span>
+                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">
+                        {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds')}
+                      </span>
+                    </button>
+                    <button onClick={() => setShowPicker('font')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
+                      <FontIcon size={16} className="mb-1" /> 
+                      <span>选字体</span>
+                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">{getAssetName(config.textFont, 'fonts')}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -619,7 +715,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                       setManualAssets(p => ({ ...p, bg: true })); 
                     }
                   }
-                  else if (showPicker === 'layout') { loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); }
+                  else if (showPicker === 'layout') { 
+                    loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); 
+                    setSelectedLayoutName(r.name);
+                  }
                 }
                 setShowPicker(null);
             }} onClose={() => setShowPicker(null)} />
