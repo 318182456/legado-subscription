@@ -307,23 +307,38 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     const kDecoded = decodeURIComponent(k).split('/').pop();
                     return kDecoded === decodedTextFont || k.includes(decodedTextFont);
                   });
+                  
                   if (fontFile) {
-                    const fontBlob = new Blob([unzipped[fontFile]]);
-                    const fontUrl = URL.createObjectURL(fontBlob);
-                    const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
-                    const fontFace = new FontFace(fontName, `url(${fontUrl})`);
-                    fontFace.load().then(f => {
-                      (document.fonts as any).add(f);
-                      setSelectedFontName(fontName);
-                      // 寄存原始文件名，并切换路径为 blob: 以便后续上传
-                      setConfig((prev: any) => ({ 
-                        ...prev, 
-                        textFont: fontUrl,
-                        _textFontName: fontFile.split('/').pop() 
-                      }));
+                    const fileName = fontFile.split('/').pop() || '';
+                    // 1. 优先尝试从云端资源中匹配同名文件
+                    api.getResources().then(res => {
+                      const cloudMatch = res.fonts?.find((f: any) => {
+                        const fName = decodeURIComponent(f.path).split('/').pop();
+                        return fName === fileName;
+                      });
+
+                      if (cloudMatch) {
+                        // 匹配到云端资源，直接使用
+                        loadFont(cloudMatch.path, cloudMatch.name);
+                      } else {
+                        // 未匹配到，使用本地 blob:
+                        const fontBlob = new Blob([unzipped[fontFile]]);
+                        const fontUrl = URL.createObjectURL(fontBlob);
+                        const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
+                        const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+                        fontFace.load().then(f => {
+                          (document.fonts as any).add(f);
+                          setSelectedFontName(fontName);
+                          setConfig((prev: any) => ({ 
+                            ...prev, 
+                            textFont: fontUrl,
+                            _textFontName: fileName 
+                          }));
+                        });
+                      }
                     });
                   } else {
-                    // 如果 ZIP 内没找到，去项目资源里找
+                    // 如果 ZIP 内没找到，去项目资源里找 (按主题内的原始路径找)
                     api.getResources().then(res => {
                       const foundFont = res.fonts?.find((f: any) => {
                          const fDecoded = decodeURIComponent(f.path).split('/').pop();
@@ -340,12 +355,25 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     const kDecoded = decodeURIComponent(k).split('/').pop();
                     return kDecoded === decodedBgStr || k.includes(decodedBgStr);
                   });
-                    if (bgFile) {
-                      const bgBlob = new Blob([unzipped[bgFile]]);
-                      const bgUrl = URL.createObjectURL(bgBlob);
-                      const bgName = bgFile.split('/').pop();
-                      setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2, _bgStrName: bgName }));
-                    }
+                  if (bgFile) {
+                    const fileName = bgFile.split('/').pop() || '';
+                    api.getResources().then(res => {
+                      const cloudMatch = res.backgrounds?.find((b: any) => {
+                        const bName = decodeURIComponent(b.path).split('/').pop();
+                        return bName === fileName;
+                      });
+
+                      if (cloudMatch) {
+                        // 匹配到云端资源，直接使用
+                        setConfig(prev => ({ ...prev, bgStr: cloudMatch.path, bgType: 2 }));
+                      } else {
+                        // 未匹配到，使用本地 blob:
+                        const bgBlob = new Blob([unzipped[bgFile]]);
+                        const bgUrl = URL.createObjectURL(bgBlob);
+                        setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2, _bgStrName: fileName }));
+                      }
+                    });
+                  }
                 }
               } catch (e) {
                 console.error('Failed to parse readConfig.json in ZIP', e);
@@ -589,9 +617,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 </>
               );
             })()}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
       {/* 右侧控制面板 */}
       <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative overflow-hidden">
