@@ -135,7 +135,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedFontName, setSelectedFontName] = useState('');
-  const [selectedLayoutName, setSelectedLayoutName] = useState('');
+  const [selectedLayoutName, setSelectedLayoutName] = useState(() => {
+    if (initialType === 'theme' || initialType === 'zip' || initialType === 'saved') {
+      return initialBase?.name || '';
+    }
+    return '';
+  });
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [manualAssets, setManualAssets] = useState(() => ({
@@ -161,9 +166,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const getAssetName = (path: string, category: string) => {
     if (!path) return '默认';
-    if (!resources || !resources[category]) return path.split('/').pop();
+    if (!resources || !resources[category]) return decodeURIComponent(path.split('/').pop() || '');
     const found = resources[category].find((r: any) => r.path === path);
-    return found ? found.name : path.split('/').pop();
+    return found ? found.name : decodeURIComponent(path.split('/').pop() || '');
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
@@ -514,23 +519,40 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     <div className="space-y-1.5"><span className="text-[10px] text-secondary">背景色</span><input type="color" value={getHex6(config.bgStr)} onChange={(e) => { setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0}); setManualAssets(p => ({ ...p, bg: true })); }} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
                     <div className="space-y-1.5"><span className="text-[10px] text-secondary">文字色</span><input type="color" value={getHex6(config.textColor)} onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 pt-2">
-                    <button onClick={() => setShowPicker('layout')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
-                      <AlignLeft size={16} className="mb-1" /> 
-                      <span>选排版</span>
-                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">{selectedLayoutName || '默认'}</span>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <button onClick={() => setShowPicker('layout')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <AlignLeft size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">排版布局</div>
+                        <div className="truncate">{selectedLayoutName || '默认'}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
                     </button>
-                    <button onClick={() => setShowPicker('bg')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
-                      <ImageIcon size={16} className="mb-1" /> 
-                      <span>选背景</span>
-                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">
-                        {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds')}
-                      </span>
+
+                    <button onClick={() => setShowPicker('bg')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <ImageIcon size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">背景资源</div>
+                        <div className="truncate">
+                          {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds')}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
                     </button>
-                    <button onClick={() => setShowPicker('font')} className="flex flex-col items-center py-3 bg-surface-container rounded-xl text-[10px] font-bold text-primary hover:bg-primary/10 border border-primary/20 px-1">
-                      <FontIcon size={16} className="mb-1" /> 
-                      <span>选字体</span>
-                      <span className="mt-1 opacity-60 font-normal truncate w-full text-center">{getAssetName(config.textFont, 'fonts')}</span>
+
+                    <button onClick={() => setShowPicker('font')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <FontIcon size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">字体资源</div>
+                        <div className="truncate">{getAssetName(config.textFont, 'fonts')}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
                     </button>
                   </div>
                 </div>
