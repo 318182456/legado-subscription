@@ -541,7 +541,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         </div>
         
         <div 
-          ref={previewRef}
           className="relative bg-[#0c0c0c] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col transition-all duration-500 ease-in-out origin-center"
           style={{ 
             width: `${device.width}px`, 
@@ -551,9 +550,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             transform: `scale(${device.width > 400 ? 0.6 : 0.75})` 
           }}
         >
-          {/* 模拟刘海/挖孔 */}
-          {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
-          {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
+          <div ref={previewRef} className="w-full h-full relative overflow-hidden flex flex-col bg-black">
+            {/* 模拟刘海/挖孔 */}
+            {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
+            {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
           
           <div 
             className="flex-1 relative flex flex-col overflow-hidden"
@@ -576,9 +576,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 </>
               );
             })()}
-          </div>
         </div>
       </div>
+    </div>
 
       {/* 右侧控制面板 */}
       <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative overflow-hidden">

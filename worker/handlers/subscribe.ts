@@ -319,7 +319,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             let fontName = '';
             if (config.textFont) {
                 fontName = 'Font_' + id;
-                const fontUrl = '/repo/' + config.textFont;
+                const fontUrl = config.textFont.startsWith('http') ? config.textFont : '/repo/' + config.textFont.replace(/^\/?repo\//, '');
                 const style = document.createElement('style');
                 style.textContent = \`@font-face { font-family: "\${fontName}"; src: url("\${fontUrl}"); }\`;
                 document.head.appendChild(style);
@@ -334,7 +334,9 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             container.classList.add('no-image');
 
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
-            const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
+            const bgStr = config.bgStr || '';
+            const bgUrl = bgStr.startsWith('http') ? bgStr : '/repo/' + bgStr.replace(/^\/?repo\//, '');
+            const bgImg = (config.bgType === 2 && bgStr) ? 'url(' + bgUrl + ')' : 'none';
 
             let html = '<div id="inner-preview-' + id + '" style="width:320px; height:675.5px; transform-origin: top left; background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden; border-radius: 14px;">' +
                        '<div style="height:14px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.15; flex-shrink:0;">' +
