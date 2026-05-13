@@ -178,13 +178,14 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             width: 100px;
             margin: 0 auto 10px;
             aspect-ratio: 9/19;
-            background: #eee;
-            border-radius: 12px;
+            border-radius: 14px;
             margin-bottom: 10px;
             overflow: hidden;
             position: relative;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
+        .preview-container.has-image { background: var(--surface-container); }
+        .preview-container.no-image { background: #000; padding: 1.5px; }
         .preview-body {
             width: 100%;
             height: 100%;
@@ -316,16 +317,19 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             if (!container) return;
 
             if (config.preview_url) {
-                container.innerHTML = '<img src="' + config.preview_url + '" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">';
+                container.classList.add('has-image');
+                container.innerHTML = '<img src="' + config.preview_url + '" style="width:100%; height:100%; object-fit:cover;">';
                 return;
             }
+
+            container.classList.add('no-image');
 
             const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
             const bgImg = (config.bgType === 2 && config.bgStr) ? 'url(/repo/' + config.bgStr + ')' : 'none';
 
-            let html = '<div id="inner-preview-' + id + '" style="width:320px; height:675.5px; transform-origin: top left; background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden;">' +
-                       '<div style="height:14px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.2; flex-shrink:0;">' +
-                       '<div style="width:24px; height:4px; background:currentColor; border-radius:4px;"></div>' +
+            let html = '<div id="inner-preview-' + id + '" style="width:320px; height:675.5px; transform-origin: top left; background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center; display:flex; flex-direction:column; overflow:hidden; border-radius: 14px;">' +
+                       '<div style="height:14px; width:100%; display:flex; align-items:center; justify-content:center; opacity:0.15; flex-shrink:0;">' +
+                       '<div style="width:24px; height:3.5px; background:rgba(0,0,0,0.5); border-radius:4px;"></div>' +
                        '</div>';
 
             html += generatePreviewHTML(config, 0.82, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)});

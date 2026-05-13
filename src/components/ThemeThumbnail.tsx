@@ -147,12 +147,15 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
   const COMP = 0.82; // Matches StyleSandbox scale
 
   return (
-    <div ref={containerRef} className="w-full aspect-[9/19] bg-black rounded-2xl p-[2px] shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative">
+    <div 
+      ref={containerRef} 
+      className={`w-full aspect-[9/19] rounded-2xl shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative ${config.preview_url ? 'bg-surface-container-low' : 'bg-black p-[2px]'}`}
+    >
       {config.preview_url ? (
         <img 
           src={config.preview_url} 
           alt={name} 
-          className="w-full h-full object-cover rounded-[14px]"
+          className="w-full h-full object-cover"
           loading="lazy"
         />
       ) : (

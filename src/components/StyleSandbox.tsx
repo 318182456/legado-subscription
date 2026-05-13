@@ -420,7 +420,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           previewUrl = await htmlToImage.toJpeg(previewRef.current, { 
             quality: 0.85,
             pixelRatio: 1.5,
-            backgroundColor: '#000000'
+            backgroundColor: '#000000',
+            style: {
+              transform: 'none',
+            }
           });
         } catch (err) {
           console.error('Failed to generate preview image', err);
