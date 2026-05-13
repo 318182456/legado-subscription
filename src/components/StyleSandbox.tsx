@@ -580,26 +580,18 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       let previewUrl = '';
       if (previewRef.current) {
         try {
-          const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
-          const toPng = mod.toPng || (mod.default && mod.default.toPng);
-          if (toPng) {
-            // 构造内联字体 CSS
-            const fontName = 'PreviewFont';
-            const fontCSS = localFontData ? `@font-face { font-family: "${fontName}"; src: url(${localFontData}); }` : '';
-            
-            // 使用更稳定的抓取流程：先转 Canvas 再转 DataURL
-            const canvas = await mod.toCanvas(previewRef.current, {
-              pixelRatio: 1,
-              skipFonts: false, 
-              fontEmbedCSS: fontCSS,
-              cacheBust: false,
-              style: { 
-                transform: 'none',
-                fontFamily: localFontData ? `"${fontName}", sans-serif` : 'sans-serif'
-              }
+          // 切换到 html2canvas：避开 SVG 沙箱，直接绘制 Canvas
+          const html2canvas = (await import('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/+esm')).default;
+          if (html2canvas && previewRef.current) {
+            const canvas = await html2canvas(previewRef.current, {
+              scale: 1,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: null, // 透明背景
+              logging: false,
             });
             previewUrl = canvas.toDataURL('image/jpeg', 0.8);
-            console.log('Preview generated with inline assets, length:', previewUrl?.length);
+            console.log('Preview generated via html2canvas, length:', previewUrl?.length);
           }
         } catch (err) {
           console.error('Failed to generate preview image', err);
