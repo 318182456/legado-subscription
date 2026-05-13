@@ -1,12 +1,18 @@
 import { PREVIEW_TITLE, PREVIEW_PARAS } from "./constants";
 
 export function getTipText(value: number): string {
-    if (value === 1) return "书名";
+    if (value === 0) return "";
+    if (value === 1) return "章节名";
     if (value === 2) return "12:30";
     if (value === 3) return "100%";
-    if (value === 4) return "章节名";
-    if (value === 5) return "75%";
+    if (value === 4) return "1";
+    if (value === 5) return "5.2%";
     if (value === 6) return "1/18";
+    if (value === 7) return "书名";
+    if (value === 8) return "12:30 100%";
+    if (value === 9) return "12:30 100%";
+    if (value === 10) return "100%";
+    if (value === 11) return "5.2%";
     return "";
 }
 
