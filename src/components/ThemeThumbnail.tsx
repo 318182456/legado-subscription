@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { argbToCss } from '../utils/color';
+import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
 
 function TipView({ value }: { value: number }) {
   if (value === 0) return <span></span>;
@@ -125,20 +126,21 @@ export function ThemeThumbnail({ path, name, config: initialConfig }: { path?: s
 
         <div className="flex-1 overflow-hidden" style={{ paddingLeft: `${config.paddingLeft * COMP}px`, paddingRight: `${config.paddingRight * COMP}px`, paddingTop: `${config.paddingTop * COMP}px`, paddingBottom: `${config.paddingBottom * COMP}px` }}>
           {config.titleMode !== 2 && (
-            <div className={`font-bold mb-1 ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ fontSize: `${config.textSize * 0.6 * COMP}px` }}>
-              预览章节
+            <div className={`font-bold ${config.titleMode === 1 ? 'text-center' : 'text-left'}`} style={{ 
+              fontSize: `${config.textSize * (1.05 + (config.titleSize || 0) * 0.1) * COMP}px`,
+              marginTop: `${(config.titleTopSpacing || 0) * COMP}px`, 
+              marginBottom: `${(config.titleBottomSpacing || 0) * COMP}px`
+            }}>
+              {PREVIEW_TITLE}
             </div>
           )}
           <div className="space-y-1 opacity-90">
-            {[
-              "窗外的蝉鸣在烈日下显得格外躁动，苏醒揉了揉有些发胀的太阳穴，从堆满试卷的课桌前站了起来。",
-              "在这个全民进化的时代，每个人在成年时都会觉醒属于自己的异能，而他，似乎还是那个被遗忘的异类。",
-              "“系统提示：检测到宿主情绪波动，‘极简加点’模板已加载。”一个冰冷的电子音在脑海中响起。"
-            ].map((para, i) => (
+            {PREVIEW_PARAS.map((para, i) => (
+
               <p key={i} style={{ 
-                fontSize: `${config.textSize * 0.45 * COMP}px`, 
-                lineHeight: 1.4, 
-                marginBottom: `${config.paragraphSpacing * COMP}px`,
+                fontSize: `${config.textSize * COMP}px`, 
+                lineHeight: (config.textSize + (config.lineSpacingExtra || 0)) / config.textSize, 
+                marginBottom: `${(config.paragraphSpacing || 0) * COMP}px`,
                 textIndent: `${config.paragraphIndent?.length || 0}em` 
               }}>
                 {para}

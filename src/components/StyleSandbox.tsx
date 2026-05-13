@@ -8,6 +8,7 @@ import * as api from '../api';
 import { Slider } from './Slider';
 import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
+import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
 
 // 外部库引用
 declare const fflate: any;
@@ -372,17 +373,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                             marginTop: `${config.titleTopSpacing * COMP}px`, 
                             marginBottom: `${config.titleBottomSpacing * COMP}px` 
                           }}>
-                            第一章 极简主义的排版
+                            {PREVIEW_TITLE}
                           </h1>
                         )}
                         <div className="space-y-6">
-                          {[
-                            "窗外的蝉鸣在烈日下显得格外躁动，苏醒揉了揉有些发胀的太阳穴，从堆满试卷的课桌前站了起来。",
-                            "他看了一眼日历，距离那个改变命运的日子，只剩下不到一周了。在这个全民进化的时代，每个人在成年时都会觉醒属于自己的异能，而他，似乎还是那个被遗忘的异类。",
-                            "“系统提示：检测到宿主情绪波动，‘极简加点’模板已加载。”一个冰冷的电子音突然在脑海中响起，苏醒愣住了，随即嘴角微微上扬。",
-                            "原来，传说中的外挂可能会迟到，但永远不会缺席。他尝试着点击面前虚幻的面板，将所有的潜能点都加在了‘精神力’上。",
-                            "刹那间，原本嘈杂的世界变得无比寂静，他能感觉到方圆百米内每一只昆虫的振翅，甚至能听见隔壁邻居正在讨论晚饭吃什么。这种掌控感，让他感到前所未有的踏实。"
-                          ].map((para, i) => (
+                          {PREVIEW_PARAS.map((para, i) => (
+
                             <p key={i} style={{ 
                               fontSize: `${config.textSize * COMP}px`, 
                               lineHeight: (config.textSize + config.lineSpacingExtra) / config.textSize, 

@@ -1,4 +1,5 @@
 import { Env } from "../types";
+import { PREVIEW_TITLE, PREVIEW_PARAS } from "../../src/utils/constants";
 
 export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
   try {
@@ -338,10 +339,15 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             }
 
             html += '<div class="preview-content" style="padding: ' + (config.paddingTop*0.2) + 'px ' + (config.paddingRight*0.2) + 'px;">' +
-                    '<div class="preview-title" style="font-size:' + (config.textSize*0.4) + 'px; margin-bottom:4px; ' + (config.titleMode === 1 ? 'text-align:center' : '') + '">预览章节标题</div>' +
-                    '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">这是一段主题效果预览文字，用于展示字体、颜色、间距以及整体排版风格。</div>' +
-                    '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">极简主义不仅仅是一种视觉风格，更是一种对待生活的态度。</div>' +
-                    '</div>';
+                    '<div class="preview-title" style="font-size:' + (config.textSize*0.4) + 'px; margin-bottom:4px; ' + (config.titleMode === 1 ? 'text-align:center' : '') + '">' + ${JSON.stringify(PREVIEW_TITLE)} + '</div>';
+
+            var paras = ${JSON.stringify(PREVIEW_PARAS)};
+            for (var i = 0; i < paras.length; i++) {
+                html += '<div class="preview-para" style="font-size:' + (config.textSize*0.3) + 'px; text-indent:2em;">' + paras[i] + '</div>';
+            }
+            html += '</div>';
+
+
 
             if (config.footerMode !== 2) {
                 html += '<div class="preview-footer" style="color:' + tipColor + ';"><span>1/18</span><span>5.2%</span></div>';
