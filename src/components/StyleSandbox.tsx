@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2, Smartphone
+  Layout, Type, Settings2, RefreshCw, Share2, Smartphone, ChevronRight
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
