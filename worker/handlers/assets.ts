@@ -277,15 +277,21 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
     config.textFont = await processResource(config.textFont, 'fonts');
   }
 
-  // 2. 处理三个背景字段 (只有在 bgType 为 2 时处理图片)
-  const bgFields = ['bgStr', 'bgStrNight', 'bgStrEInk'];
-  for (const field of bgFields) {
-    if (config.bgType === 2 && config[field]) {
-      config[field] = await processResource(config[field], 'bg');
-    }
+  // 2. 处理三个背景字段，分别根据对应的类型判断
+  if (config.bgType === 2 && config.bgStr) {
+    config.bgStr = await processResource(config.bgStr, 'bg');
+  }
+  if (config.bgTypeNight === 2 && config.bgStrNight) {
+    config.bgStrNight = await processResource(config.bgStrNight, 'bg');
+  }
+  if (config.bgTypeEInk === 2 && config.bgStrEInk) {
+    config.bgStrEInk = await processResource(config.bgStrEInk, 'bg');
   }
 
-  // 3. 添加 JSON 配置 (确保在文件最后添加，以便拿到更新后的 config)
+  // 3. 清理非标准字段，减小体积并提高兼容性
+  delete config.preview_url;
+
+  // 4. 添加 JSON 配置
   zip.addFile('readConfig.json', JSON.stringify(config, null, 2));
 
   return new Response(zip.generate(), {
@@ -294,5 +300,70 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
       "Access-Control-Allow-Origin": "*",
       "Content-Disposition": `attachment; filename="theme_${id}.zip"`
     }
+  });
+}
+
+// ---------- 资源确保存储逻辑 (查重 -> 上传 -> 更新索引) ----------
+
+export async function handleEnsureAsset(request: Request, env: Env): Promise<Response> {
+  const formData = await request.formData();
+  const file = formData.get('file') as File;
+  const category = formData.get('category') as string; // 'fonts' | 'bg'
+  const originalName = formData.get('name') as string;
+
+  if (!file || !category) return err("File and category are required");
+
+  const buffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(buffer);
+  
+  // 1. 计算 SHA-256 哈希值作为唯一标识
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  const ext = originalName.split('.').pop()?.toLowerCase() || '';
+  const r2Key = `uploads/${category}/${originalName}`;
+
+  // 2. 检查 R2 是否已存在同名文件
+  const existing = await env.ASSETS_R2.get(r2Key);
+  if (existing) {
+    // 检查内容哈希是否一致 (去重检查)
+    const existingBuffer = await existing.arrayBuffer();
+    const existingHashBuffer = await crypto.subtle.digest('SHA-256', existingBuffer);
+    const existingHashHex = Array.from(new Uint8Array(existingHashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    if (existingHashHex === hashHex) {
+      return new Response(JSON.stringify({ ok: true, path: r2Key, status: 'existing' }), {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      });
+    }
+    // 如果哈希不一致，说明是同名但内容不同的文件，后续执行覆盖上传
+  }
+
+  // 3. 上传到 R2 (保留原始文件名)
+  await env.ASSETS_R2.put(r2Key, uint8Array, {
+    httpMetadata: { contentType: file.type }
+  });
+
+  // 4. 更新 KV 索引 (resources-index)
+  const data = await env.KV.get("resources-index");
+  const index = data ? JSON.parse(data) : {};
+  
+  if (!index[category]) index[category] = [];
+  
+  // 避免索引重复
+  const existsInIndex = index[category].some((item: any) => item.path === r2Key);
+  if (!existsInIndex) {
+    index[category].push({
+      name: originalName,
+      path: r2Key,
+      size: file.size,
+      mtime: new Date().toISOString()
+    });
+    await env.KV.put("resources-index", JSON.stringify(index));
+  }
+
+  return new Response(JSON.stringify({ ok: true, path: r2Key, status: 'uploaded' }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }

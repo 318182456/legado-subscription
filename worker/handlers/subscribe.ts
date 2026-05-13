@@ -316,6 +316,15 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
             const container = document.getElementById('preview-' + id);
             if (!container) return;
 
+            let fontName = '';
+            if (config.textFont) {
+                fontName = 'Font_' + id;
+                const fontUrl = '/repo/' + config.textFont;
+                const style = document.createElement('style');
+                style.textContent = `@font-face { font-family: "${fontName}"; src: url("${fontUrl}"); }`;
+                document.head.appendChild(style);
+            }
+
             if (config.preview_url) {
                 container.classList.add('has-image');
                 container.innerHTML = '<img src="' + config.preview_url + '" style="width:100%; height:100%; object-fit:cover;">';
@@ -332,7 +341,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
                        '<div style="width:24px; height:3.5px; background:rgba(0,0,0,0.5); border-radius:4px;"></div>' +
                        '</div>';
 
-            html += generatePreviewHTML(config, 0.82, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)});
+            html += generatePreviewHTML(config, 0.82, getTipText, argbToCss, ${JSON.stringify(PREVIEW_TITLE)}, ${JSON.stringify(PREVIEW_PARAS)}, fontName);
             html += '</div>';
 
             container.innerHTML = html;

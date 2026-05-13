@@ -84,7 +84,7 @@ const DEFAULT_CONFIG = {
   headerPaddingBottom: 0,
   headerPaddingLeft: 16,
   headerPaddingRight: 16,
-  footerMode: 1,
+  footerMode: 0,
   footerPaddingTop: 6,
   footerPaddingBottom: 6,
   footerPaddingLeft: 16,
@@ -289,6 +289,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     fontFace.load().then(f => {
                       (document.fonts as any).add(f);
                       setSelectedFontName(fontName);
+                      // 寄存原始文件名
+                      setConfig((prev: any) => ({ ...prev, _textFontName: fontFile.split('/').pop() }));
                     });
                   } else {
                     // 如果 ZIP 内没找到，去项目资源里找
@@ -308,11 +310,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     const kDecoded = decodeURIComponent(k).split('/').pop();
                     return kDecoded === decodedBgStr || k.includes(decodedBgStr);
                   });
-                  if (bgFile) {
-                    const bgBlob = new Blob([unzipped[bgFile]]);
-                    const bgUrl = URL.createObjectURL(bgBlob);
-                    setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2 }));
-                  }
+                    if (bgFile) {
+                      const bgBlob = new Blob([unzipped[bgFile]]);
+                      const bgUrl = URL.createObjectURL(bgBlob);
+                      const bgName = bgFile.split('/').pop();
+                      setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2, _bgStrName: bgName }));
+                    }
                 }
               } catch (e) {
                 console.error('Failed to parse readConfig.json in ZIP', e);
@@ -327,14 +330,19 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const loadFont = async (path: string, name: string) => {
     if (!path || path.startsWith('content://')) return;
-    const fontUrl = `${window.location.origin}/repo/${path}`;
+    const isBlob = path.startsWith('blob:');
+    const fontUrl = isBlob ? path : `${window.location.origin}/repo/${path}`;
     const fontName = 'PreviewFont_' + Math.random().toString(36).substring(7);
     const fontFace = new FontFace(fontName, `url(${fontUrl})`);
     try {
       const loaded = await fontFace.load();
       (document.fonts as any).add(loaded);
       setSelectedFontName(fontName);
-      setConfig(prev => ({ ...prev, textFont: path }));
+      setConfig(prev => {
+        const next = { ...prev, textFont: path };
+        if (isBlob) next._textFontName = name;
+        return next;
+      });
     } catch (e) {
       console.error('Font load failed', e);
     }
@@ -434,6 +442,34 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     if (!config.name) return alert('请输入名称');
     setSaving(true);
     try {
+      const finalConfig = { ...config };
+      
+      // 检查并同步临时资源 (来自 ZIP 的 blob:)
+      const syncAsset = async (path: string, category: 'fonts' | 'bg', preferredName?: string) => {
+        if (!path || !path.startsWith('blob:')) return path;
+        try {
+          const res = await fetch(path);
+          const blob = await res.blob();
+          // 优先使用寄存的名字，否则降级到随机名
+          const name = preferredName || `${category}_${Date.now()}.${category === 'fonts' ? 'ttf' : 'jpg'}`;
+          return await api.ensureAsset(blob, category, name);
+        } catch (e) {
+          console.error(`Failed to sync ${category} asset:`, e);
+          return path;
+        }
+      };
+
+      if (finalConfig.textFont) {
+        finalConfig.textFont = await syncAsset(finalConfig.textFont, 'fonts', finalConfig._textFontName);
+      }
+      if (finalConfig.bgType === 2 && finalConfig.bgStr) {
+        finalConfig.bgStr = await syncAsset(finalConfig.bgStr, 'bg', finalConfig._bgStrName);
+      }
+
+      // 清理寄存的临时字段
+      delete (finalConfig as any)._textFontName;
+      delete (finalConfig as any)._bgStrName;
+
       let previewUrl = '';
       if (previewRef.current) {
         try {
@@ -452,11 +488,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       }
 
       const payload: any = { 
-        name: config.name, 
-        config: JSON.stringify({ ...config, preview_url: previewUrl }) 
+        name: finalConfig.name, 
+        config: JSON.stringify({ ...finalConfig, preview_url: previewUrl }) 
       };
       if (initialType === 'saved') payload.id = initialBase.id;
-      // 同时在外部传递 preview_url 方便后端更新字段
       payload.preview_url = previewUrl;
       
       await api.saveCustomTheme(payload);
@@ -516,7 +551,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               return (
                 <>
                   {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm z-[100]"><RefreshCw className="animate-spin text-primary" /></div>}
-                  <div className="w-full h-full flex flex-col overflow-hidden" dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }}></div>
+                  <div className="w-full h-full flex flex-col overflow-hidden" dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS, selectedFontName) }}></div>
                 </>
               );
             })()}
@@ -693,10 +728,17 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     </div>
                     <div className="space-y-2">
                       <span className="text-[10px] text-secondary font-bold uppercase">页脚显示</span>
-                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 1 : 2})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.footerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
+                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 0 : 1})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.footerMode === (i === 0 ? 0 : 1) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
                     </div>
                   </div>
                   
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+                    <Slider label="页眉上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} />
+                    <Slider label="页眉下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} />
+                    <Slider label="页脚上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} />
+                    <Slider label="页脚下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
                       <span className="text-[10px] font-bold uppercase">页眉线</span>
@@ -782,7 +824,12 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
                       loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
                     } else {
-                      setConfig(prev => ({ ...prev, bgStr: r.path, bgType: 2 }));
+                      const isBlob = r.path.startsWith('blob:');
+                      setConfig(prev => {
+                        const next = { ...prev, bgStr: r.path, bgType: 2 };
+                        if (isBlob) next._bgStrName = r.name;
+                        return next;
+                      });
                       setManualAssets(p => ({ ...p, bg: true })); 
                     }
                   }

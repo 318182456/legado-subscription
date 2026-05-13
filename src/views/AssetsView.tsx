@@ -446,7 +446,10 @@ export default function AssetsView() {
                       
                       <div className="grid grid-cols-1 gap-2 mt-auto">
                         <button onClick={() => editTheme(item)} className="flex items-center justify-center gap-2 py-2.5 bg-surface-container text-primary rounded-xl text-xs font-bold hover:bg-primary/10 transition-all border border-primary/20"><Copy size={14} /> 复制并编辑</button>
-                        <button onClick={() => { window.location.href = `legado://import/readConfig?src=${encodeURIComponent(JSON.stringify(config))}`; }} className="flex items-center justify-center gap-2 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-primary/20"><Download size={14} /> 一键导入</button>
+                        <button onClick={() => { 
+                          const exportUrl = `${window.location.origin}/api/custom-themes/${item.id}/export`;
+                          window.location.href = `legado://import/readConfig?src=${encodeURIComponent(exportUrl)}`;
+                        }} className="flex items-center justify-center gap-2 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-primary/20"><Download size={14} /> 一键导入</button>
                       </div>
                     </div>
                   </motion.div>

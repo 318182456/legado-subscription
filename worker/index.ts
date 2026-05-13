@@ -132,6 +132,9 @@ export default {
       // ── /api/r2-list (R2 完整文件清单) ─────────────────────────────
       if (path === "/api/r2-list" && method === "GET") return assets.handleR2List(request, env);
 
+      // ── /api/assets/ensure (资源确保存储) ──────────────────────────
+      if (path === "/api/assets/ensure" && method === "POST") return assets.handleEnsureAsset(request, env);
+
       // ── /api/custom-themes (精选主题) ──────────────────────────────
       if (path === "/api/custom-themes") {
         if (method === "GET") return assets.handleListCustomThemes(env);

@@ -22,11 +22,14 @@ export function generatePreviewHTML(
     getTipTextFn: (v: number) => string,
     argbToCssFn: (argb: string) => string,
     title: string,
-    paras: string[]
+    paras: string[],
+    fontFamily?: string
 ): string {
     const bgColor = config.bgType === 0 ? argbToCssFn(config.bgStr || "#EEEEEE") : "transparent";
     const textColor = argbToCssFn(config.textColor || "#3E3D3B");
     const tipColor = argbToCssFn(config.tipColor || "#803E3D3B");
+    const letterSpacing = (config.letterSpacing || 0) + "em";
+    const fontStack = fontFamily ? `"${fontFamily}", inherit` : "inherit";
 
     let html = "";
 
@@ -99,7 +102,7 @@ export function generatePreviewHTML(
             10 * comp +
             "px; color:" +
             tipColor +
-            ';">' +
+            '; font-family: sans-serif;">' +
             "<span>" +
             getTipTextFn(config.tipHeaderLeft ?? 2) +
             "</span>" +
@@ -142,7 +145,13 @@ export function generatePreviewHTML(
             "px; " +
             " margin-bottom:" +
             (config.titleBottomSpacing || 0) * comp +
-            'px;">' +
+            "px; " +
+            " letter-spacing:" +
+            letterSpacing +
+            "; " +
+            " font-family:" +
+            fontStack +
+            ';">' +
             title +
             "</div>";
     }
@@ -164,14 +173,20 @@ export function generatePreviewHTML(
             " margin-top: 0; " +
             " text-indent:" +
             (config.paragraphIndent?.length || 0) +
-            'em;">' +
+            "em; " +
+            " letter-spacing:" +
+            letterSpacing +
+            "; " +
+            " font-family:" +
+            fontStack +
+            ';">' +
             paras[i] +
             "</p>";
     }
     html += "</div></div>";
 
     // Footer
-    if (config.footerMode !== 2) {
+    if (config.footerMode !== 1) {
         const borderStr = config.showFooterLine ? "border-top: 1px solid " + tipColor + ";" : "";
         html +=
             '<div style="display:flex; align-items:center; justify-content:space-between; flex-shrink: 0; opacity:0.8; ' +
@@ -192,7 +207,7 @@ export function generatePreviewHTML(
             10 * comp +
             "px; color:" +
             tipColor +
-            ';">' +
+            '; font-family: sans-serif;">' +
             "<span>" +
             getTipTextFn(config.tipFooterLeft ?? 5) +
             "</span>" +

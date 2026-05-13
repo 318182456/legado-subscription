@@ -159,3 +159,22 @@ export const saveCustomTheme = (data: { name: string; config: string; preview_ur
   apiFetch<any>("/api/custom-themes", { method: "POST", body: JSON.stringify(data) });
 export const deleteCustomTheme = (id: number) => 
   apiFetch<any>(`/api/custom-themes/${id}`, { method: "DELETE" });
+
+export const ensureAsset = async (file: Blob, category: string, name: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', category);
+  formData.append('name', name);
+
+  // 注意：这里手动处理 fetch，因为 apiFetch 默认设置了 Content-Type: application/json
+  const token = getToken();
+  const res = await fetch('/api/assets/ensure', {
+    method: 'POST',
+    headers: token ? { "Authorization": `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  const body = await res.json();
+  if (!res.ok || body.ok === false) throw new Error(body.error || '上传失败');
+  return body.path as string;
+};
