@@ -531,15 +531,20 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       let previewUrl = '';
       if (previewRef.current) {
         try {
-          const htmlToImage = await import('https://cdn.skypack.dev/html-to-image');
-          previewUrl = await htmlToImage.toJpeg(previewRef.current, { 
-            quality: 0.85,
-            pixelRatio: 1.5,
-            backgroundColor: '#000000',
-            style: {
-              transform: 'none',
-            }
-          });
+          const mod = await import('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/+esm');
+          const toJpeg = mod.toJpeg || (mod.default && mod.default.toJpeg);
+          if (toJpeg) {
+            previewUrl = await toJpeg(previewRef.current, { 
+              quality: 0.8,
+              pixelRatio: 1,
+              backgroundColor: '#000000',
+              skipFonts: true,
+              fontEmbedCSS: '',
+              cacheBust: true,
+              style: { transform: 'none' }
+            });
+            console.log('Preview generated, length:', previewUrl?.length);
+          }
         } catch (err) {
           console.error('Failed to generate preview image', err);
         }
@@ -603,7 +608,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'transparent', 
               color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
               backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
-                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr}`}")` : 'none',
+                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`}")` : 'none',
               backgroundSize: 'cover', backgroundPosition: 'center',
               letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
             }}

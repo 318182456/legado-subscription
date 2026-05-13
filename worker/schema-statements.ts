@@ -1,5 +1,5 @@
 export const SCHEMA_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS subscriptions (
+    `CREATE TABLE IF NOT EXISTS subscriptions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL DEFAULT '',
     url         TEXT    NOT NULL,
@@ -9,7 +9,7 @@ export const SCHEMA_STATEMENTS = [
     item_count  INTEGER DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
   )`,
-  `CREATE TABLE IF NOT EXISTS sources (
+    `CREATE TABLE IF NOT EXISTS sources (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
     book_source_url TEXT    NOT NULL,
@@ -23,7 +23,7 @@ export const SCHEMA_STATEMENTS = [
     last_checked    TEXT    DEFAULT NULL,
     UNIQUE(subscription_id, book_source_url)
   )`,
-  `CREATE TABLE IF NOT EXISTS rules (
+    `CREATE TABLE IF NOT EXISTS rules (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
     name            TEXT    NOT NULL DEFAULT '',
@@ -34,13 +34,13 @@ export const SCHEMA_STATEMENTS = [
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(subscription_id, name, pattern)
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_subscriptions_type    ON subscriptions(type)`,
-  `CREATE INDEX IF NOT EXISTS idx_sources_subscription  ON sources(subscription_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_sources_enabled       ON sources(enabled)`,
-  `CREATE INDEX IF NOT EXISTS idx_rules_subscription    ON rules(subscription_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_rules_enabled         ON rules(enabled)`,
-  `CREATE INDEX IF NOT EXISTS idx_sources_available       ON sources(is_available)`,
-  `CREATE TABLE IF NOT EXISTS passkeys (
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_type    ON subscriptions(type)`,
+    `CREATE INDEX IF NOT EXISTS idx_sources_subscription  ON sources(subscription_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sources_enabled       ON sources(enabled)`,
+    `CREATE INDEX IF NOT EXISTS idx_rules_subscription    ON rules(subscription_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rules_enabled         ON rules(enabled)`,
+    `CREATE INDEX IF NOT EXISTS idx_sources_available       ON sources(is_available)`,
+    `CREATE TABLE IF NOT EXISTS passkeys (
     id          TEXT PRIMARY KEY,
     public_key  TEXT NOT NULL,
     counter     INTEGER NOT NULL DEFAULT 0,
@@ -48,10 +48,10 @@ export const SCHEMA_STATEMENTS = [
     name        TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-  `ALTER TABLE sources ADD COLUMN is_available INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE sources ADD COLUMN last_checked TEXT DEFAULT NULL`,
-  `ALTER TABLE sources ADD COLUMN test_url TEXT DEFAULT NULL`,
-  `CREATE TABLE IF NOT EXISTS custom_themes (
+    `ALTER TABLE sources ADD COLUMN is_available INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE sources ADD COLUMN last_checked TEXT DEFAULT NULL`,
+    `ALTER TABLE sources ADD COLUMN test_url TEXT DEFAULT NULL`,
+    `CREATE TABLE IF NOT EXISTS custom_themes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
     config      TEXT    NOT NULL,
