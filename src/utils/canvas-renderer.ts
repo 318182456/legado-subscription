@@ -97,13 +97,11 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
-    // 测量实际字体高度（ascent + descent），作为行高基准
-    // ctx.font 已在 L47 正确设置为 fontString
-    const bodyMeasure = ctx.measureText("国");
-    const bodyAscent = bodyMeasure.actualBoundingBoxAscent ?? fontSize * 0.86;
-    const bodyDescent = bodyMeasure.actualBoundingBoxDescent ?? fontSize * 0.14;
-    const textHeight = bodyAscent + bodyDescent;
-    const ascent = bodyAscent;
+    // textHeight 用 fontSize * 1.2 近似 Android fontMetrics.descent - fontMetrics.ascent
+    // （actualBoundingBox 只测实际像素，比 Android fontMetrics 小约 20-35%）
+    // CJK 字体在 Android 下典型比率为 1.2~1.35
+    const textHeight = fontSize * 1.2;
+    const ascent = fontSize * 0.86; // baseline 偏移保持不变
 
     // 字间距：Android letterSpacing 为字号的倍率（em 单位）
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
@@ -268,12 +266,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        const tBodyMeasure = ctx.measureText("国");
-        const tTextHeight =
-            (tBodyMeasure.actualBoundingBoxAscent ?? tFontSize * 0.86) +
-            (tBodyMeasure.actualBoundingBoxDescent ?? tFontSize * 0.14);
-        // 标题行高与正文公式一致：textHeight + lineSpacingExtra(dp)
-        const tLineH = tTextHeight + (cfg.lineSpacingExtra ?? 12) * d;
+        // 标题行高：tFontSize 作为基准（等价于 Android fontMetrics 高度，不用 actualBoundingBox）
+        const tLineH = tFontSize + (cfg.lineSpacingExtra ?? 12) * d;
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
