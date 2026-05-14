@@ -11,6 +11,84 @@ import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS, getTipText } from '../utils/constants';
 import { drawTheme } from '../utils/canvas-renderer';
 
+// --- Canvas 预览组件 ---
+const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const isRunning = React.useRef(false);
+  const needsRedraw = React.useRef(false);
+
+  // 使用 Ref 存储最新状态，确保 runDraw 总是能拿到最新的配置
+  const latestRef = React.useRef({ config, device, fontFamily, bgImage });
+  React.useEffect(() => {
+    latestRef.current = { config, device, fontFamily, bgImage };
+  }, [config, device, fontFamily, bgImage]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const runDraw = async () => {
+      if (isRunning.current) {
+        needsRedraw.current = true;
+        return;
+      }
+
+      const { config: c, device: d_dev, fontFamily: f, bgImage: b } = latestRef.current;
+
+      // 若配置指定了字体但 fontFamily 还未设置，说明字体正在加载中
+      if (c.textFont && !c.textFont.startsWith('content://') && !f) {
+        return;
+      }
+
+      isRunning.current = true;
+      try {
+        const PHONE_DPR = 3;
+        canvas.width  = d_dev.width  * PHONE_DPR;
+        canvas.height = d_dev.height * PHONE_DPR;
+        
+        if (!cancelled) {
+          await drawTheme(ctx, c, {
+            width: d_dev.width,
+            height: d_dev.height,
+            pixelRatio: PHONE_DPR,
+            fontFamily: f,
+            bgImage: b,
+            getTipText,
+            PREVIEW_TITLE,
+            PREVIEW_PARAS
+          });
+        }
+      } finally {
+        isRunning.current = false;
+        if (needsRedraw.current && !cancelled) {
+          needsRedraw.current = false;
+          runDraw();
+        }
+      }
+    };
+
+    runDraw();
+    return () => { cancelled = true; };
+  }, [config, device, fontFamily, bgImage]);
+
+  return (
+    <div className="w-full h-full relative bg-black">
+      <canvas 
+        ref={canvasRef} 
+        style={{ width: '100%', height: '100%', display: 'block' }} 
+      />
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] z-50">
+          <RefreshCw className="animate-spin text-primary" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // 外部库引用
 declare const fflate: any;
 declare const Tesseract: any;
@@ -132,70 +210,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   ];
   const [device, setDevice] = useState(DEVICES[0]);
 
-  // --- Canvas 预览组件 ---
-  const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
-    const canvasRef = React.useRef<HTMLCanvasElement>(null);
-    // 防并发锁：阻止同一组件多个异步渲染并行执行
-    const isRunning = React.useRef(false);
-    
-    React.useEffect(() => {
-      // 若上一次渲染还在进行中，跳过本次（防雪崩）
-      if (isRunning.current) return;
-
-      let cancelled = false;
-      const runDraw = async () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // 若配置指定了字体但 fontFamily 还未设置，说明字体正在加载中
-        if (config.textFont && !config.textFont.startsWith('content://') && !fontFamily) {
-          return;
-        }
-
-        isRunning.current = true;
-        try {
-          const PHONE_DPR = 3;
-          canvas.width  = device.width  * PHONE_DPR;
-          canvas.height = device.height * PHONE_DPR;
-          
-          if (!cancelled) {
-            await drawTheme(ctx, config, {
-              width: device.width,
-              height: device.height,
-              pixelRatio: PHONE_DPR,
-              fontFamily,
-              bgImage,
-              getTipText,
-              PREVIEW_TITLE,
-              PREVIEW_PARAS
-            });
-          }
-        } finally {
-          isRunning.current = false;
-        }
-      };
-
-      runDraw();
-      // effect 清理：标记本次渲染已作废
-      return () => { cancelled = true; };
-    }, [config, device, fontFamily, bgImage]);
-
-    return (
-      <div className="w-full h-full relative bg-black">
-        <canvas 
-          ref={canvasRef} 
-          style={{ width: '100%', height: '100%', display: 'block' }} 
-        />
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] z-50">
-            <RefreshCw className="animate-spin text-primary" />
-          </div>
-        )}
-      </div>
-    );
-  };
   const [saving, setSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
   const [loading, setLoading] = useState(false);
@@ -717,7 +731,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             height: `${device.height}px`, 
             borderRadius: `${device.radius}px`,
             padding: `${device.bezel * 4}px`,
-            transform: `scale(${device.width > 400 ? 0.58 : 0.68})` 
+            transform: `scale(${device.width > 400 ? 0.88 : 0.95})` 
           }}
         >
           <div className="w-full h-full relative overflow-hidden flex flex-col bg-black">

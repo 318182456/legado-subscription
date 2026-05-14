@@ -266,8 +266,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        // 标题行高：和正文相同的 1.2 倍率 + lineSpacingExtra
-        const tLineH = tFontSize * 1.2 + (cfg.lineSpacingExtra ?? 12) * d;
+        // 标题行高：和正文相同的 1.33 倍率 + lineSpacingExtra
+        const tLineH = tFontSize * 1.33 + (cfg.lineSpacingExtra ?? 12) * d;
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
@@ -289,7 +289,11 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const fFontSize = 11 * d;
     const footerSafeH =
         cfg.footerMode !== 1
-            ? (cfg.footerPaddingBottom ?? 9) * d + fFontSize + navH + (cfg.paddingBottom ?? 15) * d
+            ? (cfg.footerPaddingBottom ?? 9) * d +
+              fFontSize +
+              (cfg.footerPaddingTop ?? 6) * d + // 加上页脚上间距
+              navH +
+              (cfg.paddingBottom ?? 15) * d
             : 0;
     const maxY = H - footerSafeH;
 
@@ -323,13 +327,16 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const fY = H - navH - (cfg.footerPaddingBottom ?? 9) * d - fFontSize;
         const fBaseY = fY + fFontSize * 0.86;
 
+        // 页脚线位置：考虑 footerPaddingTop
+        const lineY = Math.floor(fY - (cfg.footerPaddingTop ?? 6) * d);
+
         if (cfg.showFooterLine) {
             ctx.strokeStyle = tipColor;
             ctx.globalAlpha = 0.2;
             ctx.lineWidth = 0.5 * d;
             ctx.beginPath();
-            ctx.moveTo(16 * d, Math.floor(fY - 8 * d));
-            ctx.lineTo(W - 16 * d, Math.floor(fY - 8 * d));
+            ctx.moveTo(16 * d, lineY);
+            ctx.lineTo(W - 16 * d, lineY);
             ctx.stroke();
             ctx.globalAlpha = 1;
         }
