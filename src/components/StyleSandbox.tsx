@@ -135,8 +135,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   // --- Canvas 预览组件 ---
   const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
+    // 防并发锁：阻止同一组件多个异步渲染并行执行
+    const isRunning = React.useRef(false);
     
     React.useEffect(() => {
+      // 若上一次渲染还在进行中，跳过本次（防雪崩）
+      if (isRunning.current) return;
+
+      let cancelled = false;
       const runDraw = async () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -144,32 +150,36 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         if (!ctx) return;
 
         // 若配置指定了字体但 fontFamily 还未设置，说明字体正在加载中
-        // 跳过本帧，等字体就绪后 React 会自动触发下一次渲染
         if (config.textFont && !config.textFont.startsWith('content://') && !fontFamily) {
-          console.log('[CanvasPreview] 等待字体加载，跳过本帧渲染...');
           return;
         }
 
-        console.log(`[CanvasPreview] 开始渲染，fontFamily="${fontFamily}", device=${device.width}x${device.height}`);
-
-        // 固定使用手机屏幕密度 3.0，模拟真实 Android 高分屏排版
-        const PHONE_DPR = 3;
-        canvas.width  = device.width  * PHONE_DPR;
-        canvas.height = device.height * PHONE_DPR;
-        
-        await drawTheme(ctx, config, {
-          width: device.width,
-          height: device.height,
-          pixelRatio: PHONE_DPR,
-          fontFamily,
-          bgImage,
-          getTipText,
-          PREVIEW_TITLE,
-          PREVIEW_PARAS
-        });
+        isRunning.current = true;
+        try {
+          const PHONE_DPR = 3;
+          canvas.width  = device.width  * PHONE_DPR;
+          canvas.height = device.height * PHONE_DPR;
+          
+          if (!cancelled) {
+            await drawTheme(ctx, config, {
+              width: device.width,
+              height: device.height,
+              pixelRatio: PHONE_DPR,
+              fontFamily,
+              bgImage,
+              getTipText,
+              PREVIEW_TITLE,
+              PREVIEW_PARAS
+            });
+          }
+        } finally {
+          isRunning.current = false;
+        }
       };
 
       runDraw();
+      // effect 清理：标记本次渲染已作废
+      return () => { cancelled = true; };
     }, [config, device, fontFamily, bgImage]);
 
     return (
