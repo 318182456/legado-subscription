@@ -143,14 +143,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = device.width * dpr;
-        canvas.height = device.height * dpr;
+        // 固定使用手机屏幕密度 3.0，模拟真实 Android 高分屏排版
+        const PHONE_DPR = 3;
+        canvas.width  = device.width  * PHONE_DPR;
+        canvas.height = device.height * PHONE_DPR;
         
         await drawTheme(ctx, config, {
           width: device.width,
           height: device.height,
-          pixelRatio: dpr,
+          pixelRatio: PHONE_DPR,
           fontFamily,
           bgImage,
           getTipText,
@@ -675,7 +676,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             height: `${device.height}px`, 
             borderRadius: `${device.radius}px`,
             padding: `${device.bezel * 4}px`,
-            transform: `scale(${device.width > 400 ? 0.6 : 0.75})` 
+            transform: `scale(${device.width > 400 ? 0.58 : 0.68})` 
           }}
         >
           <div className="w-full h-full relative overflow-hidden flex flex-col bg-black">
