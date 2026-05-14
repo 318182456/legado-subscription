@@ -11,21 +11,25 @@ export interface RenderOptions {
     PREVIEW_PARAS: string[];
 }
 
-// 避头尾禁则库 (对齐原生)
+// 避头尾禁则库
 const POST_PANC = new Set(`，。：？！、”’）》】)\]」}；;·…~～!?,.`.split(""));
 const PRE_PANC = new Set(`“‘（《【(\[「{`.split(""));
 
-// 👑 核心修正 1：获取真实的 FontMetrics，而不是魔法数字
-const getRealFontMetrics = (ctx: CanvasRenderingContext2D, sample = "国Agy") => {
+// 👑 修正 5：优先取 actualBoundingBox，加入安全 fallback 防止发布环境报 0
+const getRealFontMetrics = (ctx: CanvasRenderingContext2D, fontSize: number, sample = "国Agy") => {
     const m = ctx.measureText(sample);
-    // 优先使用 fontBoundingBox (最接近 Android Paint.FontMetrics)，回退到 actualBoundingBox
-    const ascent = m.fontBoundingBoxAscent || m.actualBoundingBoxAscent || 0;
-    const descent = m.fontBoundingBoxDescent || m.actualBoundingBoxDescent || 0;
+    const ascent = m.actualBoundingBoxAscent || m.fontBoundingBoxAscent || fontSize * 0.8;
+    const descent = m.actualBoundingBoxDescent || m.fontBoundingBoxDescent || fontSize * 0.2;
     return {
         ascent,
         descent,
-        textHeight: ascent + descent
+        fontSpacing: ascent + descent // 对应 Android Paint.getFontSpacing()
     };
+};
+
+// 👑 修正 3：动态获取字间距（不同字号应有不同的物理间距）
+const getLetterSpacing = (fontSize: number, em: number) => {
+    return em * fontSize * 0.85; // 0.85 为 Web 模拟 Android 的经验补偿系数
 };
 
 export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options: RenderOptions) {
@@ -44,7 +48,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const H = logicalH * pr;
     const d = pr;
 
-    // ── 1. 字体初始化 ──────────────────────────────────
     const fontSize = (cfg.textSize ?? 22) * d;
     const isBold = cfg.textBold === 1 ? "bold " : "";
     const fontName = cfg.textFont
@@ -54,14 +57,19 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
           : "PingFang SC";
     const fontString = `${isBold}${fontSize}px "${fontName}", "PingFang SC", sans-serif`;
 
+    // 👑 修正 6：彻底解决开发正常、发布不对的“字体未加载完”幽灵 Bug
     try {
-        await (document as any).fonts.load(`${fontSize}px "${fontName}"`);
-        await (document as any).fonts.ready;
+        const fontFaceSet = (document as any).fonts;
+        await fontFaceSet.load(`${fontSize}px "${fontName}"`, "国Agy");
+        await fontFaceSet.ready;
     } catch (e) {}
 
     ctx.font = fontString;
     ctx.imageSmoothingEnabled = true;
     ctx.textBaseline = "alphabetic";
+
+    // 强制进行一次测算，打通浏览器渲染管线
+    ctx.measureText("国");
 
     const cleanParas = PREVIEW_PARAS.map(p =>
         p.trim().replace(/!/g, "！").replace(/\?/g, "？").replace(/,/g, "，")
@@ -78,20 +86,16 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return hex;
     };
 
-    // ── 2. 提取真实排版参数 ───────────────────────────────
+    // ── 1. 提取核心排版参数 ─────────────────────────────────
     ctx.font = fontString;
-    const { ascent, textHeight } = getRealFontMetrics(ctx);
+    const { ascent, descent, fontSpacing } = getRealFontMetrics(ctx, fontSize);
 
-    // 👑 核心修正 2：Android WebView/Canvas 对 setLetterSpacing() 的经验修正值 (0.85)
     const letterSpacingEm = cfg.letterSpacing ?? 0.04;
-    const letterSp = letterSpacingEm * fontSize * 0.85;
-
-    // 绝对物理像素追加
-    const lineSpacing = (cfg.lineSpacingExtra ?? 12) * d;
+    const lineSpacingExtra = (cfg.lineSpacingExtra ?? 12) * d;
     const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
 
-    // 👑 核心修正 3：Android 实际的行高推算 (更接近 paint.getFontSpacing())
-    const lineHeight = fontSize + lineSpacing + 2 * d;
+    // 👑 修正 2：修复行高公式，摒弃魔法数字 2*d
+    const lineHeight = fontSpacing + lineSpacingExtra;
 
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
@@ -101,18 +105,14 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const contentW = W - pL - pR;
     const indentW = ctx.measureText(cfg.paragraphIndent ?? "　　").width;
 
-    // ── 3. 分词与测量引擎 ────────────────────────────────
+    // ── 2. 分词与测量引擎 ─────────────────────────────────
     const segmenter =
         typeof Intl !== "undefined" && Intl.Segmenter
             ? new Intl.Segmenter("zh-CN", { granularity: "word" })
             : null;
 
-    // 👑 核心修正 4：修正测量函数，让宽度计算和绘制计算成为同一套
-    const measure = (str: string, curFontSize: number = fontSize): number => {
-        const width = ctx.measureText(str).width;
-        if (str.length <= 1) return width;
-        return width + (str.length - 1) * letterSp;
-    };
+    // 👑 修正 1：剥离 measure 的字距，只测字宽，防止累加误差爆炸
+    const measure = (str: string): number => ctx.measureText(str).width;
 
     const layoutLines = (
         text: string,
@@ -134,24 +134,25 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         let line: string[] = [];
         let currentW = 0;
         let isFirstLine = true;
+        const currentLetterSp = getLetterSpacing(curFontSize, letterSpacingEm);
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
-            const cw = measure(token, curFontSize);
+            const cw = measure(token);
             const limit = isFirstLine ? maxW - firstIndent : maxW;
-            const expectedW = currentW + (line.length > 0 ? letterSp : 0) + cw;
+            const expectedW = currentW + (line.length > 0 ? currentLetterSp : 0) + cw;
 
             if (expectedW > limit + 0.1 && line.length > 0) {
                 if (POST_PANC.has(token) && line.length > 1) {
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
-                    currentW = measure(prevToken, curFontSize) + letterSp + cw;
+                    currentW = measure(prevToken) + currentLetterSp + measure(token);
                 } else if (PRE_PANC.has(line[line.length - 1]) && line.length > 1) {
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
-                    currentW = measure(prevToken, curFontSize) + letterSp + cw;
+                    currentW = measure(prevToken) + currentLetterSp + measure(token);
                 } else {
                     lines.push([...line]);
                     line = [token];
@@ -160,14 +161,14 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
                 isFirstLine = false;
             } else {
                 line.push(token);
-                currentW += (line.length > 1 ? letterSp : 0) + cw;
+                currentW += (line.length > 1 ? currentLetterSp : 0) + cw;
             }
         }
         if (line.length > 0) lines.push(line);
         return lines;
     };
 
-    // ── 4. 绘制函数 (附带像素级两端对齐) ─────────────────────
+    // ── 3. 绘制函数 (严格像素级对齐) ───────────────────────────
     const drawLineBaseline = (
         tokens: string[],
         x: number,
@@ -177,24 +178,25 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         curFontSize: number
     ) => {
         if (!tokens.length) return;
-        const ws = tokens.map(t => measure(t, curFontSize));
+        const currentLetterSp = getLetterSpacing(curFontSize, letterSpacingEm);
+
+        const ws = tokens.map(t => measure(t));
         const totalCharW = ws.reduce((a, b) => a + b, 0);
-        const totalBaseSp = letterSp * (tokens.length - 1);
+        const totalBaseSp = currentLetterSp * (tokens.length - 1);
 
         let extraSpacePerGap = 0;
         let extraSpacePerSpaceChar = 0;
 
         if (align === "justify" && tokens.length > 1) {
-            // 👑 核心修正 5：防止负间距溢出
             const occupiedW = totalCharW + totalBaseSp;
             const remainingW = Math.max(0, targetWidth - occupiedW);
 
             if (remainingW > 0) {
                 const spaceCount = tokens.filter(t => t.trim() === "").length;
                 if (spaceCount > 0) {
+                    // Android 默认行为：向下取整
                     extraSpacePerSpaceChar = Math.floor(remainingW / spaceCount);
                 } else {
-                    // 👑 核心修正 6：Math.floor 模拟 Android 像素对齐抛弃浮点
                     extraSpacePerGap = Math.floor(remainingW / (tokens.length - 1));
                 }
             }
@@ -204,9 +206,11 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const dy = Math.round(yBaseline);
         for (let i = 0; i < tokens.length; i++) {
             ctx.fillText(tokens[i], sx, dy);
+            // 👑 修正 1：末尾字符不再无脑累加间距
+            const isLast = i === tokens.length - 1;
             sx +=
                 ws[i] +
-                letterSp +
+                (isLast ? 0 : currentLetterSp) +
                 extraSpacePerGap +
                 (tokens[i].trim() === "" ? extraSpacePerSpaceChar : 0);
         }
@@ -214,7 +218,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     ctx.save();
 
-    // ── 5. 背景绘制 ──────────────────────────────────────────
+    // ── 4. 基础绘制与坐标系初始化 ──────────────────────────────
     if (cfg.bgType === 2 && bgImage) {
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(0, 0, W, H);
@@ -226,7 +230,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 6. 坐标系堆叠 ─────────────────────────────────────────
     let currentY = 0;
 
     // [状态栏]
@@ -273,7 +276,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         }
     }
 
-    // 正文布局安全起点
     currentY = headerBottom + (cfg.paddingTop ?? 15) * d;
 
     // [标题区域]
@@ -282,23 +284,26 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
 
-        // 👑 标题单独测算 RealFontMetrics
-        const { ascent: tAscent, textHeight: tTextHeight } = getRealFontMetrics(ctx);
+        // 独立测算标题的 Metrics
+        const {
+            ascent: tAscent,
+            descent: tDescent,
+            fontSpacing: tFontSpacing
+        } = getRealFontMetrics(ctx, tFontSize);
 
         currentY += (cfg.titleTopSpacing ?? 8) * d;
         let titleBaseline = currentY + tAscent;
 
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
-
         for (let i = 0; i < tLines.length; i++) {
             drawLineBaseline(tLines[i], pL, titleBaseline, "left", contentW, tFontSize);
             if (i < tLines.length - 1) {
-                titleBaseline += tTextHeight;
+                // 标题内部多行，只加本身字距，无需 lineSpacingExtra
+                titleBaseline += tFontSpacing;
             }
         }
 
-        // 同步到底部边界
-        currentY = titleBaseline + (tTextHeight - tAscent);
+        currentY = titleBaseline + tDescent;
         currentY += (cfg.titleBottomSpacing ?? 18) * d;
     }
 
@@ -316,9 +321,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
               navH
             : navH;
 
-    // 计算边界
     const maxY = H - footerSafeH - (cfg.paddingBottom ?? 15) * d;
-
     let bodyBaseline = currentY + ascent;
 
     outer: for (let pi = 0; pi < cleanParas.length; pi++) {
@@ -326,8 +329,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const lines = layoutLines(para, contentW, indentW, fontSize);
 
         for (let li = 0; li < lines.length; li++) {
-            // 用真实边界做越界判定
-            if (bodyBaseline + (textHeight - ascent) > maxY) break outer;
+            // 👑 修正 4：越界判定严格使用 descent 属性
+            if (bodyBaseline + descent > maxY) break outer;
 
             const isFirstLine = li === 0;
             const currentX = pL + (isFirstLine ? indentW : 0);
@@ -336,12 +339,12 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
             drawLineBaseline(lines[li], currentX, bodyBaseline, justifyMode, targetW, fontSize);
 
-            // 👑 核心修正 7：使用重建的 lineHeight
             if (li < lines.length - 1) {
+                // 正常行间距步进
                 bodyBaseline += lineHeight;
             }
         }
-        // 👑 核心修正 8：段落高度步进 = lineHeight + paraSpacing
+        // 段落间距步进
         if (pi < cleanParas.length - 1) {
             bodyBaseline += lineHeight + paraSpacing;
         }
