@@ -232,7 +232,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     let headerBottom = currentY;
     if (cfg.headerMode !== 2) {
         const hFontSize = 11 * d;
-        ctx.font = `${hFontSize}px ${fontString}`;
+        // 页眉字体字符串：独立构建，不能用 fontString（它已包含 fontSize）
+        ctx.font = `${hFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
 
         const hY = currentY + (cfg.headerPaddingTop ?? 20) * d;
@@ -266,8 +267,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        // 标题行高：tFontSize 作为基准（等价于 Android fontMetrics 高度，不用 actualBoundingBox）
-        const tLineH = tFontSize + (cfg.lineSpacingExtra ?? 12) * d;
+        // 标题行高：和正文相同的 1.2 倍率 + lineSpacingExtra
+        const tLineH = tFontSize * 1.2 + (cfg.lineSpacingExtra ?? 12) * d;
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
@@ -316,7 +317,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     // [底层] 页脚 Footer
     if (cfg.footerMode !== 1) {
-        ctx.font = `${fFontSize}px ${fontString}`;
+        // 页脚字体字符串：独立构建，不能用 fontString
+        ctx.font = `${fFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
 
         const fY = H - navH - (cfg.footerPaddingBottom ?? 9) * d - fFontSize;
