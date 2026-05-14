@@ -63,7 +63,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // ── 3. 基础参数计算 ───────────────────────────────────────
     const toRgba = (hex: any): string => {
         // 非字符串类型（数字/undefined/null）直接返回默认色
-        if (typeof hex !== 'string') return "rgba(0,0,0,1)";
+        if (typeof hex !== "string") return "rgba(0,0,0,1)";
         if (!hex.startsWith("#")) return hex;
         if (hex.length === 9) {
             const a = parseInt(hex.slice(1, 3), 16) / 255;
@@ -100,35 +100,34 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // 测量实际字体高度（ascent + descent），作为行高基准
     // ctx.font 已在 L47 正确设置为 fontString
     const bodyMeasure = ctx.measureText("国");
-    const bodyAscent  = bodyMeasure.actualBoundingBoxAscent  ?? fontSize * 0.86;
+    const bodyAscent = bodyMeasure.actualBoundingBoxAscent ?? fontSize * 0.86;
     const bodyDescent = bodyMeasure.actualBoundingBoxDescent ?? fontSize * 0.14;
-    const textHeight  = bodyAscent + bodyDescent;
+    const textHeight = bodyAscent + bodyDescent;
     const ascent = bodyAscent;
 
     // 字间距：Android letterSpacing 为字号的倍率（em 单位）
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     /**
-     * 行高公式对齐 Legado ChapterProvider.kt:
-     *   durY += textHeight + textHeight * lineSpacingExtra
-     *   lineH = textHeight * (1 + lineSpacingExtra/10)
-     * lineSpacingExtra=12 → lineH = textHeight * 2.2
+     * 行高公式：textHeight(px) + lineSpacingExtra(dp)
+     * lineSpacingExtra 是绝对 dp 值，不是倍率
+     * lineSpacingExtra=12 → lineH = textHeight + 12*3 = textHeight + 36px
      */
-    const lineH = textHeight * (1 + (cfg.lineSpacingExtra ?? 12) / 10);
+    const lineH = textHeight + (cfg.lineSpacingExtra ?? 12) * d;
 
     /**
-     * 段落间距公式同样以 textHeight 为基准
-     *   paraSpacing = textHeight * paragraphSpacing/10
-     * paragraphSpacing=5 → paraSpacing = textHeight * 0.5
+     * 段落间距同理为绝对 dp 值
+     * paragraphSpacing=5 → paraSpacing = 5*3 = 15px
      */
-    const paraSpacing = textHeight * (cfg.paragraphSpacing ?? 5) / 10;
+    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
 
-    // 强制缩进宽度：读取缩进字符数 (如 "　　" 长度为 2) 乘以标准字号
-    const indentW = (cfg.paragraphIndent?.length ?? 0) * fontSize;
+    // 首行缩进：实测全角空格宽度（不同字体下 　 宽度不等于 fontSize）
+    const emW = ctx.measureText("　").width; // 全角空格实际宽度
+    const indentW = (cfg.paragraphIndent?.length ?? 0) * emW;
 
     // ── 5. 断行与排版引擎 ─────────────────────────────────────
     const layoutLines = (
@@ -269,7 +268,12 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        const tLineH = tFontSize * 1.14 + (cfg.lineSpacingExtra ?? 12) * d;
+        const tBodyMeasure = ctx.measureText("国");
+        const tTextHeight =
+            (tBodyMeasure.actualBoundingBoxAscent ?? tFontSize * 0.86) +
+            (tBodyMeasure.actualBoundingBoxDescent ?? tFontSize * 0.14);
+        // 标题行高与正文公式一致：textHeight + lineSpacingExtra(dp)
+        const tLineH = tTextHeight + (cfg.lineSpacingExtra ?? 12) * d;
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
