@@ -69,9 +69,11 @@ export async function drawTheme(
     const fontStack = `"${fontFamily}", sans-serif`;
     
     const textSize = cfg.textSize || 22;
-    const letterSp = (cfg.letterSpacing || 0) * textSize;
+    const letterSp = (cfg.letterSpacing ?? 0) * textSize;
+    // Legado 源码: durY += textHeight * lineSpacingExtra (lineSpacingExtra = configValue/10)
+    // 行高倍率是总倍率，textSize * 1.2 即一行总高，不是 textSize + textSize*1.2
     const lineSpacingRatio = (cfg.lineSpacingExtra ?? 12) / 10;
-    const lineH = textSize * (1 + lineSpacingRatio);
+    const lineH = textSize * lineSpacingRatio;  // ✅ 对应 Legado 第605行
     
     const pL = dpToPx(cfg.paddingLeft ?? 16);
     const pR = dpToPx(cfg.paddingRight ?? 16);
@@ -233,20 +235,21 @@ export async function drawTheme(
     ctx.globalAlpha = 1.0;
     curY += pT;
     
-    // 标题
+    // 标题 (对应 Legado getTextChapter 中的 setTypeText + titleBottomSpacing)
     if (cfg.titleMode !== 2) {
-        const tSize = textSize + (cfg.titleSize || 0);
+        const tSize = textSize + (cfg.titleSize ?? 0);  // textSize + titleSize (sp)
         ctx.font = `bold ${tSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
-        curY += dpToPx(cfg.titleTopSpacing || 0);
+        curY += dpToPx(cfg.titleTopSpacing ?? 0);
         
         const align = cfg.titleMode === 1 ? 'center' : 'left';
         const titleLines = layoutLines(PREVIEW_TITLE, contentW, 0);
         for (const line of titleLines) {
             drawLine(line, align === 'center' ? width / 2 : pL, curY, align);
-            curY += tSize * 1.5;
+            curY += tSize * lineSpacingRatio;  // 标题行高同样用 lineSpacingRatio
         }
-        curY += dpToPx(cfg.titleBottomSpacing || 10);
+        // 对应 Legado: durY += titleBottomSpacing.dpToPx()
+        curY += dpToPx(cfg.titleBottomSpacing ?? 0);
     }
 
     // 段落
@@ -254,9 +257,10 @@ export async function drawTheme(
     if (cfg.textBold === 2) ctx.font = `300 ${textSize}px ${fontStack}`;
     
     ctx.fillStyle = textColor;
-    const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
-    const maxY = height - dpToPx(cfg.paddingBottom || 15) - 40;
-    const paraSpacing = textSize * (cfg.paragraphSpacing || 0) / 10;
+    const indentPx = (cfg.paragraphIndent?.length ?? 0) * textSize;
+    const maxY = height - dpToPx(cfg.paddingBottom ?? 15) - 40;
+    // 对应 Legado: durY += textHeight * paragraphSpacing / 10f
+    const paraSpacing = textSize * (cfg.paragraphSpacing ?? 0) / 10;
 
     outer: for (const para of PREVIEW_PARAS) {
         if (curY >= maxY) break;
