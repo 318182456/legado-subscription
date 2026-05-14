@@ -137,25 +137,29 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
     
     React.useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      const runDraw = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = device.width * dpr;
-      canvas.height = device.height * dpr;
-      
-      drawTheme(ctx, config, {
-        width: device.width,
-        height: device.height,
-        pixelRatio: dpr,
-        fontFamily,
-        bgImage,
-        getTipText,
-        PREVIEW_TITLE,
-        PREVIEW_PARAS
-      });
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = device.width * dpr;
+        canvas.height = device.height * dpr;
+        
+        await drawTheme(ctx, config, {
+          width: device.width,
+          height: device.height,
+          pixelRatio: dpr,
+          fontFamily,
+          bgImage,
+          getTipText,
+          PREVIEW_TITLE,
+          PREVIEW_PARAS
+        });
+      };
+
+      runDraw();
     }, [config, device, fontFamily, bgImage]);
 
     return (
@@ -567,13 +571,13 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   ): Promise<string> => {
     const canvas = document.createElement('canvas');
     const width = 360, height = 780;
-    const pixelRatio = 2; // 高清缩略图
+    const pixelRatio = 3; // 固定 3x 高清
     canvas.width = width * pixelRatio;
     canvas.height = height * pixelRatio;
     const ctx = canvas.getContext('2d')!;
     
-    // 渲染
-    drawTheme(ctx, cfg, {
+    // 渲染 (必须 await)
+    await drawTheme(ctx, cfg, {
       width, height, pixelRatio,
       fontFamily: selectedFontName,
       bgImage: bgImageObj,
@@ -582,7 +586,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       PREVIEW_PARAS
     });
 
-    return canvas.toDataURL('image/jpeg', 0.9);
+    return canvas.toDataURL('image/jpeg', 0.95);
   };
 
   const handleSave = async () => {

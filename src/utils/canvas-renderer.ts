@@ -13,13 +13,11 @@ export interface RenderOptions {
 
 /**
  * 专业级字形宽度缓存
- * 避免 O(n^2) 的 measureText 调用
  */
 const glyphWidthCache = new Map<string, number>();
 
 /**
- * 核心渲染引擎 (V4 生产级架构)
- * 采用 Layout/Render 分离设计，支持 Glyph Cache 和 Unicode 增强
+ * 核心渲染引擎 (V4.2 最终修正版)
  */
 export async function drawTheme(
     ctx: CanvasRenderingContext2D,
@@ -35,19 +33,19 @@ export async function drawTheme(
         PREVIEW_PARAS
     } = options;
 
-    // 0. 字体同步屏障 (关键：确保绘制时字体已就绪)
+    // 0. 字体同步屏障
     if ((document as any).fonts) {
         await (document as any).fonts.ready;
     }
 
-    // 1. 初始化画布
+    // 1. 初始化画布 (强制白底)
     ctx.save();
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width * pixelRatio, height * pixelRatio);
     ctx.scale(pixelRatio, pixelRatio);
     ctx.textBaseline = 'top';
     
-    // 2. 背景绘制 (解耦混合模式)
+    // 2. 背景绘制
     if (cfg.bgType === 2 && bgImage) {
         ctx.globalAlpha = 1.0;
         const scale = Math.max(width / bgImage.width, height / bgImage.height);
@@ -56,31 +54,29 @@ export async function drawTheme(
         ctx.drawImage(bgImage, (width - dW) / 2, (height - dH) / 2, dW, dH);
     } else {
         ctx.fillStyle = cfg.bgType === 0 ? argbToCss(cfg.bgStr || '#EEEEEE') : '#EEEEEE';
-        ctx.fillRect(0, 0, 0, 0); // Reset
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 3. 排版参数 (符合阅读器物理模型)
+    // 3. 排版参数 (修正 letterSp 单位)
     const textColor = argbToCss(cfg.textColor || '#3E3D3B');
     const tipColor = argbToCss(cfg.tipColor || '#803E3D3B');
     const fontStack = `"${fontFamily}", sans-serif`;
     
     const textSize = cfg.textSize || 22;
-    // 正确公式：letter-spacing 是基于字号的比例
-    const letterSp = textSize * (cfg.letterSpacing || 0);
+    // 兼容性处理：如果值很小则视为 em，较大则视为像素(Legado 默认)
+    const rawSp = cfg.letterSpacing || 0;
+    const letterSp = rawSp > 1 ? rawSp : (textSize * rawSp); 
+    
     const lineH = textSize + (cfg.lineSpacingExtra || 8);
     const pL = cfg.paddingLeft ?? 18;
     const pR = cfg.paddingRight ?? 18;
     const contentW = width - pL - pR;
 
-    // 清空当前字号下的缓存 (如果更换了字体或字号)
-    const cacheKeyPrefix = `${fontStack}-${textSize}-`;
-
     /**
-     * 获取精确字宽 (带缓存)
+     * 获取精确字宽 (Key 包含字体和字号)
      */
     const getCharWidth = (char: string) => {
-        const key = cacheKeyPrefix + char;
+        const key = `${ctx.font}-${char}`;
         if (glyphWidthCache.has(key)) return glyphWidthCache.get(key)!;
         const w = ctx.measureText(char).width;
         glyphWidthCache.set(key, w);
@@ -88,7 +84,7 @@ export async function drawTheme(
     };
 
     /**
-     * 文字排版绘制核心
+     * 文字绘制核心
      */
     const drawLine = (text: string, x: number, y: number, align: 'left'|'center'|'right' = 'left') => {
         const chars = Array.from(text);
@@ -99,11 +95,10 @@ export async function drawTheme(
             return w;
         });
 
-        let startX = Math.round(x);
-        if (align === 'center') startX = Math.round(x - totalW / 2);
-        else if (align === 'right') startX = Math.round(x - totalW);
+        let curX = Math.round(x);
+        if (align === 'center') curX = Math.round(x - totalW / 2);
+        else if (align === 'right') curX = Math.round(x - totalW);
 
-        let curX = startX;
         for (let i = 0; i < chars.length; i++) {
             ctx.fillText(chars[i], curX, Math.round(y));
             curX += charWList[i] + letterSp;
@@ -112,7 +107,7 @@ export async function drawTheme(
     };
 
     /**
-     * 精准排版算法 (单段落)
+     * 断行算法
      */
     const layoutLines = (text: string, maxW: number, indent: number) => {
         const chars = Array.from(text);
@@ -142,7 +137,7 @@ export async function drawTheme(
 
     let curY = 0;
 
-    // 4. 系统 UI (状态栏)
+    // 4. 状态栏
     if (!cfg.hideStatusBar) {
         ctx.globalAlpha = 0.5;
         ctx.fillStyle = tipColor;
@@ -176,11 +171,11 @@ export async function drawTheme(
         }
     }
 
-    // 6. 正文绘制
+    // 6. 正文
     ctx.globalAlpha = 1.0;
     curY += cfg.paddingTop ?? 12;
     
-    // 标题渲染
+    // 标题
     if (cfg.titleMode !== 2) {
         const tSize = Math.floor(textSize * (1.15 + (cfg.titleSize || 0) * 0.1));
         ctx.font = `bold ${tSize}px ${fontStack}`;
@@ -196,7 +191,7 @@ export async function drawTheme(
         curY += (cfg.titleBottomSpacing || 12);
     }
 
-    // 段落排版
+    // 段落
     ctx.font = `${cfg.textBold ? 'bold ' : ''}${textSize}px ${fontStack}`;
     ctx.fillStyle = textColor;
     const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
@@ -213,7 +208,7 @@ export async function drawTheme(
         curY += (cfg.paragraphSpacing || 0);
     }
 
-    // 7. 页脚渲染
+    // 7. 页脚
     if (cfg.footerMode !== 1) {
         const fPB = (cfg.footerPaddingBottom || 0) + (cfg.hideNavigationBar ? 12 : 8);
         const fY = height - fPB - 18;
