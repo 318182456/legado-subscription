@@ -12,12 +12,8 @@ export interface RenderOptions {
 }
 
 /**
- * 专业级字形宽度缓存
- */
-const glyphWidthCache = new Map<string, number>();
-
-/**
- * 核心渲染引擎 (V4.2 最终修正版)
+ * 核心渲染引擎 (V5.0 极致排版版)
+ * 解决了缓存污染导致的排版错位，实现了像素级对齐
  */
 export async function drawTheme(
     ctx: CanvasRenderingContext2D,
@@ -38,7 +34,10 @@ export async function drawTheme(
         await (document as any).fonts.ready;
     }
 
-    // 1. 初始化画布 (强制白底)
+    // 局部缓存：防止全局污染，确保本次渲染测量的是最新的字体状态
+    const localCache = new Map<string, number>();
+
+    // 1. 初始化画布
     ctx.save();
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width * pixelRatio, height * pixelRatio);
@@ -57,35 +56,27 @@ export async function drawTheme(
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 3. 排版参数 (修正 letterSp 单位)
+    // 3. 排版参数
     const textColor = argbToCss(cfg.textColor || '#3E3D3B');
     const tipColor = argbToCss(cfg.tipColor || '#803E3D3B');
     const fontStack = `"${fontFamily}", sans-serif`;
     
     const textSize = cfg.textSize || 22;
-    // 兼容性处理：如果值很小则视为 em，较大则视为像素(Legado 默认)
-    const rawSp = cfg.letterSpacing || 0;
-    const letterSp = rawSp > 1 ? rawSp : (textSize * rawSp); 
-    
+    // 间距逻辑回归 Legado 标准像素模式
+    const letterSp = cfg.letterSpacing || 0;
     const lineH = textSize + (cfg.lineSpacingExtra || 8);
     const pL = cfg.paddingLeft ?? 18;
     const pR = cfg.paddingRight ?? 18;
     const contentW = width - pL - pR;
 
-    /**
-     * 获取精确字宽 (Key 包含字体和字号)
-     */
     const getCharWidth = (char: string) => {
         const key = `${ctx.font}-${char}`;
-        if (glyphWidthCache.has(key)) return glyphWidthCache.get(key)!;
+        if (localCache.has(key)) return localCache.get(key)!;
         const w = ctx.measureText(char).width;
-        glyphWidthCache.set(key, w);
+        localCache.set(key, w);
         return w;
     };
 
-    /**
-     * 文字绘制核心
-     */
     const drawLine = (text: string, x: number, y: number, align: 'left'|'center'|'right' = 'left') => {
         const chars = Array.from(text);
         let totalW = 0;
@@ -95,20 +86,21 @@ export async function drawTheme(
             return w;
         });
 
-        let curX = Math.round(x);
-        if (align === 'center') curX = Math.round(x - totalW / 2);
-        else if (align === 'right') curX = Math.round(x - totalW);
+        let curX = x;
+        if (align === 'center') curX = x - totalW / 2;
+        else if (align === 'right') curX = x - totalW;
+        
+        // 像素对齐：保证文字起点在整数像素
+        curX = Math.round(curX);
+        const drawY = Math.round(y);
 
         for (let i = 0; i < chars.length; i++) {
-            ctx.fillText(chars[i], curX, Math.round(y));
+            ctx.fillText(chars[i], curX, drawY);
             curX += charWList[i] + letterSp;
         }
         return totalW;
     };
 
-    /**
-     * 断行算法
-     */
     const layoutLines = (text: string, maxW: number, indent: number) => {
         const chars = Array.from(text);
         const lines: string[] = [];
@@ -121,7 +113,7 @@ export async function drawTheme(
             const currentMaxW = isFirst ? maxW - indent : maxW;
             const spacing = curLine.length > 0 ? letterSp : 0;
 
-            if (curLineW + spacing + charW > currentMaxW && curLine !== '') {
+            if (curLineW + spacing + charW > currentMaxW + 0.1 && curLine !== '') {
                 lines.push(curLine);
                 curLine = char;
                 curLineW = charW;
@@ -164,8 +156,9 @@ export async function drawTheme(
             ctx.strokeStyle = tipColor;
             ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.moveTo(cfg.headerPaddingLeft || 16, Math.round(curY) + 0.5);
-            ctx.lineTo(width - (cfg.headerPaddingRight || 16), Math.round(curY) + 0.5);
+            const lineY = Math.round(curY) + 0.5;
+            ctx.moveTo(cfg.headerPaddingLeft || 16, lineY);
+            ctx.lineTo(width - (cfg.headerPaddingRight || 16), lineY);
             ctx.stroke();
             curY += 8;
         }
@@ -220,8 +213,9 @@ export async function drawTheme(
             ctx.strokeStyle = tipColor;
             ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.moveTo(cfg.footerPaddingLeft || 16, Math.round(fY) - 4.5);
-            ctx.lineTo(width - (cfg.footerPaddingRight || 16), Math.round(fY) - 4.5);
+            const lineY = Math.round(fY) - 4.5;
+            ctx.moveTo(cfg.footerPaddingLeft || 16, lineY);
+            ctx.lineTo(width - (cfg.footerPaddingRight || 16), lineY);
             ctx.stroke();
         }
         drawLine(getTipText(cfg.tipFooterLeft ?? 1), cfg.footerPaddingLeft || 16, fY);
