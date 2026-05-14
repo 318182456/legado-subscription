@@ -268,7 +268,7 @@
             const pUrl = savedPreviewUrl || config.preview_url;
             if (pUrl) {
                 container.classList.add('has-image');
-                container.innerHTML = '<img src="' + pUrl + '" style="width:100%; height:100%; object-fit:cover;">';
+                container.innerHTML = '<img src="' + pUrl + '" style="width:100%; height:100%; object-fit:contain;">';
                 return;
             }
 

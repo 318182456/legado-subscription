@@ -546,10 +546,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     cfg: any,
     bgBase64: string,
   ): Promise<string> => {
-    // 基础屏幕分辨率
-    const SCREEN_W = 360, SCREEN_H = 693; 
-    const BEZEL = 12; // 边框厚度
-    const RADIUS = 40; // 手机圆角
+    // 基础屏幕分辨率 (对齐 9:19.5 标准)
+    const SCREEN_W = 360, SCREEN_H = 780; 
+    const BEZEL = 14; // 边框厚度 (增加厚度以确保可见)
+    const RADIUS = 44; // 手机圆角
     
     // 最终画布分辨率（包含边框）
     const RENDER_W = SCREEN_W + BEZEL * 2;

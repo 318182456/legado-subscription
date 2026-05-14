@@ -155,7 +155,7 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
         <img 
           src={initialPreviewUrl || config.preview_url} 
           alt={name} 
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
           loading="lazy"
         />
       ) : (
