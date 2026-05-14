@@ -106,8 +106,8 @@ export async function drawTheme(
 
         if (align === 'justify' && chars.length > 1) {
             const residual = contentW - (totalCharW + totalSpW);
-            if (residual > 0 && residual < contentW * 0.25) {
-                // Legado 逻辑: 优先拉伸空格
+            // 阈值限制：如果剩余空间太大（超过20%），则放弃两端对齐，避免缝隙过大
+            if (residual > 0 && residual < contentW * 0.2) {
                 const spaceIndices = chars.reduce((acc, c, i) => (c === ' ' ? [...acc, i] : acc), [] as number[]);
                 if (spaceIndices.length > 0) {
                     extraSpaceW = residual / spaceIndices.length;
@@ -136,52 +136,57 @@ export async function drawTheme(
     };
 
     /**
-     * 断行逻辑 (引入 ZhLayout 避头尾禁则)
+     * 断行逻辑 (V7.1 稳健版 - 解决漏字问题)
      */
     const layoutLines = (text: string, maxW: number, indent: number) => {
         const chars = Array.from(text);
         const lines: string[] = [];
-        let curLineChars: string[] = [];
-        let curLineW = 0;
+        let i = 0;
         let isFirstLine = true;
 
-        for (let i = 0; i < chars.length; i++) {
-            const char = chars[i];
-            const charW = getCharWidth(char);
+        while (i < chars.length) {
+            let lineChars: string[] = [];
+            let lineW = 0;
             const limit = isFirstLine ? maxW - indent : maxW;
-            const sp = curLineChars.length > 0 ? letterSp : 0;
 
-            // 预判断行
-            if (curLineW + sp + charW > limit + 0.5) {
-                // 避头尾逻辑检测
-                let breakIdx = curLineChars.length;
+            // 填充本行
+            while (i < chars.length) {
+                const char = chars[i];
+                const charW = getCharWidth(char);
+                const sp = lineChars.length > 0 ? letterSp : 0;
                 
-                // 1. 行首禁入: 如果当前字符是后置标点，则前一个字必须拉下来
-                if (POST_PANC.has(char) && curLineChars.length > 1) {
-                    breakIdx--;
+                if (lineW + sp + charW > limit + 0.1) {
+                    break; // 溢出
                 }
-                
-                // 2. 行尾禁入: 如果行末字符是前置标点，则它必须拉至下一行
-                if (curLineChars.length > 0 && PRE_PANC.has(curLineChars[curLineChars.length - 1])) {
-                    breakIdx--;
-                }
-
-                if (breakIdx <= 0) breakIdx = curLineChars.length; // 防止死循环
-
-                const lineText = curLineChars.slice(0, breakIdx).join('');
-                lines.push(lineText);
-                
-                // 剩余字符重新放回处理流
-                const remaining = curLineChars.slice(breakIdx);
-                curLineChars = [...remaining, char];
-                curLineW = curLineChars.reduce((sum, c) => sum + getCharWidth(c) + letterSp, 0) - letterSp;
-                isFirstLine = false;
-            } else {
-                curLineChars.push(char);
-                curLineW += sp + charW;
+                lineChars.push(char);
+                lineW += sp + charW;
+                i++;
             }
+
+            // 处理避头尾禁则
+            if (i < chars.length && lineChars.length > 0) {
+                const nextChar = chars[i];
+                // 1. 行首禁入: 如果下一个字符是后置标点，需将本行末尾一个字拉下
+                if (POST_PANC.has(nextChar) && lineChars.length > 1) {
+                    i--;
+                    lineChars.pop();
+                }
+                // 2. 行尾禁入: 如果本行末尾是前置标点，需将其拉下
+                else if (PRE_PANC.has(lineChars[lineChars.length - 1]) && lineChars.length > 1) {
+                    i--;
+                    lineChars.pop();
+                }
+            }
+
+            if (lineChars.length === 0 && i < chars.length) {
+                // 兜底：防止单个字符过大导致的死循环
+                lineChars.push(chars[i]);
+                i++;
+            }
+
+            lines.push(lineChars.join(''));
+            isFirstLine = false;
         }
-        if (curLineChars.length > 0) lines.push(curLineChars.join(''));
         return lines;
     };
 
@@ -199,10 +204,9 @@ export async function drawTheme(
 
     // 5. 页眉
     if (cfg.headerMode !== 2) {
-        ctx.globalAlpha = 0.85;
+        ctx.globalAlpha = 0.8;
         ctx.fillStyle = tipColor;
         ctx.font = `11px ${fontStack}`;
-        // Legado 隐藏状态栏时，页眉通常上移
         const hPT = dpToPx(cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 12 : 20);
         curY = (cfg.hideStatusBar ? 0 : 36) + hPT;
         
@@ -213,12 +217,14 @@ export async function drawTheme(
         curY += 16 + dpToPx(cfg.headerPaddingBottom || 4);
         if (cfg.showHeaderLine) {
             ctx.strokeStyle = tipColor;
+            ctx.globalAlpha = 0.3; // 线条减淡
             ctx.lineWidth = 0.5;
             ctx.beginPath();
             const lineY = Math.round(curY) + 0.5;
             ctx.moveTo(dpToPx(cfg.headerPaddingLeft || 16), lineY);
             ctx.lineTo(width - dpToPx(cfg.headerPaddingRight || 16), lineY);
             ctx.stroke();
+            ctx.globalAlpha = 0.8;
             curY += 8;
         }
     }

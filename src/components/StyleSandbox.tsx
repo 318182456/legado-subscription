@@ -100,7 +100,7 @@ const DEFAULT_CONFIG = {
   tipColor: '#803E3D3B',
   textFont: '',
   bgAlpha: 100,
-  letterSpacing: 0.1,
+  letterSpacing: 0.02,
   textBold: 0,
   darkStatusIcon: true
 };
