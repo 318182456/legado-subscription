@@ -12,11 +12,15 @@ export interface RenderOptions {
     PREVIEW_PARAS: string[];
 }
 
+// 对标 ZhLayout.kt 的禁则字符集
+const POST_PANC = new Set("，。：？！、”’）》}】)>]」；;".split(''));
+const PRE_PANC = new Set("“（《【‘(<[{「".split(''));
+
 /**
- * 核心渲染引擎 (V6.0 深度对齐版)
- * 1. Padding/Spacing 全量切换为 dpToPx
- * 2. 间距换算对齐 Legado (1/10 倍率)
- * 3. 实现两端对齐 (Full Justification)
+ * 核心渲染引擎 (V7.0 深度对齐版 - 基于 Legado 渲染 Skill)
+ * 1. 引入 ZhLayout 避头尾禁则
+ * 2. 实现空格优先的两端对齐
+ * 3. 修正隐藏状态栏后的页眉偏移
  */
 export async function drawTheme(
     ctx: CanvasRenderingContext2D,
@@ -47,7 +51,6 @@ export async function drawTheme(
     
     // 2. 背景绘制
     if (cfg.bgType === 2 && bgImage) {
-        // 支持 bgAlpha
         ctx.globalAlpha = (cfg.bgAlpha ?? 100) / 100;
         const scale = Math.max(width / bgImage.width, height / bgImage.height);
         const dW = bgImage.width * scale;
@@ -55,19 +58,18 @@ export async function drawTheme(
         ctx.drawImage(bgImage, (width - dW) / 2, (height - dH) / 2, dW, dH);
         ctx.globalAlpha = 1.0;
     } else {
-        ctx.fillStyle = cfg.bgType === 0 ? argbToCss(cfg.bgStr || '#EEEEEE') : '#EEEEEE';
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = cfg.bgType === 0 ? argbToCss(cfg.bgStr || '#FFFFFF') : '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 3. 排版参数对齐
+    // 3. 排版参数对齐 (参考 legado_render_skill.md)
     const textColor = argbToCss(cfg.textColor || '#3E3D3B');
     const tipColor = argbToCss(cfg.tipColor || '#803E3D3B');
     const fontStack = `"${fontFamily}", sans-serif`;
     
     const textSize = cfg.textSize || 22;
-    // Legado: letterSpacing 是 em 单位
     const letterSp = (cfg.letterSpacing || 0) * textSize;
-    // Legado: lineSpacingExtra 是 1/10 倍率
     const lineSpacingRatio = (cfg.lineSpacingExtra ?? 12) / 10;
     const lineH = textSize * (1 + lineSpacingRatio);
     
@@ -85,7 +87,7 @@ export async function drawTheme(
     };
 
     /**
-     * 绘制一行文字，支持两端对齐
+     * 绘制一行文字，实现“空格优先”两端对齐
      */
     const drawLine = (text: string, x: number, y: number, align: 'left'|'center'|'right'|'justify' = 'left') => {
         const chars = Array.from(text);
@@ -98,20 +100,25 @@ export async function drawTheme(
             return w;
         });
 
-        // 基础间距总和
-        let totalSpW = letterSp * (chars.length - 1);
-        let extraSp = 0;
+        const totalSpW = letterSp * (chars.length - 1);
+        let extraCharSp = 0;
+        let extraSpaceW = 0;
 
-        // 两端对齐逻辑
         if (align === 'justify' && chars.length > 1) {
             const residual = contentW - (totalCharW + totalSpW);
-            if (residual > 0 && residual < contentW * 0.2) { // 只有间隙不是特别夸张时才对齐
-                extraSp = residual / (chars.length - 1);
+            if (residual > 0 && residual < contentW * 0.25) {
+                // Legado 逻辑: 优先拉伸空格
+                const spaceIndices = chars.reduce((acc, c, i) => (c === ' ' ? [...acc, i] : acc), [] as number[]);
+                if (spaceIndices.length > 0) {
+                    extraSpaceW = residual / spaceIndices.length;
+                } else {
+                    extraCharSp = residual / (chars.length - 1);
+                }
             }
         }
 
         let curX = x;
-        const totalLineW = totalCharW + totalSpW + (extraSp * (chars.length - 1));
+        const totalLineW = totalCharW + totalSpW + (extraCharSp * (chars.length - 1)) + (extraSpaceW * chars.filter(c => c === ' ').length);
 
         if (align === 'center') curX = x - totalLineW / 2;
         else if (align === 'right') curX = x - totalLineW;
@@ -121,37 +128,60 @@ export async function drawTheme(
 
         for (let i = 0; i < chars.length; i++) {
             ctx.fillText(chars[i], curX, drawY);
-            curX += charWList[i] + letterSp + extraSp;
+            let nextSp = letterSp + extraCharSp;
+            if (chars[i] === ' ') nextSp += extraSpaceW;
+            curX += charWList[i] + nextSp;
         }
         return totalLineW;
     };
 
     /**
-     * 断行逻辑对齐
+     * 断行逻辑 (引入 ZhLayout 避头尾禁则)
      */
     const layoutLines = (text: string, maxW: number, indent: number) => {
         const chars = Array.from(text);
         const lines: string[] = [];
-        let curLine = '';
-        let isFirst = true;
+        let curLineChars: string[] = [];
         let curLineW = 0;
+        let isFirstLine = true;
 
-        for (const char of chars) {
+        for (let i = 0; i < chars.length; i++) {
+            const char = chars[i];
             const charW = getCharWidth(char);
-            const currentMaxW = isFirst ? maxW - indent : maxW;
-            const spacing = curLine.length > 0 ? letterSp : 0;
+            const limit = isFirstLine ? maxW - indent : maxW;
+            const sp = curLineChars.length > 0 ? letterSp : 0;
 
-            if (curLineW + spacing + charW > currentMaxW + 0.1 && curLine !== '') {
-                lines.push(curLine);
-                curLine = char;
-                curLineW = charW;
-                isFirst = false;
+            // 预判断行
+            if (curLineW + sp + charW > limit + 0.5) {
+                // 避头尾逻辑检测
+                let breakIdx = curLineChars.length;
+                
+                // 1. 行首禁入: 如果当前字符是后置标点，则前一个字必须拉下来
+                if (POST_PANC.has(char) && curLineChars.length > 1) {
+                    breakIdx--;
+                }
+                
+                // 2. 行尾禁入: 如果行末字符是前置标点，则它必须拉至下一行
+                if (curLineChars.length > 0 && PRE_PANC.has(curLineChars[curLineChars.length - 1])) {
+                    breakIdx--;
+                }
+
+                if (breakIdx <= 0) breakIdx = curLineChars.length; // 防止死循环
+
+                const lineText = curLineChars.slice(0, breakIdx).join('');
+                lines.push(lineText);
+                
+                // 剩余字符重新放回处理流
+                const remaining = curLineChars.slice(breakIdx);
+                curLineChars = [...remaining, char];
+                curLineW = curLineChars.reduce((sum, c) => sum + getCharWidth(c) + letterSp, 0) - letterSp;
+                isFirstLine = false;
             } else {
-                curLine += char;
-                curLineW += spacing + charW;
+                curLineChars.push(char);
+                curLineW += sp + charW;
             }
         }
-        if (curLine) lines.push(curLine);
+        if (curLineChars.length > 0) lines.push(curLineChars.join(''));
         return lines;
     };
 
@@ -159,7 +189,7 @@ export async function drawTheme(
 
     // 4. 状态栏
     if (!cfg.hideStatusBar) {
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.9;
         ctx.fillStyle = tipColor;
         ctx.font = `600 12px sans-serif`;
         drawLine('12:30', 16, 12);
@@ -169,11 +199,12 @@ export async function drawTheme(
 
     // 5. 页眉
     if (cfg.headerMode !== 2) {
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = 0.85;
         ctx.fillStyle = tipColor;
         ctx.font = `11px ${fontStack}`;
-        const hPT = dpToPx(cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 20 : 0);
-        curY += hPT;
+        // Legado 隐藏状态栏时，页眉通常上移
+        const hPT = dpToPx(cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 12 : 20);
+        curY = (cfg.hideStatusBar ? 0 : 36) + hPT;
         
         drawLine(getTipText(cfg.tipHeaderLeft ?? 2), dpToPx(cfg.headerPaddingLeft || 16), curY);
         drawLine(getTipText(cfg.tipHeaderMiddle ?? 0), width / 2, curY, 'center');
@@ -198,7 +229,6 @@ export async function drawTheme(
     
     // 标题
     if (cfg.titleMode !== 2) {
-        // Legado: 标题大小 = textSize + titleSize
         const tSize = textSize + (cfg.titleSize || 0);
         ctx.font = `bold ${tSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
@@ -220,8 +250,6 @@ export async function drawTheme(
     ctx.fillStyle = textColor;
     const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
     const maxY = height - dpToPx(cfg.paddingBottom || 15) - 40;
-
-    // Legado: paragraphSpacing 是 1/10 倍率
     const paraSpacing = textSize * (cfg.paragraphSpacing || 0) / 10;
 
     outer: for (const para of PREVIEW_PARAS) {
@@ -229,7 +257,6 @@ export async function drawTheme(
         const lines = layoutLines(para, contentW, indentPx);
         for (let i = 0; i < lines.length; i++) {
             if (curY + textSize > maxY) break outer;
-            // 开启两端对齐
             const align = i === lines.length - 1 ? 'left' : 'justify';
             drawLine(lines[i], pL + (i === 0 ? indentPx : 0), curY, align);
             curY += lineH;
