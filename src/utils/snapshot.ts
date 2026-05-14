@@ -5,17 +5,17 @@ import { getTipText } from './preview';
 
 /**
  * 高保真缩略图生成器
- * 使用 html-to-image 将真实的 HTML/CSS 渲染为图片，确保与预览 100% 一致。
+ * 使用 html-to-image 将真实的 HTML/CSS 渲染为图片。
+ * 针对慢速网络和资源加载错误进行了深度优化。
  */
 export async function generateHighFidelitySnapshot(
     config: any,
     options: {
         width?: number;
         height?: number;
-        quality?: number;
         pixelRatio?: number;
         fontFamily?: string;
-        fontBase64?: string; // 如果有 Base64 字体，注入它
+        fontBase64?: string;
         argbToCss: (argb: string) => string;
     }
 ): Promise<string> {
@@ -30,6 +30,7 @@ export async function generateHighFidelitySnapshot(
 
     // 1. 创建离屏隐藏容器
     const container = document.createElement('div');
+    container.id = 'snapshot-temp-container';
     Object.assign(container.style, {
         position: 'fixed',
         top: '0',
@@ -38,25 +39,13 @@ export async function generateHighFidelitySnapshot(
         height: `${height}px`,
         opacity: '0',
         pointerEvents: 'none',
-        zIndex: '-1',
+        zIndex: '-1000',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
     });
     
-    // 2. 如果有自定义字体，注入 @font-face
-    if (fontFamily && fontBase64 && fontBase64.startsWith('data:')) {
-        const style = document.createElement('style');
-        style.innerHTML = `
-            @font-face {
-                font-family: "${fontFamily}";
-                src: url("${fontBase64}") format("truetype");
-            }
-        `;
-        container.appendChild(style);
-    }
-
-    // 3. 注入内容容器
+    // 2. 注入内容
     const content = document.createElement('div');
     Object.assign(content.style, {
         width: '100%',
@@ -66,15 +55,12 @@ export async function generateHighFidelitySnapshot(
         backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'transparent'
     });
     
-    // 背景图样式
-    if (config.bgType === 2 && config.bgStr && config.bgStr.length > 10) {
+    if (config.bgType === 2 && config.bgStr && config.bgStr.length > 20) {
         content.style.backgroundImage = `url("${config.bgStr}")`;
         content.style.backgroundSize = 'cover';
         content.style.backgroundPosition = 'center';
     }
 
-    // 4. 生成 HTML
-    // 注意：在这里我们使用 comp=1，因为我们是在原始分辨率下截屏
     content.innerHTML = generatePreviewHTML(
         config, 
         1, 
@@ -88,29 +74,45 @@ export async function generateHighFidelitySnapshot(
     container.appendChild(content);
     document.body.appendChild(container);
 
+    // 3. 构建字体 CSS (直接注入，不依赖 html-to-image 的自动发现)
+    let fontEmbedCSS = '';
+    if (fontFamily && fontBase64 && fontBase64.startsWith('data:')) {
+        fontEmbedCSS = `
+            @font-face {
+                font-family: "${fontFamily}";
+                src: url("${fontBase64}") format("truetype");
+            }
+        `;
+    }
+
     try {
-        // 5. 等待字体和渲染
+        // 4. 等待字体就绪
         if ((document as any).fonts) {
             await (document as any).fonts.ready;
         }
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
-        // 6. 截图 (使用 PNG 以获得更高兼容性)
+        // 5. 截图 (带有一系列优化开关)
         const dataUrl = await toPng(container, {
             width,
             height,
             pixelRatio,
-            skipAutoScale: true,
+            fontEmbedCSS, // 手动注入 Base64 字体
+            skipFonts: true, // 跳过扫描全局样式表，防止慢速网络阻塞
             cacheBust: true,
+            filter: (node: any) => {
+                // 仅允许截取容器内的节点，忽略外部干扰
+                if (node.id === 'snapshot-temp-container') return true;
+                if (container.contains(node)) return true;
+                return false;
+            }
         });
 
         return dataUrl;
     } catch (error) {
         console.error('[Snapshot] Failed to generate snapshot:', error);
-        // 如果截图彻底失败，返回空字符串而不是抛出异常，防止阻塞保存流程
         return '';
     } finally {
-        // 7. 清理容器
         if (container.parentNode) {
             document.body.removeChild(container);
         }
