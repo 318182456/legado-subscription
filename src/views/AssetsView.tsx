@@ -307,7 +307,7 @@ export default function AssetsView() {
               </div>
 
               {/* 排序与布局切换 */}
-              <div className="h-8 w-[1px] bg-outline-variant/30 mx-1"></div>
+              <div className="w-px h-8 bg-outline-variant/30 mx-1"></div>
               
               <button 
                 onClick={() => setSortOrder(sortOrder === 'name' ? 'type' : 'name')}
@@ -465,7 +465,7 @@ export default function AssetsView() {
         {sandboxConfig && (
           <div 
             onClick={(e) => e.target === e.currentTarget && setSandboxConfig(null)}
-            className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-on-background/60 backdrop-blur-md"
+            className="fixed inset-0 z-70 flex items-center justify-center p-6 bg-on-background/60 backdrop-blur-md"
           >
             <StyleSandbox initialBase={sandboxConfig.base} initialType={sandboxConfig.type} fileTree={fileTree} onClose={() => setSandboxConfig(null)} onSaved={() => { setSandboxConfig(null); fetchAll(); }} />
           </div>
@@ -479,7 +479,7 @@ export default function AssetsView() {
       {confirmItem && (
         <div 
           onClick={(e) => e.target === e.currentTarget && setConfirmItem(null)}
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
+          className="fixed inset-0 z-100 bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
         >
           <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
             <h5 className="text-sm font-bold mb-2">处理图片资源</h5>

@@ -73,12 +73,12 @@ const DEFAULT_CONFIG = {
   paragraphIndent: '　　',
   paddingLeft: 16,
   paddingRight: 16,
-  paddingTop: 6,
-  paddingBottom: 6,
+  paddingTop: 15,
+  paddingBottom: 15,
   titleMode: 0,
   titleSize: 0,
-  titleTopSpacing: 0,
-  titleBottomSpacing: 0,
+  titleTopSpacing: 8,
+  titleBottomSpacing: 10,
   headerMode: 1,
   headerPaddingTop: 0,
   headerPaddingBottom: 0,
@@ -344,8 +344,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         .then(async buf => {
           let f = (window as any).fflate;
           if (!f) {
-             const mod = await import('https://cdn.skypack.dev/fflate');
-             f = mod;
+            // @ts-ignore
+            const mod = await import('https://cdn.skypack.dev/fflate');
+            f = mod;
              (window as any).fflate = f;
           }
           if (f) {
@@ -488,6 +489,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       let t = (window as any).Tesseract;
       if (!t) {
         console.log('正在从 CDN 加载 Tesseract.js v5.1.1...');
+        // @ts-ignore
         const mod = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/+esm');
         t = mod.default || mod;
         (window as any).Tesseract = t;
@@ -930,7 +932,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface-container-high border-t border-outline-variant flex items-center gap-3 z-20 backdrop-blur-md">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-surface-container/50 rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
-          <button onClick={handleSave} disabled={saving} className="flex-[2] px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 relative overflow-hidden group">
+          <button onClick={handleSave} disabled={saving} className="flex-2 px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 relative overflow-hidden group">
             {saving ? (
               <>
                 <RefreshCw size={16} className="animate-spin" />
@@ -949,7 +951,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       {showPicker && (
         <div 
           onClick={(e) => e.target === e.currentTarget && setShowPicker(null)}
-          className="absolute inset-0 z-[100] bg-on-background/20 backdrop-blur-sm flex items-center justify-end"
+          className="absolute inset-0 z-100 bg-on-background/20 backdrop-blur-sm flex items-center justify-end"
         >
           <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="w-full md:w-[500px] h-full bg-surface shadow-2xl border-l border-outline-variant flex flex-col">
             <AssetPicker type={showPicker} fileTree={fileTree} onSelect={(r: any) => {

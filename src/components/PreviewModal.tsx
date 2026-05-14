@@ -35,6 +35,7 @@ export function PreviewModal({ item, onClose }: { item: any; onClose: () => void
           // 这里尝试使用全局 fflate，如果未加载则动态导入
           let f = (window as any).fflate;
           if (!f) {
+             // @ts-ignore
              const mod = await import('https://cdn.skypack.dev/fflate');
              f = mod;
              (window as any).fflate = f;
@@ -51,7 +52,7 @@ export function PreviewModal({ item, onClose }: { item: any; onClose: () => void
   return (
     <div 
       onClick={(e) => e.target === e.currentTarget && onClose()}
-      className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-on-background/40 backdrop-blur-sm"
+      className="fixed inset-0 z-80 flex items-center justify-center p-6 bg-on-background/40 backdrop-blur-sm"
     >
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
