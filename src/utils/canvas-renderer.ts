@@ -12,8 +12,8 @@ export interface RenderOptions {
 }
 
 /**
- * 核心 Canvas 渲染引擎
- * 将 Legado 主题配置 1:1 绘制到 Canvas 上
+ * 核心 Canvas 渲染引擎 (优化版)
+ * 解决了透明度残留、标题不换行及渲染模糊问题
  */
 export function drawTheme(
     ctx: CanvasRenderingContext2D,
@@ -29,12 +29,12 @@ export function drawTheme(
         PREVIEW_PARAS
     } = options;
 
-    // 清理画布
-    ctx.clearRect(0, 0, width * pixelRatio, height * pixelRatio);
-    
-    // 设置缩放以匹配逻辑分辨率
+    // 初始化画布状态
     ctx.save();
+    ctx.clearRect(0, 0, width * pixelRatio, height * pixelRatio);
     ctx.scale(pixelRatio, pixelRatio);
+    ctx.textBaseline = 'top'; // 使用 top 基准线，计算坐标更直观
+    ctx.globalAlpha = 1.0;
 
     // 1. 绘制背景
     if (cfg.bgType === 2 && bgImage) {
@@ -47,57 +47,53 @@ export function drawTheme(
         ctx.fillRect(0, 0, width, height);
     }
 
+    // 基础配置解析
     const textColor = argbToCss(cfg.textColor || '#3E3D3B');
     const tipColor = argbToCss(cfg.tipColor || '#803E3D3B');
     const fontStack = `"${fontFamily}", sans-serif`;
-    const textSize = cfg.textSize || 20;
-    const letterSp = (cfg.letterSpacing || 0) * textSize;
-    const lineH = textSize + (cfg.lineSpacingExtra || 0);
+    const textSize = cfg.textSize || 22;
+    const letterSp = (cfg.letterSpacing || 0) * 10; // 适当放大倍数以匹配视觉
+    const lineH = textSize + (cfg.lineSpacingExtra || 8);
     const pL = cfg.paddingLeft ?? 16;
     const pR = cfg.paddingRight ?? 16;
     const contentW = width - pL - pR;
 
     /**
-     * 内部绘制文字工具 (支持字间距)
+     * 增强版文字绘制 (支持字间距、居中、清晰度优化)
      */
-    const fillTextWithSpacing = (text: string, x: number, y: number, align: 'left'|'center'|'right' = 'left') => {
-        ctx.textAlign = 'left'; // 始终使用 left，手动控制偏移
-        
-        // 计算总宽度
+    const drawText = (text: string, x: number, y: number, align: 'left'|'center'|'right' = 'left') => {
         let totalW = 0;
         for (let i = 0; i < text.length; i++) {
             totalW += ctx.measureText(text[i]).width + (i < text.length - 1 ? letterSp : 0);
         }
 
-        let startX = x;
-        if (align === 'center') startX = x - totalW / 2;
-        else if (align === 'right') startX = x - totalW;
+        let curX = Math.floor(x);
+        if (align === 'center') curX = Math.floor(x - totalW / 2);
+        else if (align === 'right') curX = Math.floor(x - totalW);
 
-        let curX = startX;
         for (const char of text) {
-            ctx.fillText(char, curX, y);
+            ctx.fillText(char, curX, Math.floor(y));
             curX += ctx.measureText(char).width + letterSp;
         }
         return totalW;
     };
 
     /**
-     * 内部换行工具 (精确匹配 letter-spacing)
+     * 文字换行算法 (精确匹配 letter-spacing)
      */
-    const wrapText = (text: string, maxW: number, firstIndent: number) => {
+    const wrapText = (text: string, maxW: number, indent: number) => {
         const lines: string[] = [];
         let curLine = '';
         let isFirst = true;
 
         for (const char of text) {
             const testLine = curLine + char;
-            // 计算 testLine 宽度
             let testW = 0;
             for (let i = 0; i < testLine.length; i++) {
                 testW += ctx.measureText(testLine[i]).width + (i < testLine.length - 1 ? letterSp : 0);
             }
 
-            const currentMaxW = isFirst ? maxW - firstIndent : maxW;
+            const currentMaxW = isFirst ? maxW - indent : maxW;
             if (testW > currentMaxW && curLine !== '') {
                 lines.push(curLine);
                 curLine = char;
@@ -112,31 +108,30 @@ export function drawTheme(
 
     let curY = 0;
 
-    // 2. 状态栏 (简单模拟)
+    // 2. 状态栏
     if (!cfg.hideStatusBar) {
-        ctx.font = `600 12px sans-serif`;
-        ctx.fillStyle = tipColor;
         ctx.globalAlpha = 0.6;
-        fillTextWithSpacing('12:30', 16, 22);
-        fillTextWithSpacing('69%', width - 16, 22, 'right');
+        ctx.fillStyle = tipColor;
+        ctx.font = `600 12px sans-serif`;
+        drawText('12:30', 16, 12);
+        drawText('69%', width - 16, 12, 'right');
         ctx.globalAlpha = 1.0;
         curY = 32;
     }
 
     // 3. 页眉
     if (cfg.headerMode !== 2) {
-        const hPT = (cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 24 : 4);
+        const hPT = (cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 20 : 4);
         curY += hPT;
-        ctx.font = `11px ${fontStack}`;
+        ctx.globalAlpha = 0.7;
         ctx.fillStyle = tipColor;
-        ctx.globalAlpha = 0.8;
+        ctx.font = `11px ${fontStack}`;
         
-        const hY = curY + 10;
-        fillTextWithSpacing(getTipText(cfg.tipHeaderLeft ?? 2), cfg.headerPaddingLeft || 16, hY);
-        fillTextWithSpacing(getTipText(cfg.tipHeaderMiddle ?? 0), width / 2, hY, 'center');
-        fillTextWithSpacing(getTipText(cfg.tipHeaderRight ?? 3), width - (cfg.headerPaddingRight || 16), hY, 'right');
+        drawText(getTipText(cfg.tipHeaderLeft ?? 2), cfg.headerPaddingLeft || 16, curY);
+        drawText(getTipText(cfg.tipHeaderMiddle ?? 0), width / 2, curY, 'center');
+        drawText(getTipText(cfg.tipHeaderRight ?? 3), width - (cfg.headerPaddingRight || 16), curY, 'right');
         
-        curY = hY + (cfg.headerPaddingBottom || 4);
+        curY += 15 + (cfg.headerPaddingBottom || 4);
         
         if (cfg.showHeaderLine) {
             ctx.strokeStyle = tipColor;
@@ -145,27 +140,32 @@ export function drawTheme(
             ctx.moveTo(cfg.headerPaddingLeft || 16, curY);
             ctx.lineTo(width - (cfg.headerPaddingRight || 16), curY);
             ctx.stroke();
+            curY += 4;
         }
-        curY += 4;
+        ctx.globalAlpha = 1.0; // 必须重置，防止正文变灰
     }
 
-    // 4. 正文内容
+    // 4. 正文
     curY += cfg.paddingTop ?? 10;
     
-    // 标题
+    // 标题 (支持换行)
     if (cfg.titleMode !== 2) {
-        const tSize = textSize * (1.1 + (cfg.titleSize || 0) * 0.1);
+        const tSize = Math.floor(textSize * (1.1 + (cfg.titleSize || 0) * 0.1));
         ctx.font = `bold ${tSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
         curY += cfg.titleTopSpacing || 0;
         
         const align = cfg.titleMode === 1 ? 'center' : 'left';
-        fillTextWithSpacing(PREVIEW_TITLE, align === 'center' ? width / 2 : pL, curY + tSize, align);
+        const titleLines = wrapText(PREVIEW_TITLE, contentW, 0);
+        for (const line of titleLines) {
+            drawText(line, align === 'center' ? width / 2 : pL, curY, align);
+            curY += tSize * 1.4;
+        }
         
-        curY += tSize + (cfg.titleBottomSpacing || 10);
+        curY += (cfg.titleBottomSpacing || 10);
     }
 
-    // 正文
+    // 正文内容
     ctx.font = `${cfg.textBold ? 'bold ' : ''}${textSize}px ${fontStack}`;
     ctx.fillStyle = textColor;
     const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
@@ -175,10 +175,8 @@ export function drawTheme(
         if (curY >= maxY) break;
         const lines = wrapText(para, contentW, indentPx);
         for (let i = 0; i < lines.length; i++) {
-            const lineY = curY + textSize;
-            if (lineY > maxY) break outer;
-            
-            fillTextWithSpacing(lines[i], pL + (i === 0 ? indentPx : 0), lineY);
+            if (curY + textSize > maxY) break outer;
+            drawText(lines[i], pL + (i === 0 ? indentPx : 0), curY);
             curY += lineH;
         }
         curY += cfg.paragraphSpacing || 0;
@@ -187,24 +185,25 @@ export function drawTheme(
     // 5. 页脚
     if (cfg.footerMode !== 1) {
         const fPB = (cfg.footerPaddingBottom || 0) + (cfg.hideNavigationBar ? 10 : 6);
-        const fY = height - fPB - 12;
+        const fY = height - fPB - 20;
         
-        ctx.font = `11px ${fontStack}`;
+        ctx.globalAlpha = 0.7;
         ctx.fillStyle = tipColor;
-        ctx.globalAlpha = 0.8;
+        ctx.font = `11px ${fontStack}`;
 
         if (cfg.showFooterLine) {
             ctx.strokeStyle = tipColor;
             ctx.lineWidth = 0.5;
             ctx.beginPath();
-            ctx.moveTo(cfg.footerPaddingLeft || 16, fY - 6);
-            ctx.lineTo(width - (cfg.footerPaddingRight || 16), fY - 6);
+            ctx.moveTo(cfg.footerPaddingLeft || 16, fY - 4);
+            ctx.lineTo(width - (cfg.footerPaddingRight || 16), fY - 4);
             ctx.stroke();
         }
 
-        fillTextWithSpacing(getTipText(cfg.tipFooterLeft ?? 1), cfg.footerPaddingLeft || 16, fY + 10);
-        fillTextWithSpacing(getTipText(cfg.tipFooterMiddle ?? 0), width / 2, fY + 10, 'center');
-        fillTextWithSpacing(getTipText(cfg.tipFooterRight ?? 6), width - (cfg.footerPaddingRight || 16), fY + 10, 'right');
+        drawText(getTipText(cfg.tipFooterLeft ?? 1), cfg.footerPaddingLeft || 16, fY);
+        drawText(getTipText(getTipText(cfg.tipFooterMiddle ?? 0) === '' ? '' : getTipText(cfg.tipFooterMiddle ?? 0)), width / 2, fY, 'center');
+        drawText(getTipText(cfg.tipFooterRight ?? 6), width - (cfg.footerPaddingRight || 16), fY, 'right');
+        ctx.globalAlpha = 1.0;
     }
 
     ctx.restore();
