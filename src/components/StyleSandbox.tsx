@@ -203,10 +203,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   });
 
   const DEVICES = [
-    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 36, innerRadius: 30, bezel: 1.5, notch: 'hole' },
-    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 48, innerRadius: 38, bezel: 2.5, notch: 'island' },
-    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 36, innerRadius: 28, bezel: 2.0, notch: 'hole' },
-    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 12, innerRadius: 8, bezel: 4.0, notch: 'none' }
+    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 26, bezel: 1.5, notch: 'hole' },
+    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 42, innerRadius: 34, bezel: 2.5, notch: 'island' },
+    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 24, bezel: 2.0, notch: 'hole' },
+    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 8, innerRadius: 4, bezel: 4.0, notch: 'none' }
   ];
   const [device, setDevice] = useState(DEVICES[0]);
 
@@ -712,7 +712,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   return (
     <motion.div 
       initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-      className="bg-surface-container-highest border border-outline-variant w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] relative"
+      className="bg-surface-container-highest border border-outline-variant w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] relative"
     >
       {/* 左侧预览 */}
       <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col items-center justify-center min-h-0 relative">

@@ -82,17 +82,17 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     }
   }, [config?.textFont, resources]);
 
-  if (!inView) return <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container animate-pulse rounded-xl" />;
+  if (!inView) return <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container animate-pulse rounded-lg" />;
 
   if (loading) return (
-    <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container rounded-xl flex flex-col items-center justify-center gap-2">
+    <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container rounded-lg flex flex-col items-center justify-center gap-2">
       <Loader2 className="animate-spin text-primary/30" size={24} />
       <span className="text-[10px] text-secondary opacity-50">加载主题...</span>
     </div>
   );
 
   if (error || !config) return (
-    <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container rounded-xl flex flex-col items-center justify-center text-error/40">
+    <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container rounded-lg flex flex-col items-center justify-center text-error/40">
       <AlertCircle size={24} />
       <span className="text-[10px]">加载失败</span>
     </div>
@@ -103,10 +103,10 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   return (
     <div 
       ref={containerRef} 
-      className="w-full aspect-9/19.5 rounded-[24px] shadow-[0_12px_30px_-6px_rgba(0,0,0,0.3)] group-hover:ring-2 ring-primary/30 transition-all relative bg-[#0a0a0a] p-[3px] border border-white/10"
+      className="w-full aspect-9/19.5 rounded-[16px] shadow-[0_12px_30px_-6px_rgba(0,0,0,0.3)] group-hover:ring-2 ring-primary/30 transition-all relative bg-[#0a0a0a] p-[3px] border border-white/10"
     >
       {/* 屏幕内容 */}
-      <div className={`w-full h-full rounded-[20px] overflow-hidden relative bg-black ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : ''}`}>
+      <div className={`w-full h-full rounded-[13px] overflow-hidden relative bg-black ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : ''}`}>
         {(initialPreviewUrl || config.preview_url) ? (
           <img 
             src={initialPreviewUrl || config.preview_url} 

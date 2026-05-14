@@ -337,8 +337,8 @@ export default function AssetsView() {
                   const isImg = isImage(item.path);
                   
                   return (
-                    <div key={idx} onClick={() => isFolder && navigateTo([...currentPath, item.name])} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-2xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
-                      <div className="relative aspect-video rounded-xl bg-surface-container overflow-hidden flex items-center justify-center mb-3">
+                    <div key={idx} onClick={() => isFolder && navigateTo([...currentPath, item.name])} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
+                      <div className="relative aspect-video rounded-lg bg-surface-container overflow-hidden flex items-center justify-center mb-3">
                         {isFolder ? (
                           <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" />
                         ) : isImg ? (
@@ -427,7 +427,7 @@ export default function AssetsView() {
                   <motion.div 
                     layout
                     key={item.id} 
-                    className="bg-surface-container-lowest border border-outline-variant rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all group relative flex flex-col"
+                    className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all group relative flex flex-col"
                   >
                     <div className="p-4 bg-surface-container-low/30 flex justify-center cursor-pointer" onClick={() => editTheme(item)}>
                       <div className="w-full max-w-[140px] transition-transform group-hover:scale-[1.05] duration-500">
@@ -481,7 +481,7 @@ export default function AssetsView() {
           onClick={(e) => e.target === e.currentTarget && setConfirmItem(null)}
           className="fixed inset-0 z-100 bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
         >
-          <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-surface-container-highest border border-outline-variant rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
             <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
             <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>
             

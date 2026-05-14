@@ -15,12 +15,11 @@ export interface RenderOptions {
 const POST_PANC = new Set(`，。：？！、”’）》】)\]」}；;·…~～!?,.`.split(""));
 const PRE_PANC = new Set(`“‘（《【(\[「{`.split(""));
 
-// 核心：模拟 Android 固定的字体度量比例 (去除 Web 测量带来的平台差异)
+// 👑 核心引擎：模拟 Android 固定的字体度量比例 (Ascent / Descent)
 const getAndroidFontMetrics = (fontSize: number) => {
     const ascent = fontSize * 0.86;
     const descent = fontSize * 0.28;
-    const textHeight = ascent + descent; // 约 1.14 倍
-    return { ascent, descent, textHeight };
+    return { ascent, descent, textHeight: ascent + descent };
 };
 
 export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options: RenderOptions) {
@@ -56,9 +55,9 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     ctx.font = fontString;
     ctx.imageSmoothingEnabled = true;
+    // ⚠️ 极其关键：必须使用 alphabetic 对齐，才能模拟 Android 基线
     ctx.textBaseline = "alphabetic";
 
-    // 文本清洗：只处理中英文标点，绝对保留原文空格（排版需要）
     const cleanParas = PREVIEW_PARAS.map(p =>
         p.trim().replace(/!/g, "！").replace(/\?/g, "？").replace(/,/g, "，")
     );
@@ -74,13 +73,10 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return hex;
     };
 
-    // ── 2. 提取并转换排版参数 (👑 修复核心：绝对 DP 计算) ───────
-    const { ascent, textHeight } = getAndroidFontMetrics(fontSize);
+    // ── 2. 提取排版参数 (绝对 DP 像素) ───────────────────────
+    const { ascent, descent, textHeight } = getAndroidFontMetrics(fontSize);
 
-    // Android 的 letterSpacing 是基于 em 的 (0.04 * textSize)
     const letterSp = (cfg.letterSpacing ?? 0.04) * fontSize;
-
-    // ⚠️ 极其关键：Legado 中的 Spacing 是绝对追加的像素值，不是倍率！
     const lineSpacing = (cfg.lineSpacingExtra ?? 12) * d;
     const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
 
@@ -153,14 +149,13 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return lines;
     };
 
-    // ── 4. 绘制单行 ──────────────────────────────────────────
-    const drawLine = (
+    // ── 4. 基于基线 (Baseline) 的绘制函数 ─────────────────────
+    const drawLineBaseline = (
         tokens: string[],
         x: number,
-        y: number,
+        yBaseline: number,
         align: "left" | "justify",
         targetWidth: number,
-        curAscent: number,
         curFontSize: number
     ) => {
         if (!tokens.length) return;
@@ -181,7 +176,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         }
 
         let sx = x;
-        const dy = Math.round(y + curAscent);
+        // ⚠️ 取整防止抗锯齿模糊，直接绘制在基线上
+        const dy = Math.round(yBaseline);
         for (let i = 0; i < tokens.length; i++) {
             ctx.fillText(tokens[i], sx, dy);
             sx +=
@@ -206,7 +202,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 6. 坐标系堆叠 (👑 修复核心：完全对齐 Android Box Model) ──
+    // ── 6. 坐标系堆叠 (👑 全新重写：100% 对齐 Android StaticLayout) ──
     let currentY = 0;
 
     // [状态栏]
@@ -253,31 +249,41 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         }
     }
 
-    // 正文安全区起点
+    // 👑 正文与标题布局起点
     currentY = headerBottom + (cfg.paddingTop ?? 15) * d;
 
-    // [标题]
+    // [标题区域]
     if (cfg.titleMode !== 2) {
         const tFontSize = fontSize + (cfg.titleSize ?? 4) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
 
-        const { ascent: tAscent, textHeight: tTextHeight } = getAndroidFontMetrics(tFontSize);
+        const {
+            ascent: tAscent,
+            descent: tDescent,
+            textHeight: tTextHeight
+        } = getAndroidFontMetrics(tFontSize);
 
         currentY += (cfg.titleTopSpacing ?? 8) * d;
 
+        // 锚定标题的第一行 Baseline
+        let titleBaseline = currentY + tAscent;
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
+
         for (let i = 0; i < tLines.length; i++) {
-            drawLine(tLines[i], pL, currentY, "left", contentW, tAscent, tFontSize);
-            currentY += tTextHeight; // 物理文字高度
+            drawLineBaseline(tLines[i], pL, titleBaseline, "left", contentW, tFontSize);
             if (i < tLines.length - 1) {
-                currentY += 4 * d; // 标题内部固定紧凑行距
+                // 标题内部多行，紧凑排列，无需 lineSpacingExtra
+                titleBaseline += tTextHeight;
             }
         }
+
+        // Android 真实逻辑：位移到标题的最底端（Descent边界），再加上 TitleBottomSpacing
+        currentY = titleBaseline + tDescent;
         currentY += (cfg.titleBottomSpacing ?? 18) * d;
     }
 
-    // [正文]
+    // [正文区域]
     ctx.font = fontString;
     ctx.fillStyle = textColor;
 
@@ -290,33 +296,40 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
               (cfg.footerPaddingTop ?? 0) * d +
               navH
             : navH;
+
+    // 最大可用高度计算
     const maxY = H - footerSafeH - (cfg.paddingBottom ?? 15) * d;
 
-    outer: for (const para of cleanParas) {
-        if (currentY >= maxY) break;
+    // 锚定正文的第一行 Baseline
+    let bodyBaseline = currentY + ascent;
+
+    outer: for (let pi = 0; pi < cleanParas.length; pi++) {
+        const para = cleanParas[pi];
         const lines = layoutLines(para, contentW, indentW, fontSize);
 
         for (let li = 0; li < lines.length; li++) {
-            if (currentY + textHeight > maxY) break outer;
+            // Android 真实越界判断：当前基线 + 底部溢出高度(descent) 是否盖住 paddingBottom
+            if (bodyBaseline + descent > maxY) break outer;
 
             const isFirstLine = li === 0;
             const currentX = pL + (isFirstLine ? indentW : 0);
             const targetW = isFirstLine ? contentW - indentW : contentW;
             const justifyMode = li === lines.length - 1 ? "left" : "justify";
 
-            drawLine(lines[li], currentX, currentY, justifyMode, targetW, ascent, fontSize);
+            drawLineBaseline(lines[li], currentX, bodyBaseline, justifyMode, targetW, fontSize);
 
-            // 每画完一行，累加：文字本身高度 + 额外设定的行距绝对值
-            currentY += textHeight;
             if (li < lines.length - 1) {
-                currentY += lineSpacing;
+                // 物理文字高度 + 设置中增加的附加行距
+                bodyBaseline += textHeight + lineSpacing;
             }
         }
-        // 段落结束，累加：段落间距 + 行距 (Legado 段距是叠加在行距之上的)
-        currentY += lineSpacing + paraSpacing;
+        // 段落结束，不仅加上正常行距，再叠加上段距 (paraSpacing)
+        if (pi < cleanParas.length - 1) {
+            bodyBaseline += textHeight + lineSpacing + paraSpacing;
+        }
     }
 
-    // [页脚]
+    // [页脚区域]
     if (cfg.footerMode !== 1) {
         ctx.font = `${fFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
