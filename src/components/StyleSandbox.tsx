@@ -143,6 +143,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
+        console.log(`[CanvasPreview] 开始渲染，fontFamily="${fontFamily}", device=${device.width}x${device.height}`);
+
         // 固定使用手机屏幕密度 3.0，模拟真实 Android 高分屏排版
         const PHONE_DPR = 3;
         canvas.width  = device.width  * PHONE_DPR;
@@ -461,9 +463,16 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     const fontUrl = isBlob ? path : `${window.location.origin}/repo/${path}`;
 
     // 用文件名（去掉扩展名）作为稳定字体名
-    // 例如 "汉仪正圆3.ttf" -> "汉仪正圆3"
     const rawName = (name || path.split('/').pop() || 'CustomFont').replace(/\.[^.]+$/, '');
     const fontName = rawName;
+
+    // 去重：若同名字体已注册且已加载，直接使用，不重复加载
+    const existing = [...(document.fonts as any)].find((f: any) => f.family === fontName && f.status === 'loaded');
+    if (existing) {
+      console.log(`[loadFont] 字体已存在，直接复用: "${fontName}"`);
+      setSelectedFontName(fontName);
+      return;
+    }
 
     try {
       const fontFace = new FontFace(fontName, `url(${fontUrl})`);
