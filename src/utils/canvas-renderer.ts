@@ -235,14 +235,14 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.font = `${hFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
 
-        const hY = currentY + (cfg.headerPaddingTop ?? 20) * d;
+        const hY = currentY + (cfg.headerPaddingTop ?? 6) * d;
         const hBaseY = hY + hFontSize * 0.86;
 
-        ctx.fillText(getTipText(cfg.tipHeaderLeft ?? 1), pL, hBaseY);
+        ctx.fillText(getTipText(cfg.tipHeaderLeft ?? 1), (cfg.headerPaddingLeft ?? 24) * d, hBaseY);
         const midText = getTipText(cfg.tipHeaderMiddle ?? 0);
         ctx.fillText(midText, (W - ctx.measureText(midText).width) / 2, hBaseY);
         const rightText = getTipText(cfg.tipHeaderRight ?? 7);
-        ctx.fillText(rightText, W - pR - ctx.measureText(rightText).width, hBaseY);
+        ctx.fillText(rightText, W - (cfg.headerPaddingRight ?? 24) * d - ctx.measureText(rightText).width, hBaseY);
 
         headerBottom = hY + hFontSize + (cfg.headerPaddingBottom ?? 1) * d;
 
@@ -341,13 +341,13 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
             ctx.globalAlpha = 1;
         }
 
-        ctx.fillText(getTipText(cfg.tipFooterLeft ?? 6), (cfg.footerPaddingLeft ?? 20) * d, fBaseY);
+        ctx.fillText(getTipText(cfg.tipFooterLeft ?? 6), (cfg.footerPaddingLeft ?? 24) * d, fBaseY);
         const midFText = getTipText(cfg.tipFooterMiddle ?? 0);
         ctx.fillText(midFText, (W - ctx.measureText(midFText).width) / 2, fBaseY);
         const rightFText = getTipText(cfg.tipFooterRight ?? 9);
         ctx.fillText(
             rightFText,
-            W - (cfg.footerPaddingRight ?? 19) * d - ctx.measureText(rightFText).width,
+            W - (cfg.footerPaddingRight ?? 24) * d - ctx.measureText(rightFText).width,
             fBaseY
         );
     }

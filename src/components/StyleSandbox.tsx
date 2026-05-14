@@ -160,13 +160,13 @@ const DEFAULT_CONFIG = {
   headerMode: 1,
   headerPaddingTop: 0,
   headerPaddingBottom: 0,
-  headerPaddingLeft: 16,
-  headerPaddingRight: 16,
+  headerPaddingLeft: 24,
+  headerPaddingRight: 24,
   footerMode: 0,
   footerPaddingTop: 6,
   footerPaddingBottom: 6,
-  footerPaddingLeft: 16,
-  footerPaddingRight: 16,
+  footerPaddingLeft: 24,
+  footerPaddingRight: 24,
   showHeaderLine: false,
   showFooterLine: true,
   tipHeaderLeft: 2, 
@@ -840,9 +840,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 <label className="text-[10px] font-bold text-outline uppercase tracking-wider">核心参数</label>
                 <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
                   <Slider label="字号" value={config.textSize} min={12} max={40} unit="sp" onChange={v => setConfig({...config, textSize: v})} />
-                  <Slider label="行间距" value={config.lineSpacingExtra} min={0} max={30} unit="dp" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
+                  <Slider label="行间距" value={config.lineSpacingExtra} min={10} max={50} step={1} displayValue={v => ((v - 10) / 10).toFixed(1)} onChange={v => setConfig({...config, lineSpacingExtra: v})} />
                   <Slider label="字距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
-                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={40} unit="dp" onChange={v => setConfig({...config, paragraphSpacing: v})} />
+                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={50} step={1} displayValue={v => (v / 10).toFixed(1)} onChange={v => setConfig({...config, paragraphSpacing: v})} />
                 </div>
               </div>
               <div className="space-y-3">
