@@ -9,8 +9,8 @@ import { Slider } from './Slider';
 import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
-import { generatePreviewHTML, getTipText } from '../utils/preview';
-import { generateHighFidelitySnapshot } from '../utils/snapshot';
+import { getTipText } from '../utils/preview';
+import { drawTheme } from '../utils/canvas-renderer';
 
 // 外部库引用
 declare const fflate: any;
@@ -133,6 +133,46 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   ];
   const [device, setDevice] = useState(DEVICES[0]);
 
+  // --- Canvas 预览组件 ---
+  const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
+    const canvasRef = React.useRef<HTMLCanvasElement>(null);
+    
+    React.useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = device.width * dpr;
+      canvas.height = device.height * dpr;
+      
+      drawTheme(ctx, config, {
+        width: device.width,
+        height: device.height,
+        pixelRatio: dpr,
+        fontFamily,
+        bgImage,
+        getTipText,
+        PREVIEW_TITLE,
+        PREVIEW_PARAS
+      });
+    }, [config, device, fontFamily, bgImage]);
+
+    return (
+      <div className="w-full h-full relative bg-black">
+        <canvas 
+          ref={canvasRef} 
+          style={{ width: '100%', height: '100%', display: 'block' }} 
+        />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] z-50">
+            <RefreshCw className="animate-spin text-primary" />
+          </div>
+        )}
+      </div>
+    );
+  };
   const [saving, setSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState('');
   const [loading, setLoading] = useState(false);
@@ -146,34 +186,22 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   });
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
-  const [localBgUrl, setLocalBgUrl] = useState('');
+  const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
   const [fontBase64, setFontBase64] = useState('');
 
 
 
-  // 预加载背景图为 Base64，确保 html-to-image 能够无障碍抓取
+  // 预加载背景图为 Image 对象
   useEffect(() => {
-    let active = true;
-    if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('blob:') && !config.bgStr.startsWith('content://')) {
-      const url = `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
-      fetch(url)
-        .then(r => r.blob())
-        .then(blob => {
-          if (!active) return;
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (active) setLocalBgUrl(reader.result as string);
-          };
-          reader.readAsDataURL(blob);
-        })
-        .catch(err => console.warn('Failed to pre-cache background', err));
+    if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) {
+      const url = config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => setBgImageObj(img);
+      img.src = url;
     } else {
-      setLocalBgUrl('');
+      setBgImageObj(null);
     }
-    return () => { 
-      active = false;
-      // Base64 不需要手动释放资源
-    };
   }, [config.bgStr, config.bgType]);
   const [manualAssets, setManualAssets] = useState(() => ({
     bg: initialType === 'bg',
@@ -538,14 +566,24 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const generateThumbnail = async (
     cfg: any,
   ): Promise<string> => {
-    // 使用高保真快照方案
-    return await generateHighFidelitySnapshot(cfg, {
-      width: 360,
-      height: 780,
+    const canvas = document.createElement('canvas');
+    const width = 360, height = 780;
+    const pixelRatio = 2; // 高清缩略图
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    const ctx = canvas.getContext('2d')!;
+    
+    // 渲染
+    drawTheme(ctx, cfg, {
+      width, height, pixelRatio,
       fontFamily: selectedFontName,
-      fontBase64: fontBase64,
-      argbToCss: argbToCss
+      bgImage: bgImageObj,
+      getTipText,
+      PREVIEW_TITLE,
+      PREVIEW_PARAS
     });
+
+    return canvas.toDataURL('image/jpeg', 0.9);
   };
 
   const handleSave = async () => {
@@ -582,8 +620,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       setSyncStatus('正在生成高保真预览图...');
       let previewUrl = '';
       try {
-        previewUrl = await generateThumbnail({ ...finalConfig, bgStr: localBgUrl });
-        console.log('Thumbnail generated via html-to-image, length:', previewUrl?.length);
+        previewUrl = await generateThumbnail(finalConfig);
+        console.log('Thumbnail generated via Canvas Engine, length:', previewUrl?.length);
       } catch (err) {
         console.error('Thumbnail generation failed, skipping', err);
         setSyncStatus('缩略图生成失败，已跳过');
@@ -640,27 +678,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
             {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
           
-          <div 
-            className="flex-1 relative flex flex-col overflow-hidden"
-            style={{ 
-              borderRadius: `${device.innerRadius}px`,
-              backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr) : 'transparent', 
-              color: argbToCss(config.textColor), fontFamily: selectedFontName || 'inherit',
-              backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
-                `url("${config.bgStr.startsWith('blob:') ? config.bgStr : (localBgUrl || `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`)}")` : 'none',
-              backgroundSize: 'cover', backgroundPosition: 'center',
-              letterSpacing: `${config.letterSpacing}em`, fontWeight: config.textBold ? 'bold' : 'normal'
-            }}
-          >
-            {(() => {
-              const COMP = 0.82;
-              return (
-                <>
-                  {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm z-[100]"><RefreshCw className="animate-spin text-primary" /></div>}
-                  <div className="w-full h-full flex flex-col overflow-hidden" dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS, selectedFontName) }}></div>
-                </>
-              );
-            })()}
+            <div className="flex-1 relative flex flex-col overflow-hidden" style={{ borderRadius: `${device.innerRadius}px` }}>
+              <CanvasPreview 
+                config={config} 
+                device={device} 
+                fontFamily={selectedFontName} 
+                bgImage={bgImageObj} 
+                loading={loading}
+              />
             </div>
           </div>
         </div>

@@ -134,7 +134,22 @@
             border-radius: 20px;
             overflow: hidden;
             position: relative;
-            background: black;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .preview-screen img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .preview-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: rgba(255,255,255,0.2);
+            font-size: 10px;
         }
         .preview-container.has-image { background: var(--surface-container); }
         .preview-container.no-image { background: #000; padding: 1.5px; }
@@ -258,43 +273,18 @@
             const container = document.getElementById('preview-' + id);
             if (!container) return;
 
-            let fontName = '';
-            if (config.textFont) {
-                fontName = 'Font_' + id;
-                const fontUrl = config.textFont.startsWith('http') ? config.textFont : '/repo/' + config.textFont.replace(/^\/?repo\//, '');
-                const style = document.createElement('style');
-                style.textContent = `@font-face { font-family: "${fontName}"; src: url("${fontUrl}"); }`;
-                document.head.appendChild(style);
-            }
-
             const pUrl = savedPreviewUrl || config.preview_url;
             if (pUrl) {
                 container.innerHTML = '<div class="preview-screen">' +
-                                      '<img src="' + pUrl + '" style="width:100%; height:100%; object-fit:cover;">' +
+                                      '<img src="' + pUrl + '" loading="lazy">' +
                                       '</div>';
-                return;
+            } else {
+                container.innerHTML = '<div class="preview-screen">' +
+                                      '<div class="preview-placeholder">' +
+                                      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>' +
+                                      '<div style="margin-top:4px">暂无预览</div>' +
+                                      '</div></div>';
             }
-
-            const bgColor = config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'white';
-            const bgStr = config.bgStr || '';
-            const bgUrl = bgStr.startsWith('http') ? bgStr : '/repo/' + bgStr.replace(/^\/?repo\//, '');
-            const bgImg = (config.bgType === 2 && bgStr) ? 'url(' + bgUrl + ')' : 'none';
-
-            let html = '<div class="preview-screen">' +
-                       '<div id="inner-preview-' + id + '" class="preview-inner" style="width:320px; height:693.3px; background-color:' + bgColor + '; background-image:' + bgImg + '; background-size:cover; background-position:center;">' +
-                       '<div class="preview-body" style="flex:1; padding: 20px; font-family: ' + (fontName || 'inherit') + ';">' +
-                       generatePreviewHTML(config, 0.88, getTipText, argbToCss, {{PREVIEW_TITLE}}, {{PREVIEW_PARAS}}, fontName) +
-                       '</div></div></div>';
-
-            container.innerHTML = html;
-
-            const inner = document.getElementById('inner-preview-' + id);
-            const resize = () => {
-                const w = container.clientWidth;
-                inner.style.transform = 'scale(' + (w / 320) + ')';
-            };
-            new ResizeObserver(resize).observe(container);
-            resize();
         }
 
         function showStatus(msg) {

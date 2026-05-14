@@ -1,26 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { argbToCss } from '../utils/color';
-import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
-import { generatePreviewHTML, getTipText } from '../utils/preview';
-
-function TipView({ value }: { value: number }) {
-  if (value === 0) return <span></span>;
-  const labelMap: Record<number, string> = {
-    7: '影视世界当神探',
-    1: '第1353章 1369章会面...',
-    2: '11:00',
-    3: '■',
-    10: '69%',
-    4: '1',
-    5: '60.5%',
-    11: '1/13',
-    6: '1/13 60.5%',
-    8: '11:00 ■',
-    9: '11:00 69%'
-  };
-  return <span>{labelMap[value] || ''}</span>;
-}
+import { Loader2, AlertCircle, ImageIcon } from 'lucide-react';
 
 export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: initialPreviewUrl }: { path?: string; name: string; config?: any; previewUrl?: string }) {
   const [config, setConfig] = useState<any>(initialConfig);
@@ -28,8 +7,6 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   const [error, setError] = useState(false);
   const [inView, setInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [fontFamily, setFontFamily] = useState<string>('inherit');
-  const [scale, setScale] = useState(0.45);
   const [resources, setResources] = useState<any>(null);
 
   useEffect(() => {
@@ -39,14 +16,6 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   }, []);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        // contentRect.width already excludes the parent's p-[2px] (total 4px)
-        setScale(entry.contentRect.width / 320);
-      }
-    });
-    observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -132,19 +101,7 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     </div>
   );
 
-  const style: React.CSSProperties = {
-    backgroundColor: config.bgType === 0 ? argbToCss(config.bgStr || '#EEEEEE') : 'transparent',
-    color: argbToCss(config.textColor || '#3E3D3B'),
-    fontFamily: fontFamily,
-    backgroundImage: (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) ? 
-      `url("${config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr}`}")` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    fontWeight: config.textBold ? 'bold' : 'normal',
-    letterSpacing: `${(config.letterSpacing || 0.1)}em`,
-  };
 
-  const COMP = 0.82; // Matches StyleSandbox scale
 
   return (
     <div 
@@ -161,21 +118,9 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
             loading="lazy"
           />
         ) : (
-          <div 
-            className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
-            style={{ 
-              ...style, 
-              width: '320px', 
-              height: '693.33px', 
-              transform: `translate(-50%, -50%) scale(${scale})`,
-              borderRadius: `${14 / scale}px` 
-            }}
-          >
-            <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
-              <div className="w-6 h-1 bg-black/20 rounded-full"></div>
-            </div>
-
-            <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
+          <div className="w-full h-full flex flex-col items-center justify-center text-outline/30 bg-surface-container-lowest">
+            <ImageIcon size={32} strokeWidth={1} />
+            <span className="text-[10px] mt-2">暂无预览</span>
           </div>
         )}
       </div>

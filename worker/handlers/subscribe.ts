@@ -1,7 +1,4 @@
 import { Env } from "../types";
-import { PREVIEW_TITLE, PREVIEW_PARAS } from "../../src/utils/constants";
-import { generatePreviewHTML, getTipText } from "../../src/utils/preview";
-import { argbToCss } from "../../src/utils/color";
 // @ts-ignore - 这种导入方式需要 Wrangler 规则支持，已在 wrangler.toml 中配置
 import TEMPLATE_STR from "./subscribe.html";
 
@@ -33,19 +30,12 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
   
   let html = TEMPLATE_STR;
 
-  // 动态注入变量
+  // 动态注入变量 (仅保留基础 URL)
   html = html
     .replace(/{{ORIGIN}}/g, origin)
     .replace(/{{SOURCES_URL}}/g, encodeURIComponent(origin + '/subscribe/sources'))
     .replace(/{{RULES_URL}}/g, encodeURIComponent(origin + '/subscribe/rules'))
-    .replace(/{{INFO_URL}}/g, encodeURIComponent(origin + '/subscribe/info.json'))
-    .replace(/{{PREVIEW_TITLE}}/g, JSON.stringify(PREVIEW_TITLE))
-    .replace(/{{PREVIEW_PARAS}}/g, JSON.stringify(PREVIEW_PARAS))
-    .replace('// {{INJECTED_FUNCTIONS}}', `
-        const argbToCss = ${argbToCss.toString()};
-        const getTipText = ${getTipText.toString()};
-        const generatePreviewHTML = ${generatePreviewHTML.toString()};
-    `);
+    .replace(/{{INFO_URL}}/g, encodeURIComponent(origin + '/subscribe/info.json'));
 
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" },
