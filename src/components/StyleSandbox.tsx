@@ -459,11 +459,26 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     if (!path || path.startsWith('content://')) return;
     const isBlob = path.startsWith('blob:');
     const fontUrl = isBlob ? path : `${window.location.origin}/repo/${path}`;
-    const fontName = 'PreviewFont_' + Math.random().toString(36).substring(7);
-    const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+
+    // 用文件名（去掉扩展名）作为稳定字体名
+    // 例如 "汉仪正圆3.ttf" -> "汉仪正圆3"
+    const rawName = (name || path.split('/').pop() || 'CustomFont').replace(/\.[^.]+$/, '');
+    const fontName = rawName;
+
     try {
+      const fontFace = new FontFace(fontName, `url(${fontUrl})`);
       const loaded = await fontFace.load();
       (document.fonts as any).add(loaded);
+
+      // 注入 @font-face CSS，确保 document.fonts.load() 的字体名能被正确识别
+      const styleId = `ff-${fontName.replace(/\s/g, '-')}`;
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontUrl}') format('truetype'); }`;
+        document.head.appendChild(style);
+      }
+
       setSelectedFontName(fontName);
       
       // 预加载字体为 Base64 以供截图使用

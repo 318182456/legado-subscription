@@ -15,18 +15,7 @@ export interface RenderOptions {
 const POST_PANC = new Set(`，。：？！、"'）》}】)>]」；;”’`.split(""));
 // 行末禁用字符（不能出现在行末）
 const PRE_PANC = new Set(`"（《【'(<[{「“‘`.split(""));
-// 所有标点（两端对齐时不参与额外空间分配）
-const ALL_PANC = new Set([...POST_PANC, ...PRE_PANC, "　", " ", "-"]);
 
-/**
- * 核心渲染引擎 (V8.8)
- * 修正：
- * 1. 缩进严格按 fontSize 计算，解决缩进过宽问题。
- * 2. Justify 增加防过度拉伸阈值 (max 0.3em)。
- * 3. 行高和段距公式调整，更贴近 Android 行高倍率视觉。
- * 4. Y轴起始点逻辑重构，解决标题贴顶问题。
- * 5. 模拟 Legado 内置的正文标点净化排版。
- */
 export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options: RenderOptions) {
     const {
         width: logicalW,
@@ -43,29 +32,32 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const H = logicalH * pr;
     const d = pr;
 
+    // 强制后备字体，尽量贴近 Android
     const fontStack =
         fontFamily && fontFamily !== "sans-serif"
-            ? `"${fontFamily}", "PingFang SC", sans-serif`
-            : '"PingFang SC", sans-serif';
+            ? `"${fontFamily}", "PingFang SC", "Microsoft YaHei", sans-serif`
+            : '"PingFang SC", "Microsoft YaHei", sans-serif';
 
-    // ── 文本净化 (模拟 Legado 阅读排版) ───────────────────────
-    // 将半角标点转为全角，去除多余前导空格
+    // ── 1. 文本净化：模拟 Legado 标点全角化 ──────────────────────
     const cleanParas = PREVIEW_PARAS.map(
         p =>
             p
                 .trim()
                 .replace(/!/g, "！")
                 .replace(/\?/g, "？")
-                .replace(/"(.*?[^\\])"/g, "“$1”") // 简单引号转换
+                .replace(/"(.*?)"/g, "“$1”")
+                .replace(/-/g, "－") // 英文连字符转全角
     );
 
-    // ── 等待字体加载 ──────────────────────────────────────────
+    // ── 2. 字体加载保障 ──────────────────────────────────────────
     try {
         if (fontFamily && fontFamily !== "sans-serif") {
             await (document as any).fonts.load(`${(cfg.textSize ?? 22) * d}px "${fontFamily}"`);
         }
         await (document as any).fonts.ready;
-    } catch (_) {}
+    } catch (_) {
+        console.warn("字体加载失败，退回默认字体");
+    }
 
     const cache = new Map<string, number>();
 
@@ -90,45 +82,42 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     };
 
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true; // 文字渲染建议开启平滑
 
-    // 背景绘制 (FIT_XY)
+    // ── 3. 背景层 ─────────────────────────────────────────────
     if (cfg.bgType === 2 && bgImage) {
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(0, 0, W, H);
         ctx.globalAlpha = (cfg.bgAlpha ?? 100) / 100;
-        ctx.drawImage(bgImage, 0, 0, W, H);
+        ctx.drawImage(bgImage, 0, 0, W, H); // 强制拉伸铺满
         ctx.globalAlpha = 1;
     } else {
         ctx.fillStyle = toRgba(cfg.bgStr || "#FFFFFF");
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 排版参数 ─────────────────────────────────────────────
+    // ── 4. 核心排版参数 (对齐 Legado 引擎) ────────────────────
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
     const fontSize = (cfg.textSize ?? 22) * d;
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     ctx.font = `${cfg.textBold === 1 ? "bold " : ""}${fontSize}px ${fontStack}`;
-    const mm = ctx.measureText("国");
-    const ascent = mm.actualBoundingBoxAscent ?? fontSize * 0.8;
-    const descent = mm.actualBoundingBoxDescent ?? fontSize * 0.2;
-    const measuredH = ascent + descent;
+    const ascent = fontSize * 0.84; // 统一基准线，丢弃不稳定的 measureText 基线
 
-    // 视觉行高公式：Legado 的 extra 在 web 上约等于 0.6x 的 dp 累加效果
-    const lineH = fontSize * 1.05 + (cfg.lineSpacingExtra ?? 12) * d * 0.6;
-    const paraSpacing = (fontSize * (cfg.paragraphSpacing ?? 5)) / 10;
+    // Legado 行高 = 字号 + 额外行距(dp)
+    const lineH = fontSize + (cfg.lineSpacingExtra ?? 12) * d;
+    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
 
-    // ⚠️修正1：首行缩进严格使用字号倍数（保证无论字体如何，空格都是正方形）
+    // 严格锁定首行缩进宽度 (2倍字号)，不随全角空格实际宽度漂移
     const indentW =
-        (cfg.paragraphIndent?.length ?? 0) > 0 ? fontSize * cfg.paragraphIndent.length : 0;
+        (cfg.paragraphIndent?.length ?? 0) > 0 ? cfg.paragraphIndent.length * fontSize : 0;
 
-    // ── 断行引擎 ─────────────────────────────────────────────
+    // ── 5. 断行引擎 (完美模拟 Android 换行) ───────────────────
     const layoutLines = (text: string, maxW: number, firstIndent: number): string[] => {
         const chars = Array.from(text);
         const lines: string[] = [];
@@ -142,9 +131,18 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
             while (i < chars.length) {
                 const c = chars[i];
-                const cw = c === "　" ? fontSize : measure(c); // 全角空格强制等宽
+                // 忽略文字自带的全角缩进空格，统一由外部缩进接管
+                if (isFirst && line.length === 0 && (c === "　" || c === " ")) {
+                    i++;
+                    continue;
+                }
+
+                const cw = measure(c);
                 const sp = line.length > 0 ? letterSp : 0;
+
                 if (w + sp + cw > limit + 0.5) {
+                    // 0.5px 容差
+                    // 避头尾规则
                     if (POST_PANC.has(c) && line.length > 1) {
                         i--;
                         line.pop();
@@ -165,190 +163,188 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return lines;
     };
 
-    // ── 绘制函数 ─────────────────────────────────────────────
+    // ── 6. 绘制单行引擎 (修复 Justify 撕裂) ───────────────────
     const drawLine = (
         text: string,
         x: number,
         y: number,
-        align: "left" | "center" | "right" | "justify" = "left",
-        asc: number = ascent
+        align: "left" | "center" | "right" | "justify" = "left"
     ) => {
         const chars = Array.from(text);
         if (!chars.length) return;
 
-        const ws = chars.map(c => (c === "　" ? fontSize : measure(c)));
-        const totalW = ws.reduce((a, b) => a + b, 0);
-        const totalSp = letterSp * (chars.length - 1);
+        const ws = chars.map(c => measure(c));
+        const totalCharW = ws.reduce((a, b) => a + b, 0);
+        const totalBaseSp = letterSp * (chars.length - 1);
 
         let extraSp = 0;
+        // 只有当需要两端对齐，且字符数>1，且不是最后一行时，才均匀拉伸
         if (align === "justify" && chars.length > 1) {
-            const gap = contentW - totalW - totalSp;
-            if (gap > 0) {
-                const distributableGaps = chars.slice(0, -1).filter(c => !ALL_PANC.has(c)).length;
-                if (distributableGaps > 0) {
-                    extraSp = gap / distributableGaps;
-                    // ⚠️修正2：限制最大拉伸宽度 (不得超过字号的 30%)，防止字间距被扯裂
-                    extraSp = Math.min(extraSp, fontSize * 0.3);
-                }
+            const gap = contentW - totalCharW - totalBaseSp;
+            // 限制最大拉伸阈值，防止字距夸张
+            if (gap > 0 && gap < contentW * 0.4) {
+                extraSp = gap / (chars.length - 1);
             }
         }
 
-        const lineW =
-            totalW +
-            totalSp +
-            chars.slice(0, -1).reduce((acc, c) => acc + (!ALL_PANC.has(c) ? extraSp : 0), 0);
-
+        const lineW = totalCharW + totalBaseSp + extraSp * (chars.length - 1);
         let sx =
             align === "center"
                 ? Math.floor(x - lineW / 2)
                 : align === "right"
                   ? Math.floor(x - lineW)
                   : Math.floor(x);
-        const dy = Math.floor(y + asc);
+        const dy = Math.floor(y + ascent);
 
         for (let i = 0; i < chars.length; i++) {
             ctx.fillText(chars[i], sx, dy);
-            const gapSp = i < chars.length - 1 && !ALL_PANC.has(chars[i]) ? extraSp : 0;
-            sx += ws[i] + letterSp + gapSp;
+            sx += ws[i] + letterSp + extraSp;
         }
     };
 
-    // ── 绘制流 ────────────────────────────────────────────────
+    // ── 7. 全局坐标系布局 (严格按照 Legado 层级) ───────────────
 
+    let currentY = 0;
+
+    // [层级 1] 状态栏
     const statusBarH = cfg.hideStatusBar ? 0 : 24 * d;
-
-    // 1. 状态栏
     if (!cfg.hideStatusBar) {
         const sFontSize = Math.round(12 * d);
         ctx.font = `600 ${sFontSize}px sans-serif`;
         ctx.fillStyle = tipColor;
-        const sAsc = ctx.measureText("0").actualBoundingBoxAscent ?? sFontSize * 0.8;
-        const sY = (statusBarH - sAsc) / 2 + 4 * d;
-        drawLine("12:30", 16 * d, sY, "left", sAsc);
-        drawLine("69%", W - 16 * d, sY, "right", sAsc);
+        const sY = statusBarH / 2 + sFontSize * 0.35; // 居中微调
+        drawLine("12:30", 16 * d, statusBarH / 2 - sFontSize / 2, "left"); // Y传入顶部边界
+        ctx.fillText("12:30", 16 * d, sY);
+        ctx.fillText("69%", W - 16 * d - ctx.measureText("69%").width, sY);
     }
+    currentY += statusBarH;
 
-    // 2. 页眉 (绝对定位)
-    let headerBottomY = statusBarH;
+    // [层级 2] 页眉 Header
     if (cfg.headerMode !== 2) {
         const hFontSize = 11 * d;
         ctx.font = `${hFontSize}px ${fontStack}`;
         ctx.fillStyle = tipColor;
-        const hm = ctx.measureText("国");
-        const hAsc = hm.actualBoundingBoxAscent ?? hFontSize * 0.8;
-        const hH = hAsc + (hm.actualBoundingBoxDescent ?? hFontSize * 0.2);
 
         // HeaderY 绝对定位
-        const hY = (cfg.headerPaddingTop ?? 20) * d;
-        drawLine(
-            getTipText(cfg.tipHeaderLeft ?? 1),
-            (cfg.headerPaddingLeft ?? 22) * d,
-            hY,
-            "left",
-            hAsc
-        );
-        drawLine(getTipText(cfg.tipHeaderMiddle ?? 0), W / 2, hY, "center", hAsc);
-        drawLine(
-            getTipText(cfg.tipHeaderRight ?? 7),
-            W - (cfg.headerPaddingRight ?? 22) * d,
-            hY,
-            "right",
-            hAsc
-        );
+        const hY = currentY + (cfg.headerPaddingTop ?? 20) * d;
 
-        headerBottomY = hY + hH + (cfg.headerPaddingBottom ?? 1) * d;
+        ctx.fillText(getTipText(cfg.tipHeaderLeft ?? 1), pL, hY + hFontSize);
+        const midText = getTipText(cfg.tipHeaderMiddle ?? 0);
+        ctx.fillText(midText, (W - ctx.measureText(midText).width) / 2, hY + hFontSize);
+        const rightText = getTipText(cfg.tipHeaderRight ?? 7);
+        ctx.fillText(rightText, W - pR - ctx.measureText(rightText).width, hY + hFontSize);
+
+        currentY = hY + hFontSize * 1.5 + (cfg.headerPaddingBottom ?? 1) * d;
 
         if (cfg.showHeaderLine) {
             ctx.save();
             ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.2;
             ctx.lineWidth = 0.5 * d;
             ctx.beginPath();
-            ctx.moveTo(16 * d, Math.floor(headerBottomY));
-            ctx.lineTo(W - 16 * d, Math.floor(headerBottomY));
+            ctx.moveTo(16 * d, currentY);
+            ctx.lineTo(W - 16 * d, currentY);
             ctx.stroke();
             ctx.restore();
         }
     }
 
-    // ⚠️修正4：正文区起始Y坐标逻辑
-    // 以 paddingTop 作为基线，如果 paddingTop 过小导致和 header 重叠，才强制下移
-    const pT = (cfg.paddingTop ?? 15) * d;
-    let curY = Math.max(headerBottomY + 10 * d, pT);
+    // [层级 3] 页面内边距 (Padding Top) -> 正确解决标题贴顶
+    currentY += (cfg.paddingTop ?? 15) * d;
 
-    // 3. 标题
+    // [层级 4] 标题
     if (cfg.titleMode !== 2) {
-        const tFontSize = ((cfg.textSize ?? 22) + (cfg.titleSize ?? 3)) * d;
+        const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
-        const tm = ctx.measureText("国");
-        const tAsc = tm.actualBoundingBoxAscent ?? tFontSize * 0.8;
-        const tLineH = tFontSize * 1.1 + (cfg.lineSpacingExtra ?? 12) * d * 0.6;
+        const tLineH = tFontSize + (cfg.lineSpacingExtra ?? 12) * d;
 
-        curY += (cfg.titleTopSpacing ?? 8) * d;
+        currentY += (cfg.titleTopSpacing ?? 8) * d;
         const tAlign = cfg.titleMode === 1 ? "center" : "left";
+
+        // 此处需要复写 asc，因为标题字号变了
+        const tAsc = tFontSize * 0.84;
+
         const tLines = layoutLines(PREVIEW_TITLE, contentW, 0);
         for (const line of tLines) {
-            drawLine(line, tAlign === "center" ? W / 2 : pL, curY, tAlign, tAsc);
-            curY += tLineH;
+            // 单独绘制标题
+            const lW = ctx.measureText(line).width + letterSp * (line.length - 1);
+            let sx = tAlign === "center" ? (W - lW) / 2 : pL;
+            for (let i = 0; i < line.length; i++) {
+                ctx.fillText(line[i], sx, Math.floor(currentY + tAsc));
+                sx += ctx.measureText(line[i]).width + letterSp;
+            }
+            currentY += tLineH;
         }
-        curY += (cfg.titleBottomSpacing ?? 10) * d;
+        currentY += (cfg.titleBottomSpacing ?? 10) * d;
     }
 
-    // 4. 正文段落
+    // [层级 5] 正文区域
     ctx.font = `${cfg.textBold === 1 ? "bold " : ""}${fontSize}px ${fontStack}`;
     ctx.fillStyle = textColor;
-    const maxY = H - (cfg.footerPaddingBottom ?? 9) * d - 30 * d;
 
-    // 使用净化后的段落 cleanParas
+    // 页脚预留安全区
+    const navH = cfg.hideNavigationBar ? 0 : 10 * d;
+    const fFontSize = 11 * d;
+    const footerSafeH =
+        cfg.footerMode !== 1
+            ? (cfg.footerPaddingBottom ?? 9) * d +
+              fFontSize * 2 +
+              navH +
+              (cfg.paddingBottom ?? 15) * d
+            : 0;
+    const maxY = H - footerSafeH;
+
     outer: for (const para of cleanParas) {
-        if (curY >= maxY) break;
+        if (currentY >= maxY) break;
+
         const lines = layoutLines(para, contentW, indentW);
+
         for (let li = 0; li < lines.length; li++) {
-            if (curY + measuredH > maxY) break outer;
+            if (currentY + fontSize > maxY) break outer;
+
             const isLast = li === lines.length - 1;
-            drawLine(lines[li], pL + (li === 0 ? indentW : 0), curY, isLast ? "left" : "justify");
-            curY += lineH;
+            // 首行加上强制缩进量
+            const lineX = pL + (li === 0 ? indentW : 0);
+
+            drawLine(lines[li], lineX, currentY, isLast ? "left" : "justify");
+            currentY += lineH;
         }
-        curY += paraSpacing;
+        // 段落间距附加值
+        currentY += paraSpacing;
     }
 
-    // 5. 页脚
+    // [层级 6] 页脚 Footer (绝对定位于底部)
     if (cfg.footerMode !== 1) {
-        const fFontSize = 11 * d;
         ctx.font = `${fFontSize}px ${fontStack}`;
         ctx.fillStyle = tipColor;
-        const fAsc = ctx.measureText("国").actualBoundingBoxAscent ?? fFontSize * 0.8;
 
-        const navH = cfg.hideNavigationBar ? 0 : 10 * d;
         const fY = H - navH - (cfg.footerPaddingBottom ?? 9) * d - fFontSize;
 
         if (cfg.showFooterLine) {
             ctx.save();
             ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.2;
             ctx.lineWidth = 0.5 * d;
             ctx.beginPath();
-            ctx.moveTo(16 * d, Math.floor(fY - 4 * d));
-            ctx.lineTo(W - 16 * d, Math.floor(fY - 4 * d));
+            ctx.moveTo(16 * d, Math.floor(fY - 8 * d));
+            ctx.lineTo(W - 16 * d, Math.floor(fY - 8 * d));
             ctx.stroke();
             ctx.restore();
         }
 
-        drawLine(
+        ctx.fillText(
             getTipText(cfg.tipFooterLeft ?? 6),
             (cfg.footerPaddingLeft ?? 20) * d,
-            fY,
-            "left",
-            fAsc
+            fY + fFontSize
         );
-        drawLine(getTipText(cfg.tipFooterMiddle ?? 0), W / 2, fY, "center", fAsc);
-        drawLine(
-            getTipText(cfg.tipFooterRight ?? 9),
-            W - (cfg.footerPaddingRight ?? 19) * d,
-            fY,
-            "right",
-            fAsc
+        const midFText = getTipText(cfg.tipFooterMiddle ?? 0);
+        ctx.fillText(midFText, (W - ctx.measureText(midFText).width) / 2, fY + fFontSize);
+        const rightFText = getTipText(cfg.tipFooterRight ?? 9);
+        ctx.fillText(
+            rightFText,
+            W - (cfg.footerPaddingRight ?? 19) * d - ctx.measureText(rightFText).width,
+            fY + fFontSize
         );
     }
 
