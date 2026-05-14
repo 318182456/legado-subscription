@@ -97,11 +97,10 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
-    // textHeight 用 fontSize * 1.2 近似 Android fontMetrics.descent - fontMetrics.ascent
-    // （actualBoundingBox 只测实际像素，比 Android fontMetrics 小约 20-35%）
-    // CJK 字体在 Android 下典型比率为 1.2~1.35
-    const textHeight = fontSize * 1.2;
-    const ascent = fontSize * 0.86; // baseline 偏移保持不变
+    // textHeight 近似 Android fontMetrics.descent - fontMetrics.ascent
+    // 经计算对齐真机需 lineH > 123.4px，对应比率 1.33
+    const textHeight = fontSize * 1.33;
+    const ascent = fontSize * 0.86;
 
     // 字间距：Android letterSpacing 为字号的倍率（em 单位）
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
