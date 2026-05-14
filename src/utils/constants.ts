@@ -1,3 +1,11 @@
+export const CANVAS_BASE_WIDTH = 360;
+export const CANVAS_BASE_HEIGHT = 640;
+
+// Legado 内部大部分参数是 dp，这里模拟一个比例
+// 假设预览区域是一个标准的 360dp 宽度设备
+export const DP_RATIO = 1.0; 
+export const dpToPx = (dp: number) => dp * DP_RATIO;
+
 export const PREVIEW_TITLE = "第1章 001章重生、穿越、以及智障系统";
 
 export const PREVIEW_PARAS = [
@@ -14,7 +22,7 @@ export const PREVIEW_PARAS = [
 export const getTipText = (type: number) => {
     const labelMap: Record<number, string> = {
         7: "影视世界当神探",
-        1: "第1353章会面",
+        1: PREVIEW_TITLE,
         2: "11:00",
         3: "■",
         10: "69%",
