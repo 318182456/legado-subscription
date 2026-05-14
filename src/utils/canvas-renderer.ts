@@ -98,25 +98,25 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
     // textHeight 近似 Android fontMetrics.descent - fontMetrics.ascent
-    // 经计算对齐真机需 lineH > 123.4px，对应比率 1.33
-    const textHeight = fontSize * 1.33;
+    // 经计算对齐真机需高密度排版，对应比率 1.15
+    const textHeight = fontSize * 1.15;
     const ascent = fontSize * 0.86;
 
     // 字间距：Android letterSpacing 为字号的倍率（em 单位）
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     /**
-     * 行高公式：textHeight(px) + lineSpacingExtra(dp)
-     * lineSpacingExtra 是绝对 dp 值，不是倍率
-     * lineSpacingExtra=12 → lineH = textHeight + 12*3 = textHeight + 36px
+     * 行高公式对齐真机 (Multiplier 模式):
+     * lineH = textHeight * (lineSpacingExtra / 10)
+     * 例：lineSpacingExtra=12 (0.2) → lineH = textHeight * 1.2
      */
-    const lineH = textHeight + (cfg.lineSpacingExtra ?? 12) * d;
+    const lineH = textHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
 
     /**
-     * 段落间距同理为绝对 dp 值
-     * paragraphSpacing=5 → paraSpacing = 5*3 = 15px
+     * 段落间距同理为倍率值
+     * 例：paragraphSpacing=5 (0.5) → paraSpacing = fontSize * 0.5
      */
-    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
+    const paraSpacing = fontSize * ((cfg.paragraphSpacing ?? 5) / 10);
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
@@ -209,8 +209,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // ── 6. 坐标系绝对堆叠 (核心对齐机制) ───────────────────────
     let currentY = 0;
 
-    // [顶层] 状态栏
-    const statusBarH = cfg.hideStatusBar ? 0 : 24 * d;
+    // [顶层] 状态栏 (通知栏)
+    const statusBarH = cfg.hideStatusBar ? 0 : 32 * d;
     if (!cfg.hideStatusBar) {
         const sFontSize = Math.round(12 * d);
         ctx.font = `600 ${sFontSize}px sans-serif`;
@@ -266,8 +266,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        // 标题行高：和正文相同的 1.33 倍率 + lineSpacingExtra
-        const tLineH = tFontSize * 1.33 + (cfg.lineSpacingExtra ?? 12) * d;
+        // 标题行高：使用 1.15 基准高度 * 倍率
+        const tLineH = (tFontSize * 1.15) * ((cfg.lineSpacingExtra ?? 12) / 10);
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
@@ -285,16 +285,16 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     ctx.font = fontString;
     ctx.fillStyle = textColor;
 
-    const navH = cfg.hideNavigationBar ? 0 : 10 * d;
+    const navH = cfg.hideNavigationBar ? 0 : 24 * d;
     const fFontSize = 11 * d;
     const footerSafeH =
         cfg.footerMode !== 1
             ? (cfg.footerPaddingBottom ?? 9) * d +
               fFontSize +
-              (cfg.footerPaddingTop ?? 6) * d + // 加上页脚上间距
+              (cfg.footerPaddingTop ?? 6) * d +
               navH +
               (cfg.paddingBottom ?? 15) * d
-            : 0;
+            : navH;
     const maxY = H - footerSafeH;
 
     outer: for (const para of cleanParas) {
