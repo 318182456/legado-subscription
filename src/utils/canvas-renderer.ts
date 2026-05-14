@@ -93,26 +93,31 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 4. 提取 JSON 排版参数 (精准转换为物理像素) ──────────────
+    // ── 4. 提取 JSON 排版参数 (精准对齐 Legado ChapterProvider.kt) ──────
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
-    // textHeight 对齐 Android 字体度量，1.25 是真机视觉的中间态
-    const textHeight = fontSize * 1.25;
+    // textHeight 对齐 PaintExtensions.kt: descent - ascent + leading
+    // 对于常规 CJK 字体，该值约为 1.15 * fontSize
+    const textHeight = fontSize * 1.15;
     const ascent = fontSize * 0.86;
+
+    // 字间距：Android letterSpacing 是基于 em 的倍率
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     /**
-     * 行高公式像素级对齐 Image 5 (疏朗排版):
-     * lineH = textHeight * (1 + (cfg.lineSpacingExtra - 10) / 10)
-     * 12 (0.2) → lineH = textHeight * 1.2 ≈ fontSize * 1.5
+     * 行高公式对齐 ChapterProvider.kt (L605):
+     * durY += textHeight * (lineSpacingExtra / 10f)
+     * 12 (0.2) → lineH = textHeight * 1.2
      */
     const lineH = textHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
 
     /**
-     * 段落间距修正：对齐 Image 5 约为 0.6x 字号
+     * 段落间距对齐 ChapterProvider.kt (L610):
+     * durY += textHeight * paragraphSpacing / 10f
+     * 它是叠加在 lineH 之上的额外偏移
      */
-    const paraSpacing = fontSize * ((cfg.paragraphSpacing ?? 5) / 10 + 0.1);
+    const paraSpacing = textHeight * ((cfg.paragraphSpacing ?? 5) / 10);
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
@@ -262,22 +267,19 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        // 标题行高：使用 1.15 基准高度 * 倍率
-        const tLineH = (tFontSize * 1.15) * ((cfg.lineSpacingExtra ?? 12) / 10);
+        // 标题 textHeight
+        const tTextHeight = tFontSize * 1.15;
+        // 标题行高公式同正文
+        const tLineH = tTextHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
 
         // 加上 titleTopSpacing
         currentY += (cfg.titleTopSpacing ?? 8) * d;
         const tAlign = cfg.titleMode === 1 ? "center" : "left";
 
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
-        for (let i = 0; i < tLines.length; i++) {
-            drawLine(tLines[i], pL, currentY, tAlign, contentW, tFontSize * 0.86, tFontSize);
-            // 仅在非最后一行添加行高
-            if (i < tLines.length - 1) {
-                currentY += tLineH;
-            } else {
-                currentY += tFontSize; // 最后一行仅增加字高，随后由 titleBottomSpacing 接管
-            }
+        for (const line of tLines) {
+            drawLine(line, pL, currentY, tAlign, contentW, tFontSize * 0.86, tFontSize);
+            currentY += tLineH;
         }
         currentY += (cfg.titleBottomSpacing ?? 10) * d;
     }
