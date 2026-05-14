@@ -203,10 +203,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   });
 
   const DEVICES = [
-    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 56, innerRadius: 48, bezel: 1.5, notch: 'hole' },
-    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 54, innerRadius: 44, bezel: 2.5, notch: 'island' },
-    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 40, innerRadius: 32, bezel: 3, notch: 'hole' },
-    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 24, innerRadius: 16, bezel: 8, notch: 'none' }
+    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 36, innerRadius: 30, bezel: 1.5, notch: 'hole' },
+    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 48, innerRadius: 38, bezel: 2.5, notch: 'island' },
+    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 36, innerRadius: 28, bezel: 2.0, notch: 'hole' },
+    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 12, innerRadius: 8, bezel: 4.0, notch: 'none' }
   ];
   const [device, setDevice] = useState(DEVICES[0]);
 
@@ -731,7 +731,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             height: `${device.height}px`, 
             borderRadius: `${device.radius}px`,
             padding: `${device.bezel * 4}px`,
-            transform: `scale(${device.width > 400 ? 0.88 : 0.95})` 
+            transform: `scale(${device.width > 400 ? 0.8 : 0.88})` 
           }}
         >
           <div className="w-full h-full relative overflow-hidden flex flex-col bg-black">
@@ -839,10 +839,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-outline uppercase tracking-wider">核心参数</label>
                 <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
-                  <Slider label="字号" value={config.textSize} min={12} max={40} unit="px" onChange={v => setConfig({...config, textSize: v})} />
-                  <Slider label="行间距" value={config.lineSpacingExtra} min={0} max={30} unit="px" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
+                  <Slider label="字号" value={config.textSize} min={12} max={40} unit="sp" onChange={v => setConfig({...config, textSize: v})} />
+                  <Slider label="行间距" value={config.lineSpacingExtra} min={0} max={30} unit="dp" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
                   <Slider label="字距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
-                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={40} unit="px" onChange={v => setConfig({...config, paragraphSpacing: v})} />
+                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={40} unit="dp" onChange={v => setConfig({...config, paragraphSpacing: v})} />
                 </div>
               </div>
               <div className="space-y-3">
@@ -881,10 +881,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 <label className="text-[10px] font-bold text-outline uppercase tracking-wider">全局边距</label>
                 <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
                   <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                    <Slider label="左" value={config.paddingLeft} min={0} max={100} onChange={v => setConfig({...config, paddingLeft: v})} />
-                    <Slider label="右" value={config.paddingRight} min={0} max={100} onChange={v => setConfig({...config, paddingRight: v})} />
-                    <Slider label="上" value={config.paddingTop} min={0} max={100} onChange={v => setConfig({...config, paddingTop: v})} />
-                    <Slider label="下" value={config.paddingBottom} min={0} max={100} onChange={v => setConfig({...config, paddingBottom: v})} />
+                    <Slider label="左" value={config.paddingLeft} min={0} max={100} unit="dp" onChange={v => setConfig({...config, paddingLeft: v})} />
+                    <Slider label="右" value={config.paddingRight} min={0} max={100} unit="dp" onChange={v => setConfig({...config, paddingRight: v})} />
+                    <Slider label="上" value={config.paddingTop} min={0} max={100} unit="dp" onChange={v => setConfig({...config, paddingTop: v})} />
+                    <Slider label="下" value={config.paddingBottom} min={0} max={100} unit="dp" onChange={v => setConfig({...config, paddingBottom: v})} />
                   </div>
                 </div>
               </div>
@@ -903,8 +903,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                     <>
                       <Slider label="缩放系数" value={config.titleSize} min={0} max={10} onChange={v => setConfig({...config, titleSize: v})} />
                       <div className="grid grid-cols-2 gap-4">
-                        <Slider label="上间距" value={config.titleTopSpacing} min={0} max={100} onChange={v => setConfig({...config, titleTopSpacing: v})} />
-                        <Slider label="下间距" value={config.titleBottomSpacing} min={0} max={100} onChange={v => setConfig({...config, titleBottomSpacing: v})} />
+                        <Slider label="上间距" value={config.titleTopSpacing} min={0} max={100} unit="dp" onChange={v => setConfig({...config, titleTopSpacing: v})} />
+                        <Slider label="下间距" value={config.titleBottomSpacing} min={0} max={100} unit="dp" onChange={v => setConfig({...config, titleBottomSpacing: v})} />
                       </div>
                     </>
                   )}
@@ -926,10 +926,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                   </div>
                   
                   <div className="grid grid-cols-2 gap-x-4 gap-y-6">
-                    <Slider label="页眉上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} />
-                    <Slider label="页眉下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} />
-                    <Slider label="页脚上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} />
-                    <Slider label="页脚下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} />
+                    <Slider label="页眉上" value={config.headerPaddingTop} min={0} max={100} unit="dp" onChange={v => setConfig({...config, headerPaddingTop: v})} />
+                    <Slider label="页眉下" value={config.headerPaddingBottom} min={0} max={100} unit="dp" onChange={v => setConfig({...config, headerPaddingBottom: v})} />
+                    <Slider label="页脚上" value={config.footerPaddingTop} min={0} max={100} unit="dp" onChange={v => setConfig({...config, footerPaddingTop: v})} />
+                    <Slider label="页脚下" value={config.footerPaddingBottom} min={0} max={100} unit="dp" onChange={v => setConfig({...config, footerPaddingBottom: v})} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
