@@ -61,8 +61,10 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const cleanTitle = PREVIEW_TITLE.trim().replace(/ /g, " "); // 标题保留必要空格
 
     // ── 3. 基础参数计算 ───────────────────────────────────────
-    const toRgba = (hex: string): string => {
-        if (!hex?.startsWith("#")) return hex ?? "rgba(0,0,0,1)";
+    const toRgba = (hex: any): string => {
+        // 非字符串类型（数字/undefined/null）直接返回默认色
+        if (typeof hex !== 'string') return "rgba(0,0,0,1)";
+        if (!hex.startsWith("#")) return hex;
         if (hex.length === 9) {
             const a = parseInt(hex.slice(1, 3), 16) / 255;
             const r = parseInt(hex.slice(3, 5), 16);
