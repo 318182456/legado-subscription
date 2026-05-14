@@ -11,9 +11,18 @@ export interface RenderOptions {
     PREVIEW_PARAS: string[];
 }
 
-// 避头尾禁则库 (100% 对齐 Android ICU 规则)
+// 避头尾禁则库 (对齐 Android ICU 规则)
 const POST_PANC = new Set(`，。：？！、”’）》】)\]」}；;·…~～!?,.`.split(""));
 const PRE_PANC = new Set(`“‘（《【(\[「{`.split(""));
+
+// 👑 核心模拟：强制使用 Android 系统字体的固定比例度量 (解决行距缩水和底部多出一行的问题)
+const getAndroidFontMetrics = (fontSize: number) => {
+    // 在 Android CJK (中日韩) 标准字体中，ascent 和 descent 是固定的比例
+    const ascent = fontSize * 0.88;
+    const descent = fontSize * 0.26;
+    const textHeight = ascent + descent; // 约为 1.14 倍字体大小
+    return { ascent, descent, textHeight };
+};
 
 export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options: RenderOptions) {
     const {
@@ -34,7 +43,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // ── 1. 字体配置与加载 ─────────────────────────────────────
     const fontSize = (cfg.textSize ?? 22) * d;
     const isBold = cfg.textBold === 1 ? "bold " : "";
-    // 优先使用 JSON 中指定的字体，如果没有则回退
     const fontName = cfg.textFont
         ? cfg.textFont.split(".")[0]
         : fontFamily !== "sans-serif"
@@ -49,17 +57,11 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     ctx.font = fontString;
     ctx.imageSmoothingEnabled = true;
-    ctx.textBaseline = "alphabetic";
+    ctx.textBaseline = "alphabetic"; // 对齐 Android Skia 基准线
 
-    // ── 2. 文本清洗 (修复英文空格丢失问题) ──────────────────────
+    // ── 2. 文本清洗 (保留空格规则) ─────────────────────────
     const cleanParas = PREVIEW_PARAS.map(p =>
-        p
-            .trim()
-            // ⚠️ 注意：绝不能全局 replace 空格，否则英文单词和 "W! T! H!" 会粘连。
-            // 只处理半角转全角符号
-            .replace(/!/g, "！")
-            .replace(/\?/g, "？")
-            .replace(/,/g, "，")
+        p.trim().replace(/!/g, "！").replace(/\?/g, "？").replace(/,/g, "，")
     );
     const cleanTitle = PREVIEW_TITLE.trim();
 
@@ -76,17 +78,11 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return hex;
     };
 
-    // ── 3. 解析 JSON 核心排版参数 (严格对齐 Legado 公式) ─────────
-    // Android Paint FontMetrics 的经验值：textHeight ≈ textSize * 1.15
-    const ascent = fontSize * 0.86;
-    const textHeight = fontSize * 1.15;
+    // ── 3. 提取高度参数 (严格走 Android FontMetrics) ─────────
+    const { ascent, textHeight } = getAndroidFontMetrics(fontSize);
 
-    // JSON "letterSpacing": 0.04 -> Android 内部换算为 em (0.04 * textSize)
     const letterSp = (cfg.letterSpacing ?? 0.04) * fontSize;
-
-    // JSON "lineSpacingExtra": 12 -> 对应倍率 1.2
     const lineH = textHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
-    // JSON "paragraphSpacing": 5 -> 对应倍率 0.5
     const paraSpacing = textHeight * ((cfg.paragraphSpacing ?? 5) / 10);
 
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
@@ -95,11 +91,9 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
-
-    // JSON "paragraphIndent": "　　" -> 动态测量实际字体下的首行缩进宽度
     const indentW = ctx.measureText(cfg.paragraphIndent ?? "　　").width;
 
-    // ── 4. 分词与断行引擎 (保留空格 + 避头尾禁则) ────────────────
+    // ── 4. 分词与断行引擎 (避头尾) ────────────────
     const segmenter =
         typeof Intl !== "undefined" && Intl.Segmenter
             ? new Intl.Segmenter("zh-CN", { granularity: "word" })
@@ -117,10 +111,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     ): string[][] => {
         let tokens: string[] = [];
         if (segmenter) {
-            // 切割出完整的单词、符号、空格
             const segments = Array.from(segmenter.segment(text)).map(s => s.segment);
             segments.forEach(t => {
-                // 中文字符串单独打散，保证单字换行；其他保留原样（保护英文/空格）
                 if (/^[\u4e00-\u9fa5]+$/.test(t)) tokens.push(...Array.from(t));
                 else tokens.push(t);
             });
@@ -140,15 +132,12 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
             const expectedW = currentW + (line.length > 0 ? letterSp : 0) + cw;
 
             if (expectedW > limit + 0.1 && line.length > 0) {
-                // 触发换行，执行避头尾
                 if (POST_PANC.has(token) && line.length > 1) {
-                    // 后置标点（如逗号）不放行首，把上一行最后一个词拉到下一行
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
                     currentW = measure(prevToken, curFontSize) + letterSp + cw;
                 } else if (PRE_PANC.has(line[line.length - 1]) && line.length > 1) {
-                    // 前置标点（如左括号）不放行尾，跟下一个词一起放到下一行
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
@@ -168,7 +157,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return lines;
     };
 
-    // ── 5. 精准两端对齐 (优先拉伸空格，模拟 Android) ─────────────
+    // ── 5. 两端对齐绘制 ─────────────────────────────
     const drawLine = (
         tokens: string[],
         x: number,
@@ -190,7 +179,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         if (align === "justify" && tokens.length > 1) {
             const remainingW = targetWidth - totalCharW - totalBaseSp;
             if (remainingW > 0) {
-                // Legado: 优先利用英文空格吸收多余宽度
                 const spaceCount = tokens.filter(t => t.trim() === "").length;
                 if (spaceCount > 0) {
                     extraSpacePerSpaceChar = remainingW / spaceCount;
@@ -201,7 +189,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         }
 
         let sx = x;
-        const dy = Math.round(y + curAscent); // 取整消除字体模糊
+        const dy = Math.round(y + curAscent);
 
         for (let i = 0; i < tokens.length; i++) {
             ctx.fillText(tokens[i], sx, dy);
@@ -212,7 +200,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     ctx.save();
 
-    // ── 6. 基础背景 ───────────────────────────────────────────
+    // ── 6. 基础背景绘制 ───────────────────────────────────────────
     if (cfg.bgType === 2 && bgImage) {
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(0, 0, W, H);
@@ -239,7 +227,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     }
     currentY += statusBarH;
 
-    // [顶层] 页眉 Header
+    // [顶层] 页眉
     let headerBottom = currentY;
     if (cfg.headerMode !== 2) {
         const hFontSize = 11 * d;
@@ -273,40 +261,36 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         }
     }
 
-    // 正文安全区起点：线底部 + paddingTop
     currentY = headerBottom + (cfg.paddingTop ?? 15) * d;
 
-    // [内容层] 标题
+    // [内容层] 标题 (👑 修正了标题行距过大的问题)
     if (cfg.titleMode !== 2) {
         const tFontSize = fontSize + (cfg.titleSize ?? 4) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
 
-        const tAscent = tFontSize * 0.86;
-        const tTextHeight = tFontSize * 1.15;
-        const tLineH = tTextHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
+        const { ascent: tAscent, textHeight: tTextHeight } = getAndroidFontMetrics(tFontSize);
+        // Legado 中标题内部行距较为紧凑，不使用正文的 1.2 倍
+        const tLineH = tTextHeight * 1.05;
 
-        // 累加上方距 (titleTopSpacing: 8)
         currentY += (cfg.titleTopSpacing ?? 8) * d;
 
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
         for (const line of tLines) {
-            // 标题不执行两端对齐
             drawLine(line, pL, currentY, "left", contentW, tAscent, tFontSize);
             currentY += tLineH;
         }
-        // 累加下方距 (titleBottomSpacing: 18)
+        // 关键：绝对增加标题底部空隙
         currentY += (cfg.titleBottomSpacing ?? 18) * d;
     }
 
-    // [内容层] 正文渲染
+    // [内容层] 正文
     ctx.font = fontString;
     ctx.fillStyle = textColor;
 
     const navH = cfg.hideNavigationBar ? 0 : 24 * d;
     const fFontSize = 11 * d;
 
-    // 页脚边界计算 (基于 JSON 数据)
     const footerSafeH =
         cfg.footerMode !== 1
             ? (cfg.footerPaddingBottom ?? 9) * d +
@@ -314,6 +298,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
               (cfg.footerPaddingTop ?? 0) * d +
               navH
             : navH;
+
+    // 👑 减去 paddingTop/Bottom，计算出精确的“正文可画高度区域”
     const maxY = H - footerSafeH - (cfg.paddingBottom ?? 15) * d;
 
     outer: for (const para of cleanParas) {
@@ -322,6 +308,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const lines = layoutLines(para, contentW, indentW, fontSize);
 
         for (let li = 0; li < lines.length; li++) {
+            // 用真实 Android Box 高度判断是否超出屏幕
             if (currentY + textHeight > maxY) break outer;
 
             const isFirstLine = li === 0;
@@ -337,7 +324,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         currentY += paraSpacing;
     }
 
-    // [底层] 页脚 Footer
+    // [底层] 页脚
     if (cfg.footerMode !== 1) {
         ctx.font = `${fFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
