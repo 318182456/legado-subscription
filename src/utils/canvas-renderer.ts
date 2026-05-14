@@ -15,10 +15,10 @@ const POST_PANC = new Set(`，。：？！、”’）》}】)>]」；;`.split('
 const PRE_PANC = new Set(`“（《【‘(<[{「`.split(''));
 
 /**
- * 核心渲染引擎 (V8.2 像素级对齐版)
- * 1. 废弃 ctx.scale：全量使用物理像素运算，解决“灰蒙蒙”模糊问题
- * 2. 增强型排版：彻底解决漏字，对齐真机单行标题容量
- * 3. 颜色系统：直接提取 ARGB 分量，无损渲染
+ * 核心渲染引擎 (V8.3 严防死守版)
+ * 1. 物理坐标绝对取整：移除所有 +0.5，确保 100% 锐利度。
+ * 2. 增强容差：给 Limit 增加 1px 物理冗余，彻底杜绝漏字。
+ * 3. 布局微调：缩放系数 0.95 对齐真机密度。
  */
 export async function drawTheme(
     ctx: CanvasRenderingContext2D,
@@ -44,12 +44,10 @@ export async function drawTheme(
 
     const localCache = new Map<string, number>();
 
-    // 1. 初始化画布 (物理像素层)
+    // 1. 初始化画布
     ctx.save();
-    ctx.imageSmoothingEnabled = false; // 禁用平滑以获得锐利文字
+    ctx.imageSmoothingEnabled = false;
     
-    // 背景处理
-    const bgHex = cfg.bgStr || '#FFFFFF';
     const toRgba = (hex: string, alphaMul = 1): string => {
         if (!hex || !hex.startsWith('#')) return hex || 'rgba(0,0,0,1)';
         if (hex.length === 9) {
@@ -62,7 +60,7 @@ export async function drawTheme(
         return hex;
     };
 
-    // 绘制背景
+    const bgHex = cfg.bgStr || '#FFFFFF';
     if (cfg.bgType === 2 && bgImage) {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
@@ -77,12 +75,13 @@ export async function drawTheme(
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. 排版参数 (全部乘以 pr)
+    // 2. 参数对齐 (引入 0.95 修正系数)
+    const density = 0.95 * pr; 
     const textColor = toRgba(cfg.textColor || '#ff3E3D3B');
     const tipColor = toRgba(cfg.tipColor || '#ff3E3D3B');
     const fontStack = `"${fontFamily}", sans-serif`;
 
-    const textSize = (cfg.textSize ?? 22) * pr;
+    const textSize = (cfg.textSize ?? 22) * density;
     const letterSp = (cfg.letterSpacing ?? 0) * textSize;
     
     ctx.font = `${textSize}px ${fontStack}`;
@@ -93,9 +92,9 @@ export async function drawTheme(
     const lineSpacingRatio = (cfg.lineSpacingExtra ?? 12) / 10;
     const lineH = textHeight * lineSpacingRatio;
 
-    const pL = dpToPx(cfg.paddingLeft ?? 16) * pr;
-    const pR = dpToPx(cfg.paddingRight ?? 16) * pr;
-    const pT = dpToPx(cfg.paddingTop ?? 12) * pr;
+    const pL = (cfg.paddingLeft ?? 16) * density;
+    const pR = (cfg.paddingRight ?? 16) * density;
+    const pT = (cfg.paddingTop ?? 12) * density;
     const contentW = width - pL - pR;
 
     const getCharWidth = (char: string): number => {
@@ -123,7 +122,7 @@ export async function drawTheme(
 
         if (align === 'justify' && chars.length > 1) {
             const res = contentW - (totalW + totalSp);
-            if (res > 0 && res < contentW * 0.25) {
+            if (res > 0 && res < contentW * 0.3) { // 稍微扩大对齐阈值
                 const spaces = chars.filter(c => c === ' ').length;
                 if (spaces > 0) exSpaceW = res / spaces;
                 else exCharSp = res / (chars.length - 1);
@@ -147,6 +146,9 @@ export async function drawTheme(
         return lineW;
     };
 
+    /**
+     * V8.3 严防死守断行：杜绝所有逻辑溢出风险
+     */
     const layoutLines = (text: string, maxW: number, indent: number): string[] => {
         const chars = Array.from(text);
         const lines: string[] = [];
@@ -155,36 +157,37 @@ export async function drawTheme(
 
         while (i < chars.length) {
             const limit = first ? maxW - indent : maxW;
-            let currentLine = "";
+            let currentLine: string[] = [];
             let currentW = 0;
 
+            // 1. 逐字填入
             while (i < chars.length) {
                 const c = chars[i];
                 const cw = getCharWidth(c);
                 const sp = currentLine.length > 0 ? letterSp : 0;
-                // 增加 0.5px 的容差，防止浮点数精度导致的不必要断行
-                if (currentW + sp + cw > limit + 0.5) break;
-                currentLine += c;
+                // 增加 1px 冗余度
+                if (currentW + sp + cw > limit + 1.0) break;
+                currentLine.push(c);
                 currentW += sp + cw;
                 i++;
             }
 
-            // 禁则回退
+            // 2. 禁则回退 (数组操作更安全)
             if (i < chars.length && currentLine.length > 1) {
                 const nextC = chars[i];
                 if (POST_PANC.has(nextC)) {
                     i--;
-                    currentLine = currentLine.slice(0, -1);
+                    currentLine.pop();
                 } else if (PRE_PANC.has(currentLine[currentLine.length - 1])) {
                     i--;
-                    currentLine = currentLine.slice(0, -1);
+                    currentLine.pop();
                 }
             }
 
             if (currentLine.length === 0 && i < chars.length) {
-                currentLine = chars[i++];
+                currentLine.push(chars[i++]);
             }
-            lines.push(currentLine);
+            lines.push(currentLine.join(''));
             first = false;
         }
         return lines;
@@ -192,69 +195,71 @@ export async function drawTheme(
 
     // ─── 绘制 ─────────────────────────────────────────────────
     
-    // 4. 状态栏 (对齐物理像素)
+    // 4. 状态栏
     if (!cfg.hideStatusBar) {
         ctx.fillStyle = tipColor;
-        ctx.font = `600 ${12 * pr}px sans-serif`;
-        const off = (12 * pr) * 0.85;
-        drawLine('12:30', 16 * pr, 8 * pr, 'left', off);
-        drawLine('69%', width - 16 * pr, 8 * pr, 'right', off);
+        const sSize = 12 * pr;
+        ctx.font = `600 ${sSize}px sans-serif`;
+        const off = sSize * 0.8;
+        drawLine('12:30', 16 * pr, 10 * pr, 'left', off);
+        drawLine('69%', width - 16 * pr, 10 * pr, 'right', off);
     }
 
     // 5. 页眉
-    let curY = (cfg.hideStatusBar ? 0 : 28 * pr);
+    let curY = (cfg.hideStatusBar ? 0 : 30 * pr);
     if (cfg.headerMode !== 2) {
-        ctx.font = `${11 * pr}px ${fontStack}`;
+        const hSize = 11 * density;
+        ctx.font = `${hSize}px ${fontStack}`;
         const hm = ctx.measureText('中');
-        const hOff = hm.actualBoundingBoxAscent ?? (11 * pr * 0.8);
-        const hH = hOff + (hm.actualBoundingBoxDescent ?? (11 * pr * 0.2));
+        const hOff = hm.actualBoundingBoxAscent ?? (hSize * 0.8);
+        const hH = hOff + (hm.actualBoundingBoxDescent ?? (hSize * 0.2));
         
-        curY += (dpToPx(cfg.headerPaddingTop ?? 0) * pr) + (cfg.hideStatusBar ? 10 * pr : 0);
+        curY += ((cfg.headerPaddingTop ?? 0) * density) + (cfg.hideStatusBar ? 10 * pr : 0);
         ctx.fillStyle = tipColor;
-        drawLine(getTipText(cfg.tipHeaderLeft ?? 2), 16 * pr, curY, 'left', hOff);
+        drawLine(getTipText(cfg.tipHeaderLeft ?? 2), 16 * density, curY, 'left', hOff);
         drawLine(getTipText(cfg.tipHeaderMiddle ?? 0), width / 2, curY, 'center', hOff);
-        drawLine(getTipText(cfg.tipHeaderRight ?? 3), width - 16 * pr, curY, 'right', hOff);
+        drawLine(getTipText(cfg.tipHeaderRight ?? 3), width - 16 * density, curY, 'right', hOff);
 
-        curY += hH + (4 * pr);
+        curY += hH + (4 * density);
         if (cfg.showHeaderLine) {
             ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.25;
             ctx.lineWidth = 0.5 * pr;
             ctx.beginPath();
-            const ly = Math.floor(curY) + 0.5;
-            ctx.moveTo(16 * pr, ly);
-            ctx.lineTo(width - 16 * pr, ly);
+            const ly = Math.floor(curY);
+            ctx.moveTo(16 * density, ly);
+            ctx.lineTo(width - 16 * density, ly);
             ctx.stroke();
             ctx.globalAlpha = 1.0;
-            curY += 8 * pr;
+            curY += 8 * density;
         }
     }
 
     // 6. 正文
     curY += pT;
     if (cfg.titleMode !== 2) {
-        const tSize = (cfg.textSize ?? 22) + (cfg.titleSize ?? 0);
-        ctx.font = `bold ${tSize * pr}px ${fontStack}`;
+        const tSize = ((cfg.textSize ?? 22) + (cfg.titleSize ?? 0)) * density;
+        ctx.font = `bold ${tSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
         const tm = ctx.measureText('中');
-        const tOff = tm.actualBoundingBoxAscent ?? (tSize * pr * 0.8);
-        const tH = (tOff + (tm.actualBoundingBoxDescent ?? (tSize * pr * 0.2))) * lineSpacingRatio;
+        const tOff = tm.actualBoundingBoxAscent ?? (tSize * 0.8);
+        const tH = (tOff + (tm.actualBoundingBoxDescent ?? (tSize * 0.2))) * lineSpacingRatio;
         
-        curY += dpToPx(cfg.titleTopSpacing ?? 0) * pr;
+        curY += (cfg.titleTopSpacing ?? 0) * density;
         const tAlign = cfg.titleMode === 1 ? 'center' : 'left';
         const tLines = layoutLines(PREVIEW_TITLE, contentW, 0);
         for (const line of tLines) {
             drawLine(line, tAlign === 'center' ? width / 2 : pL, curY, tAlign, tOff);
             curY += tH;
         }
-        curY += dpToPx(cfg.titleBottomSpacing ?? 10) * pr;
+        curY += (cfg.titleBottomSpacing ?? 10) * density;
     }
 
-    // 正文内容
+    // 正文
     ctx.font = `${cfg.textBold === 1 ? 'bold ' : ''}${textSize}px ${fontStack}`;
     ctx.fillStyle = textColor;
     const indentPx = (cfg.paragraphIndent?.length ?? 0) > 0 ? getCharWidth('　') * (cfg.paragraphIndent.length) : 0;
-    const maxY = height - (dpToPx(cfg.paddingBottom ?? 15) * pr) - (40 * pr);
+    const maxY = height - ((cfg.paddingBottom ?? 15) * density) - (40 * density);
     const paraSpacing = textHeight * (cfg.paragraphSpacing ?? 0) / 10;
 
     outer: for (const para of PREVIEW_PARAS) {
@@ -271,28 +276,29 @@ export async function drawTheme(
 
     // 7. 页脚
     if (cfg.footerMode !== 1) {
-        ctx.font = `${11 * pr}px ${fontStack}`;
+        const fSize = 11 * density;
+        ctx.font = `${fSize}px ${fontStack}`;
         const fm = ctx.measureText('中');
-        const fOff = fm.actualBoundingBoxAscent ?? (11 * pr * 0.8);
-        const fH = fOff + (fm.actualBoundingBoxDescent ?? (11 * pr * 0.2));
-        const fPB = (dpToPx(cfg.footerPaddingBottom ?? 6) * pr) + (cfg.hideNavigationBar ? 12 * pr : 8 * pr);
+        const fOff = fm.actualBoundingBoxAscent ?? (fSize * 0.8);
+        const fH = fOff + (fm.actualBoundingBoxDescent ?? (fSize * 0.2));
+        const fPB = ((cfg.footerPaddingBottom ?? 6) * density) + (cfg.hideNavigationBar ? 12 * pr : 8 * pr);
         const fY = height - fPB - fH;
 
         ctx.fillStyle = tipColor;
         if (cfg.showFooterLine) {
             ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.25;
             ctx.lineWidth = 0.5 * pr;
             ctx.beginPath();
             const ly = Math.floor(fY) - (4 * pr);
-            ctx.moveTo(16 * pr, ly);
-            ctx.lineTo(width - 16 * pr, ly);
+            ctx.moveTo(16 * density, ly);
+            ctx.lineTo(width - 16 * density, ly);
             ctx.stroke();
             ctx.globalAlpha = 1.0;
         }
-        drawLine(getTipText(cfg.tipFooterLeft ?? 1), 16 * pr, fY, 'left', fOff);
+        drawLine(getTipText(cfg.tipFooterLeft ?? 1), 16 * density, fY, 'left', fOff);
         drawLine(getTipText(cfg.tipFooterMiddle ?? 0), width / 2, fY, 'center', fOff);
-        drawLine(getTipText(cfg.tipFooterRight ?? 6), width - 16 * pr, fY, 'right', fOff);
+        drawLine(getTipText(cfg.tipFooterRight ?? 6), width - 16 * density, fY, 'right', fOff);
     }
 
     ctx.restore();
