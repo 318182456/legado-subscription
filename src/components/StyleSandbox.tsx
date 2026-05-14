@@ -1,303 +1,1026 @@
-export interface RenderOptions {
-    width: number;
-    height: number;
-    pixelRatio: number;
-    fontFamily?: string;
-    bgImage?: HTMLImageElement | null;
-    getTipText: (type: number) => string;
-    PREVIEW_TITLE: string;
-    PREVIEW_PARAS: string[];
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { 
+  Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
+  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight
+} from 'lucide-react';
+import * as api from '../api';
+import { Slider } from './Slider';
+import { AssetPicker } from './AssetPicker';
+import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
+import { PREVIEW_TITLE, PREVIEW_PARAS, getTipText } from '../utils/constants';
+import { drawTheme } from '../utils/canvas-renderer';
+
+// 外部库引用
+declare const fflate: any;
+declare const Tesseract: any;
+
+const TIP_OPTIONS = [
+  { value: 0, label: '无' },
+  { value: 7, label: '书名' },
+  { value: 1, label: '标题' },
+  { value: 2, label: '时间' },
+  { value: 3, label: '电量' },
+  { value: 10, label: '电量%' },
+  { value: 4, label: '页数' },
+  { value: 5, label: '进度(%)' },
+  { value: 11, label: '进度(xx/yyy)' },
+  { value: 6, label: '页数及进度' },
+  { value: 8, label: '时间及电量' },
+  { value: 9, label: '时间及电量%' },
+];
+
+function TipView({ value }: { value: number }) {
+  if (value === 0) return <span></span>;
+  const labelMap: Record<number, string> = {
+    7: '影视世界当神探',
+    1: '第1353章 1369章会面...',
+    2: '11:00',
+    3: '■',
+    10: '69%',
+    4: '1',
+    5: '60.5%',
+    11: '1/13',
+    6: '1/13 60.5%',
+    8: '11:00 ■',
+    9: '11:00 69%'
+  };
+  return <span>{labelMap[value] || ''}</span>;
 }
 
-// 避头尾规则字符
-const POST_PANC = new Set(`，。：？！、"'）》}】)>]」；;”’`.split(''));
-const PRE_PANC  = new Set(`"（《【'(<[{「“‘`.split(''));
+function TipSelector({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) {
+  return (
+    <div className="flex-1 flex flex-col gap-1">
+      <span className="text-[9px] text-outline text-center">{label}</span>
+      <select 
+        value={value} 
+        onChange={e => onChange(parseInt(e.target.value))}
+        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-1 py-1.5 text-[10px] outline-none"
+      >
+        {TIP_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+      </select>
+    </div>
+  );
+}
 
-export async function drawTheme(
-    ctx: CanvasRenderingContext2D,
-    cfg: any,
-    options: RenderOptions
-) {
-    const {
-        width: logicalW, height: logicalH, pixelRatio: pr,
-        fontFamily = 'sans-serif',
-        bgImage,
-        getTipText,
-        PREVIEW_TITLE,
-        PREVIEW_PARAS,
-    } = options;
+const DEFAULT_CONFIG = {
+  bgStr: '#EEEEEE',
+  bgType: 0,
+  textColor: '#3E3D3B',
+  textSize: 20,
+  lineSpacingExtra: 12,
+  paragraphSpacing: 2,
+  paragraphIndent: '　　',
+  paddingLeft: 16,
+  paddingRight: 16,
+  paddingTop: 15,
+  paddingBottom: 15,
+  titleMode: 0,
+  titleSize: 0,
+  titleTopSpacing: 8,
+  titleBottomSpacing: 10,
+  headerMode: 1,
+  headerPaddingTop: 0,
+  headerPaddingBottom: 0,
+  headerPaddingLeft: 16,
+  headerPaddingRight: 16,
+  footerMode: 0,
+  footerPaddingTop: 6,
+  footerPaddingBottom: 6,
+  footerPaddingLeft: 16,
+  footerPaddingRight: 16,
+  showHeaderLine: false,
+  showFooterLine: true,
+  tipHeaderLeft: 2, 
+  tipHeaderMiddle: 0,
+  tipHeaderRight: 3, 
+  tipFooterLeft: 1,
+  tipFooterMiddle: 0,
+  tipFooterRight: 6,
+  tipColor: '#803E3D3B',
+  textFont: '',
+  bgAlpha: 100,
+  letterSpacing: 0.02,
+  textBold: 0,
+  darkStatusIcon: true
+};
 
-    const W = logicalW * pr;
-    const H = logicalH * pr;
-    const d = pr;
+export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved' | 'image' | 'bg'; onClose: () => void; onSaved: () => void; fileTree: any }) {
+  const [config, setConfig] = useState<any>(() => {
+    const isSaved = initialType === 'saved';
+    const baseName = initialBase?.name || '未知';
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      name: isSaved ? baseName : (baseName + ' 定制'),
+    };
+    if (initialType === 'bg') {
+      cfg.bgStr = initialBase.path;
+      cfg.bgType = 2;
+    }
+    if (isSaved && initialBase.config) {
+       const savedCfg = typeof initialBase.config === 'string' ? JSON.parse(initialBase.config) : initialBase.config;
+       return { ...cfg, ...savedCfg, id: initialBase.id };
+    }
+    return cfg;
+  });
 
-    // ── 1. 强制等待字体并更新 Canvas 状态 ────────────────────
-    const fontSize = (cfg.textSize ?? 22) * d;
-    const isBold = cfg.textBold === 1 ? 'bold ' : '';
-    const fontName = fontFamily && fontFamily !== 'sans-serif' ? fontFamily : "PingFang SC";
-    const fontString = `${isBold}${fontSize}px "${fontName}", "PingFang SC", sans-serif`;
+  const DEVICES = [
+    { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 56, innerRadius: 48, bezel: 1.5, notch: 'hole' },
+    { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 54, innerRadius: 44, bezel: 2.5, notch: 'island' },
+    { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 40, innerRadius: 32, bezel: 3, notch: 'hole' },
+    { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 24, innerRadius: 16, bezel: 8, notch: 'none' }
+  ];
+  const [device, setDevice] = useState(DEVICES[0]);
+
+  // --- Canvas 预览组件 ---
+  const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
+    const canvasRef = React.useRef<HTMLCanvasElement>(null);
+    
+    React.useEffect(() => {
+      const runDraw = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // 若配置指定了字体但 fontFamily 还未设置，说明字体正在加载中
+        // 跳过本帧，等字体就绪后 React 会自动触发下一次渲染
+        if (config.textFont && !config.textFont.startsWith('content://') && !fontFamily) {
+          console.log('[CanvasPreview] 等待字体加载，跳过本帧渲染...');
+          return;
+        }
+
+        console.log(`[CanvasPreview] 开始渲染，fontFamily="${fontFamily}", device=${device.width}x${device.height}`);
+
+        // 固定使用手机屏幕密度 3.0，模拟真实 Android 高分屏排版
+        const PHONE_DPR = 3;
+        canvas.width  = device.width  * PHONE_DPR;
+        canvas.height = device.height * PHONE_DPR;
+        
+        await drawTheme(ctx, config, {
+          width: device.width,
+          height: device.height,
+          pixelRatio: PHONE_DPR,
+          fontFamily,
+          bgImage,
+          getTipText,
+          PREVIEW_TITLE,
+          PREVIEW_PARAS
+        });
+      };
+
+      runDraw();
+    }, [config, device, fontFamily, bgImage]);
+
+    return (
+      <div className="w-full h-full relative bg-black">
+        <canvas 
+          ref={canvasRef} 
+          style={{ width: '100%', height: '100%', display: 'block' }} 
+        />
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[2px] z-50">
+            <RefreshCw className="animate-spin text-primary" />
+          </div>
+        )}
+      </div>
+    );
+  };
+  const [saving, setSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const [selectedFontName, setSelectedFontName] = useState('');
+  const [selectedLayoutName, setSelectedLayoutName] = useState(() => {
+    if (initialType === 'theme' || initialType === 'zip' || initialType === 'saved') {
+      return initialBase?.name || '';
+    }
+    return '';
+  });
+  const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
+  const [resources, setResources] = useState<any>(null);
+  const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
+  const [fontBase64, setFontBase64] = useState('');
+
+
+
+  // 预加载背景图为 Image 对象
+  useEffect(() => {
+    if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) {
+      const url = config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => setBgImageObj(img);
+      img.src = url;
+    } else {
+      setBgImageObj(null);
+    }
+  }, [config.bgStr, config.bgType]);
+  const [manualAssets, setManualAssets] = useState(() => ({
+    bg: initialType === 'bg',
+    font: initialType === 'font'
+  }));
+  const manualAssetsRef = React.useRef(manualAssets);
+  React.useEffect(() => { manualAssetsRef.current = manualAssets; }, [manualAssets]);
+  const [activeTab, setActiveTab] = useState<'visual' | 'text' | 'layout' | 'extra'>('visual');
+
+  // 初始化：并行加载资源清单和基础配置
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.getResources(),
+      loadBaseConfig(initialType, initialBase)
+    ]).then(([res]) => {
+      if (!active) return;
+      setResources(res);
+      
+      if (initialType === 'theme' || initialType === 'zip') {
+        const cat = initialType === 'theme' ? 'themes' : 'zips';
+        const found = res[cat]?.find((t: any) => t.path === initialBase.path);
+        if (found) setSelectedLayoutName(found.name);
+      }
+    });
+    return () => { active = false; };
+  }, [initialBase, initialType]);
+
+  const getAssetName = (path: string, category: string, preferredName?: string) => {
+    if (!path) return '默认';
+    
+    const safeDecode = (str: string) => {
+      let current = str;
+      try {
+        // 最多尝试解码 3 次，防止死循环
+        for (let i = 0; i < 3; i++) {
+          if (!current.includes('%')) break;
+          const next = decodeURIComponent(current);
+          if (next === current) break;
+          current = next;
+        }
+      } catch (e) {}
+      return current;
+    };
+
+    if (path.startsWith('blob:')) {
+      const name = preferredName ? safeDecode(preferredName) : '本地资源';
+      return (name.split('/').pop() || name) + ' (待上传)';
+    }
+
+    const decoded = safeDecode(path);
+    const fileName = decoded.split('/').pop() || decoded;
+    
+    let result = fileName;
+    if (resources && resources[category]) {
+      const found = resources[category].find((r: any) => r.path === path);
+      if (found) result = found.name;
+    }
+    
+    return safeDecode(result);
+  };
+
+  const loadBaseConfig = async (type: string, base: any) => {
+    if (type === 'saved') {
+      const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
+      setConfig(prev => ({ ...DEFAULT_CONFIG, ...data, id: base.id }));
+      if (data.textFont) {
+        // 对初始路径也进行一次安全提取
+        let decoded = data.textFont;
+        try { decoded = decodeURIComponent(data.textFont); } catch(e){}
+        loadFont(data.textFont, decoded.split('/').pop() || 'CustomFont');
+      }
+      return;
+    }
+    if (type === 'image') {
+      const url = `${window.location.origin}/repo/${base.path}`;
+      recognizeLayoutFromImage(url);
+      return;
+    }
+    if (type === 'bg') {
+      setConfig(prev => ({ ...prev, bgStr: base.path, bgType: 2 }));
+      setManualAssets(p => ({ ...p, bg: true }));
+      return;
+    }
+    if (type === 'theme') {
+      setLoading(true);
+      fetch(`${window.location.origin}/repo/${base.path}`)
+        .then(async res => {
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const text = await res.text();
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON', text.slice(0, 100));
+            throw new Error('所选资源不是有效的 JSON 格式');
+          }
+        })
+        .then(data => {
+          setConfig(prev => {
+            const next = { ...prev, ...data };
+            if (manualAssetsRef.current.bg) {
+              next.bgStr = prev.bgStr;
+              next.bgType = prev.bgType;
+            }
+            if (manualAssetsRef.current.font) {
+              next.textFont = prev.textFont;
+            }
+            return next;
+          });
+
+          // 自动加载排版指定的字体
+          if (data.textFont && !manualAssetsRef.current.font) {
+            // 尝试在资源中找这个字体 (处理编码过的路径)
+            const decodedFont = decodeURIComponent(data.textFont).split('/').pop() || '';
+            api.getResources().then(res => {
+              const foundFont = res.fonts?.find((f: any) => {
+                return f.name === decodedFont || decodeURIComponent(f.path).split('/').pop() === decodedFont || f.path === data.textFont;
+              });
+              if (foundFont) {
+                loadFont(foundFont.path, foundFont.name);
+              }
+            });
+          }
+        })
+        .catch(err => {
+          console.error('Theme load failed', err);
+          alert('加载失败: ' + err.message);
+        })
+        .finally(() => setLoading(false));
+    } else if (type === 'font') {
+      loadFont(base.path, base.name);
+      setManualAssets(p => ({ ...p, font: true }));
+    } else if (type === 'zip') {
+      setLoading(true);
+      fetch(`${window.location.origin}/repo/${base.path}`)
+        .then(res => res.arrayBuffer())
+        .then(async buf => {
+          let f = (window as any).fflate;
+          if (!f) {
+            // @ts-ignore
+            const mod = await import('https://cdn.skypack.dev/fflate');
+            f = mod;
+             (window as any).fflate = f;
+          }
+          if (f) {
+            const unzipped = f.unzipSync(new Uint8Array(buf));
+            const configFile = Object.keys(unzipped).find(k => k.endsWith('readConfig.json'));
+            if (configFile) {
+              const str = new TextDecoder().decode(unzipped[configFile]);
+              try {
+                const data = JSON.parse(str);
+                
+                setConfig(prev => {
+                  const next = { ...prev, ...data };
+                  if (manualAssetsRef.current.bg) {
+                    next.bgStr = prev.bgStr;
+                    next.bgType = prev.bgType;
+                  }
+                  if (manualAssetsRef.current.font) {
+                    next.textFont = prev.textFont;
+                  }
+                  return next;
+                });
+                
+                const decodedTextFont = data.textFont ? decodeURIComponent(data.textFont).split('/').pop() : '';
+                const decodedBgStr = data.bgStr ? decodeURIComponent(data.bgStr).split('/').pop() : '';
+
+                // 处理 ZIP 内的字体
+                if (data.textFont && !manualAssetsRef.current.font) {
+                  const fontFile = Object.keys(unzipped).find(k => {
+                    const kDecoded = decodeURIComponent(k).split('/').pop();
+                    return kDecoded === decodedTextFont || k.includes(decodedTextFont);
+                  });
+                  
+                  if (fontFile) {
+                    const fileName = decodeURIComponent(fontFile.split('/').pop() || '');
+                    // 1. 优先尝试从云端资源中匹配同名文件
+                    api.getResources().then(res => {
+                      const cloudMatch = res.fonts?.find((f: any) => {
+                        return f.name === fileName || decodeURIComponent(f.path).split('/').pop() === fileName;
+                      });
+
+                      if (cloudMatch) {
+                        // 匹配到云端资源，直接使用
+                        loadFont(cloudMatch.path, cloudMatch.name);
+                      } else {
+                        // 未匹配到，使用本地 blob:
+                        const fontBlob = new Blob([unzipped[fontFile]]);
+                        const fontUrl = URL.createObjectURL(fontBlob);
+                        const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
+                        const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+                        fontFace.load().then(f => {
+                          (document.fonts as any).add(f);
+                          setSelectedFontName(fontName);
+                          setConfig((prev: any) => ({ 
+                            ...prev, 
+                            textFont: fontUrl,
+                            _textFontName: fileName 
+                          }));
+                        });
+                      }
+                    });
+                  } else {
+                    // 如果 ZIP 内没找到，去项目资源里找 (按主题内的原始路径找)
+                    api.getResources().then(res => {
+                      const foundFont = res.fonts?.find((f: any) => {
+                         return f.name === decodedTextFont || decodeURIComponent(f.path).split('/').pop() === decodedTextFont || f.path === data.textFont;
+                      });
+                      if (foundFont) loadFont(foundFont.path, foundFont.name);
+                    });
+                  }
+                }
+
+                // 处理 ZIP 内的背景图
+                if (data.bgStr && (data.bgType === 1 || data.bgType === 2) && !manualAssetsRef.current.bg) {
+                  const bgFile = Object.keys(unzipped).find(k => {
+                    const kDecoded = decodeURIComponent(k).split('/').pop();
+                    return kDecoded === decodedBgStr || k.includes(decodedBgStr);
+                  });
+                  if (bgFile) {
+                    const fileName = decodeURIComponent(bgFile.split('/').pop() || '');
+                    api.getResources().then(res => {
+                      const cloudMatch = res.backgrounds?.find((b: any) => {
+                        return b.name === fileName || decodeURIComponent(b.path).split('/').pop() === fileName;
+                      });
+
+                      if (cloudMatch) {
+                        // 匹配到云端资源，直接使用
+                        setConfig(prev => ({ ...prev, bgStr: cloudMatch.path, bgType: 2 }));
+                      } else {
+                        // 未匹配到，使用本地 blob:
+                        const bgBlob = new Blob([unzipped[bgFile]]);
+                        const bgUrl = URL.createObjectURL(bgBlob);
+                        setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2, _bgStrName: fileName }));
+                      }
+                    });
+                  }
+                }
+              } catch (e) {
+                console.error('Failed to parse readConfig.json in ZIP', e);
+                alert('解析压缩包内的配置文件失败');
+              }
+            }
+          }
+        })
+        .finally(() => setLoading(false));
+    }
+  };
+
+  const loadFont = async (path: string, name: string) => {
+    if (!path || path.startsWith('content://')) return;
+    const isBlob = path.startsWith('blob:');
+    const fontUrl = isBlob ? path : `${window.location.origin}/repo/${path}`;
+
+    // 用文件名（去掉扩展名）作为稳定字体名
+    const rawName = (name || path.split('/').pop() || 'CustomFont').replace(/\.[^.]+$/, '');
+    const fontName = rawName;
+
+    // 去重：若同名字体已注册且已加载，直接使用，不重复加载
+    const existing = [...(document.fonts as any)].find((f: any) => f.family === fontName && f.status === 'loaded');
+    if (existing) {
+      console.log(`[loadFont] 字体已存在，直接复用: "${fontName}"`);
+      setSelectedFontName(fontName);
+      return;
+    }
 
     try {
-        if (fontFamily && fontFamily !== 'sans-serif') {
-            // 必须严格校验字号和字体
-            await (document as any).fonts.load(`${fontSize}px "${fontName}"`);
-        }
-        await (document as any).fonts.ready;
+      const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+      const loaded = await fontFace.load();
+      (document.fonts as any).add(loaded);
+
+      // 注入 @font-face CSS，确保 document.fonts.load() 的字体名能被正确识别
+      const styleId = `ff-${fontName.replace(/\s/g, '-')}`;
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontUrl}') format('truetype'); }`;
+        document.head.appendChild(style);
+      }
+
+      setSelectedFontName(fontName);
+      
+      // 预加载字体为 Base64 以供截图使用
+      fetch(fontUrl).then(r => r.blob()).then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => setFontBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
+      setConfig(prev => {
+        const next = { ...prev, textFont: path };
+        if (isBlob) next._textFontName = name;
+        return next;
+      });
     } catch (e) {
-        console.warn("字体加载异常，降级处理", e);
+      console.error('Font load failed', e);
     }
+  };
 
-    // 必须在执行任何 measureText 之前，把 context 的 font 设置正确！
-    ctx.font = fontString;
-    ctx.imageSmoothingEnabled = true;
+  const recognizeLayoutFromImage = async (url: string) => {
+    setLoading(true);
+    let worker: any = null;
+    try {
+      let t = (window as any).Tesseract;
+      if (!t) {
+        console.log('正在从 CDN 加载 Tesseract.js v5.1.1...');
+        // @ts-ignore
+        const mod = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/+esm');
+        t = mod.default || mod;
+        (window as any).Tesseract = t;
+      }
+      
+      if (!t || !t.createWorker) {
+        throw new Error('无法初始化 OCR 引擎 (Tesseract.js)');
+      }
 
-    // ── 2. 文本彻底净化 (解决半角标点问题) ───────────────────
-    const cleanParas = PREVIEW_PARAS.map(p => 
-        p.replace(/!/g, '！')
-         .replace(/\?/g, '？')
-         .replace(/,/g, '，')
-         .replace(/"(.*?)"/g, '“$1”') // 简单转换英文双引号
-         .replace(/-/g, '－') 
-    );
+      console.log('正在创建 OCR Worker...');
+      worker = await t.createWorker('chi_sim+eng', 1, {
+        logger: (m: any) => console.log('OCR 进度:', m),
+        // 强制使用稳定的 v5 核心和 worker 路径，防止 v7 core 自动加载导致的参数错误
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.0.0/tesseract-core-relaxedsimd-lstm.wasm.js',
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/dist/worker.min.js',
+      });
 
-    // ── 3. 核心测量器 (解决缩进错乱问题) ───────────────────────
-    // 抛弃所有的缓存，直接实时测量。并强制全角空格宽度等于字号 (1em)
-    const measure = (char: string, currentFontSize: number = fontSize): number => {
-        if (char === '　') return currentFontSize; // 全角空格永远是正方形
-        if (char === ' ') return currentFontSize * 0.5; // 半角空格是半个字
-        return ctx.measureText(char).width;
-    };
+      console.log('正在识别图片内容...', url);
+      const { data: { lines } } = await worker.recognize(url);
+      
+      const newConfig: any = {};
+      let currentSection: 'main' | 'title' | 'header' | 'footer' = 'main';
 
-    const toRgba = (hex: string): string => {
-        if (!hex?.startsWith('#')) return hex ?? 'rgba(0,0,0,1)';
-        if (hex.length === 9) {
-            const a = parseInt(hex.slice(1, 3), 16) / 255;
-            const r = parseInt(hex.slice(3, 5), 16);
-            const g = parseInt(hex.slice(5, 7), 16);
-            const b = parseInt(hex.slice(7, 9), 16);
-            return `rgba(${r},${g},${b},${a.toFixed(4)})`;
+      lines.forEach((line: any) => {
+        const text = line.text.replace(/\s+/g, '');
+        if (text.includes('正文标题')) currentSection = 'title';
+        else if (text.includes('页眉')) currentSection = 'header';
+        else if (text.includes('页脚')) currentSection = 'footer';
+        else if (text.includes('正文') && !text.includes('标题')) currentSection = 'main';
+
+        const findValue = () => {
+          // 增强匹配逻辑：匹配冒号或空格后的数字
+          const matches = text.match(/[-?]?\d+(\.\d+)?/g);
+          return (matches && matches.length > 0) ? parseFloat(matches[matches.length - 1]) : null;
+        };
+
+        const val = findValue();
+        if (val === null || isNaN(val)) return;
+
+        if (currentSection === 'main') {
+          if (text.includes('字号')) newConfig.textSize = val;
+          else if (text.includes('字距')) newConfig.letterSpacing = val;
+          else if (text.includes('行距')) newConfig.lineSpacingExtra = val;
+          else if (text.includes('段距')) newConfig.paragraphSpacing = val;
+          else if (text.includes('上边距')) newConfig.paddingTop = val;
+          else if (text.includes('下边距')) newConfig.paddingBottom = val;
+          else if (text.includes('左边距')) newConfig.paddingLeft = val;
+          else if (text.includes('右边距')) newConfig.paddingRight = val;
+        } else if (currentSection === 'title') {
+          if (text.includes('字号')) newConfig.titleSize = val;
+          else if (text.includes('上边距')) newConfig.titleTopSpacing = val;
+          else if (text.includes('下边距')) newConfig.titleBottomSpacing = val;
+        } else if (currentSection === 'footer') {
+          if (text.includes('上边距')) newConfig.footerPaddingTop = val;
+          else if (text.includes('下边距')) newConfig.footerPaddingBottom = val;
+          else if (text.includes('左边距')) newConfig.footerPaddingLeft = val;
+          else if (text.includes('右边距')) newConfig.footerPaddingRight = val;
         }
-        return hex;
-    };
+      });
 
-    ctx.save();
-
-    // ── 4. 背景层绘制 ─────────────────────────────────────────
-    if (cfg.bgType === 2 && bgImage) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalAlpha = (cfg.bgAlpha ?? 100) / 100;
-        ctx.drawImage(bgImage, 0, 0, W, H);
-        ctx.globalAlpha = 1;
-    } else {
-        ctx.fillStyle = toRgba(cfg.bgStr || '#FFFFFF');
-        ctx.fillRect(0, 0, W, H);
+      if (Object.keys(newConfig).length > 0) {
+        setConfig((prev: any) => ({ ...prev, ...newConfig }));
+        alert(`识别成功！提取了 ${Object.keys(newConfig).length} 项参数`);
+      } else {
+        alert('未能从图片中提取到有效参数。请确保图片清晰且包含参数数值。');
+      }
+    } catch (e) {
+      console.error('OCR 识别过程发生异常:', e);
+      alert('识别失败: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      if (worker) {
+        await worker.terminate();
+        console.log('OCR Worker 已终止');
+      }
+      setLoading(false);
     }
+  };
 
-    // ── 5. 布局参数设定 ───────────────────────────────────────
-    const textColor = toRgba(cfg.textColor  ?? '#ff43050a');
-    const tipColor  = toRgba(cfg.tipColor   ?? '#ff4d3838');
-    const letterSp  = (cfg.letterSpacing ?? 0) * fontSize;
-    const ascent    = fontSize * 0.84; // 经验基线值
+  const generateThumbnail = async (
+    cfg: any,
+  ): Promise<string> => {
+    const canvas = document.createElement('canvas');
+    const width = 360, height = 780;
+    const pixelRatio = 3; // 固定 3x 高清
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    const ctx = canvas.getContext('2d')!;
     
-    // Legado 公式：行高 = 字体大小 + 行距(dp)
-    const lineH = fontSize + (cfg.lineSpacingExtra ?? 12) * d; 
-    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
+    // 渲染 (必须 await)
+    await drawTheme(ctx, cfg, {
+      width, height, pixelRatio,
+      fontFamily: selectedFontName,
+      bgImage: bgImageObj,
+      getTipText,
+      PREVIEW_TITLE,
+      PREVIEW_PARAS
+    });
 
-    const pL = (cfg.paddingLeft  ?? 23) * d;
-    const pR = (cfg.paddingRight ?? 23) * d;
-    const contentW = W - pL - pR;
+    return canvas.toDataURL('image/jpeg', 0.95);
+  };
 
-    // ── 6. 纯粹的断行引擎 ─────────────────────────────────────
-    const layoutLines = (text: string, maxW: number, curFontSize: number = fontSize): string[] => {
-        const chars = Array.from(text);
-        const lines: string[] = [];
-        let line: string[] = [];
-        let currentW = 0;
+  const handleSave = async () => {
+    if (!config.name) return alert('请输入名称');
+    setSaving(true);
+    setSyncStatus('准备同步...');
+    try {
+      const finalConfig = { ...config };
+      
+      // 检查并同步临时资源 (来自 ZIP 的 blob:)
+      const syncAsset = async (path: string, category: 'fonts' | 'bg', preferredName?: string) => {
+        if (!path || !path.startsWith('blob:')) return path;
+        try {
+          const decodedName = preferredName ? decodeURIComponent(decodeURIComponent(preferredName)).split('/').pop() : 'asset';
+          setSyncStatus(`正在上传${category === 'fonts' ? '字体' : '背景'}: ${decodedName}...`);
+          
+          const res = await fetch(path);
+          const blob = await res.blob();
+          const name = preferredName || `${category}_${Date.now()}.${category === 'fonts' ? 'ttf' : 'jpg'}`;
+          return await api.ensureAsset(blob, category, name);
+        } catch (e) {
+          console.error(`Failed to sync ${category} asset:`, e);
+          return path;
+        }
+      };
 
-        for (let i = 0; i < chars.length; i++) {
-            const c = chars[i];
-            const cw = measure(c, curFontSize);
-            const sp = line.length > 0 ? letterSp : 0;
+      if (finalConfig.textFont) {
+        finalConfig.textFont = await syncAsset(finalConfig.textFont, 'fonts', finalConfig._textFontName);
+      }
+      if (finalConfig.bgType === 2 && finalConfig.bgStr) {
+        finalConfig.bgStr = await syncAsset(finalConfig.bgStr, 'bg', finalConfig._bgStrName);
+      }
 
-            if (currentW + sp + cw > maxW + 0.5) {
-                // 避头尾规则处理
-                if (POST_PANC.has(c) && line.length > 1) {
-                    const prevC = line.pop()!;
-                    lines.push(line.join(''));
-                    line = [prevC, c];
-                    currentW = measure(prevC, curFontSize) + letterSp + cw;
-                } else if (line.length > 0 && PRE_PANC.has(line[line.length - 1])) {
-                    const prevC = line.pop()!;
-                    lines.push(line.join(''));
-                    line = [prevC, c];
-                    currentW = measure(prevC, curFontSize) + letterSp + cw;
+      setSyncStatus('正在生成高保真预览图...');
+      let previewUrl = '';
+      try {
+        previewUrl = await generateThumbnail(finalConfig);
+        console.log('Thumbnail generated via Canvas Engine, length:', previewUrl?.length);
+      } catch (err) {
+        console.error('Thumbnail generation failed, skipping', err);
+        setSyncStatus('缩略图生成失败，已跳过');
+      }
+
+      setSyncStatus('正在保存主题配置...');
+      const payload: any = { 
+        name: finalConfig.name, 
+        config: JSON.stringify({ ...finalConfig, preview_url: previewUrl }) 
+      };
+      if (initialType === 'saved') payload.id = initialBase.id;
+      payload.preview_url = previewUrl;
+      
+      await api.saveCustomTheme(payload);
+      setSyncStatus('同步完成！');
+      alert(initialType === 'saved' ? '已更新主题' : '已保存到云端精选');
+      onSaved();
+      onClose();
+    } catch (e) {
+      alert('保存失败: ' + String(e));
+    } finally {
+      setSaving(false);
+      setSyncStatus('');
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+      className="bg-surface-container-highest border border-outline-variant w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] relative"
+    >
+      {/* 左侧预览 */}
+      <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col items-center justify-center min-h-0 relative">
+        <div className="absolute top-6 left-6 flex items-center gap-3"><Zap className="text-primary" size={20} /><h3 className="font-bold text-lg text-primary">样式实验室</h3></div>
+        
+
+        <div className="absolute bottom-6 right-6 bg-surface-container px-3 py-1 rounded-full text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2 z-10 border border-outline-variant/30">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+          {device.name} ({device.ratio})
+        </div>
+        
+        <div 
+          className="relative bg-[#0c0c0c] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_30px_60px_rgba(0,0,0,0.5)] border-[6px] border-[#222222] overflow-hidden flex flex-col transition-all duration-500 ease-in-out origin-center"
+          style={{ 
+            width: `${device.width}px`, 
+            height: `${device.height}px`, 
+            borderRadius: `${device.radius}px`,
+            padding: `${device.bezel * 4}px`,
+            transform: `scale(${device.width > 400 ? 0.58 : 0.68})` 
+          }}
+        >
+          <div className="w-full h-full relative overflow-hidden flex flex-col bg-black">
+            {/* 模拟刘海/挖孔 */}
+            {device.notch === 'hole' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
+            {device.notch === 'island' && <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 shadow-inner border border-white/5"></div>}
+          
+            <div className="flex-1 relative flex flex-col overflow-hidden" style={{ borderRadius: `${device.innerRadius}px` }}>
+              <CanvasPreview 
+                config={config} 
+                device={device} 
+                fontFamily={selectedFontName} 
+                bgImage={bgImageObj} 
+                loading={loading}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 右侧控制面板 */}
+      <div className="w-full md:w-[400px] bg-surface-container-high border-l border-outline-variant flex flex-col shrink-0 relative overflow-hidden">
+        {/* 顶部标签栏 */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-surface-container-high border-b border-outline-variant flex items-center px-4 gap-1 z-20">
+          {[
+            { id: 'visual', icon: <Palette size={16} />, label: '视觉' },
+            { id: 'text', icon: <Type size={16} />, label: '文字' },
+            { id: 'layout', icon: <Layout size={16} />, label: '布局' },
+            { id: 'extra', icon: <Settings2 size={16} />, label: '组件' },
+          ].map(tab => (
+            <button 
+              key={tab.id} 
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all ${activeTab === tab.id ? 'bg-primary text-white shadow-md' : 'text-secondary hover:bg-surface-container'}`}
+            >
+              {tab.icon}
+              <span className="text-[10px] font-bold">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-20 pb-24 space-y-8">
+          {activeTab === 'visual' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">主题信息</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-secondary">名称</span>
+                    <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">色彩与资源</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><span className="text-[10px] text-secondary">背景色</span><input type="color" value={getHex6(config.bgStr)} onChange={(e) => { setConfig({...config, bgStr: cssToArgb(e.target.value), bgType: 0}); setManualAssets(p => ({ ...p, bg: true })); }} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
+                    <div className="space-y-1.5"><span className="text-[10px] text-secondary">文字色</span><input type="color" value={getHex6(config.textColor)} onChange={(e) => setConfig({...config, textColor: cssToArgb(e.target.value)})} className="w-full h-10 rounded-xl cursor-pointer p-1 bg-surface-container" /></div>
+                  </div>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <button onClick={() => setShowPicker('layout')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <AlignLeft size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">排版布局</div>
+                        <div className="truncate">{selectedLayoutName || '默认'}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
+                    </button>
+
+                    <button onClick={() => setShowPicker('bg')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <ImageIcon size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">背景资源</div>
+                        <div className="truncate">
+                          {config.bgType === 0 ? '纯色' : getAssetName(config.bgStr, 'backgrounds', config._bgStrName)}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
+                    </button>
+
+                    <button onClick={() => setShowPicker('font')} className="flex items-center gap-4 p-4 bg-surface-container rounded-2xl text-sm font-bold text-primary hover:bg-primary/10 border border-primary/20 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <FontIcon size={20} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="text-[10px] text-secondary opacity-60 uppercase tracking-tighter mb-0.5">字体资源</div>
+                        <div className="truncate">{getAssetName(config.textFont, 'fonts', config._textFontName)}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-outline opacity-40" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'text' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">核心参数</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <Slider label="字号" value={config.textSize} min={12} max={40} unit="px" onChange={v => setConfig({...config, textSize: v})} />
+                  <Slider label="行间距" value={config.lineSpacingExtra} min={0} max={30} unit="px" onChange={v => setConfig({...config, lineSpacingExtra: v})} />
+                  <Slider label="字距" value={config.letterSpacing} min={0} max={1} step={0.01} onChange={v => setConfig({...config, letterSpacing: v})} />
+                  <Slider label="段距" value={config.paragraphSpacing} min={0} max={40} unit="px" onChange={v => setConfig({...config, paragraphSpacing: v})} />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">排版习惯</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-secondary">文字加粗</span>
+                    <button onClick={() => setConfig({...config, textBold: config.textBold ? 0 : 1})} className={`w-10 h-5 rounded-full transition-all relative ${config.textBold ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${config.textBold ? 'left-6' : 'left-1'}`}></div></button>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-outline font-bold uppercase">首行缩进</span>
+                    <select value={config.paragraphIndent} onChange={e => setConfig({...config, paragraphIndent: e.target.value})} className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-xs outline-none">
+                      <option value="">无缩进</option><option value="　">1字符</option><option value="　　">2字符</option><option value="　　　　">4字符</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'layout' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">物理环境</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant">
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEVICES.map(d => (
+                      <button key={d.id} onClick={() => setDevice(d)} className={`py-3 px-1 rounded-xl text-[10px] font-bold transition-all border ${device.id === d.id ? 'bg-primary text-white border-primary shadow-sm' : 'bg-surface-container text-secondary border-outline-variant hover:bg-surface-container'}`}>
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">全局边距</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    <Slider label="左" value={config.paddingLeft} min={0} max={100} onChange={v => setConfig({...config, paddingLeft: v})} />
+                    <Slider label="右" value={config.paddingRight} min={0} max={100} onChange={v => setConfig({...config, paddingRight: v})} />
+                    <Slider label="上" value={config.paddingTop} min={0} max={100} onChange={v => setConfig({...config, paddingTop: v})} />
+                    <Slider label="下" value={config.paddingBottom} min={0} max={100} onChange={v => setConfig({...config, paddingBottom: v})} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'extra' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">标题风格</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="flex bg-surface-container p-1 rounded-xl gap-1">
+                    {['居左', '居中', '隐藏'].map((l, i) => <button key={i} onClick={() => setConfig({...config, titleMode: i})} className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${config.titleMode === i ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}
+                  </div>
+                  {config.titleMode !== 2 && (
+                    <>
+                      <Slider label="缩放系数" value={config.titleSize} min={0} max={10} onChange={v => setConfig({...config, titleSize: v})} />
+                      <div className="grid grid-cols-2 gap-4">
+                        <Slider label="上间距" value={config.titleTopSpacing} min={0} max={100} onChange={v => setConfig({...config, titleTopSpacing: v})} />
+                        <Slider label="下间距" value={config.titleBottomSpacing} min={0} max={100} onChange={v => setConfig({...config, titleBottomSpacing: v})} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">状态信息栏 (页眉页脚)</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-secondary font-bold uppercase">页眉显示</span>
+                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, headerMode: i === 0 ? 1 : 2})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.headerMode === (i === 0 ? 1 : 2) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-secondary font-bold uppercase">页脚显示</span>
+                      <div className="flex bg-surface-container p-1 rounded-lg gap-1">{['开', '关'].map((l, i) => <button key={i} onClick={() => setConfig({...config, footerMode: i === 0 ? 0 : 1})} className={`flex-1 py-1 rounded-md text-[9px] font-bold transition-all ${config.footerMode === (i === 0 ? 0 : 1) ? 'bg-primary text-white shadow-sm' : 'text-secondary'}`}>{l}</button>)}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+                    <Slider label="页眉上" value={config.headerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, headerPaddingTop: v})} />
+                    <Slider label="页眉下" value={config.headerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, headerPaddingBottom: v})} />
+                    <Slider label="页脚上" value={config.footerPaddingTop} min={0} max={100} onChange={v => setConfig({...config, footerPaddingTop: v})} />
+                    <Slider label="页脚下" value={config.footerPaddingBottom} min={0} max={100} onChange={v => setConfig({...config, footerPaddingBottom: v})} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">页眉线</span>
+                      <button onClick={() => setConfig({...config, showHeaderLine: !config.showHeaderLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showHeaderLine ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showHeaderLine ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">页脚线</span>
+                      <button onClick={() => setConfig({...config, showFooterLine: !config.showFooterLine})} className={`w-8 h-4 rounded-full transition-all relative ${config.showFooterLine ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.showFooterLine ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5 pt-2 border-t border-outline-variant/30">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-bold uppercase text-secondary">提示色</span>
+                       <input type="color" value={getHex6(config.tipColor || '#80000000')} onChange={(e) => setConfig({...config, tipColor: cssToArgb(e.target.value)})} className="w-10 h-6 rounded cursor-pointer" />
+                    </div>
+                    <div className="space-y-4">
+                      <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block text-center">页眉内容</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <TipSelector label="左" value={config.tipHeaderLeft} onChange={v => setConfig({...config, tipHeaderLeft: v})} />
+                        <TipSelector label="中" value={config.tipHeaderMiddle} onChange={v => setConfig({...config, tipHeaderMiddle: v})} />
+                        <TipSelector label="右" value={config.tipHeaderRight} onChange={v => setConfig({...config, tipHeaderRight: v})} />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block text-center">页脚内容</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <TipSelector label="左" value={config.tipFooterLeft} onChange={v => setConfig({...config, tipFooterLeft: v})} />
+                        <TipSelector label="中" value={config.tipFooterMiddle} onChange={v => setConfig({...config, tipFooterMiddle: v})} />
+                        <TipSelector label="右" value={config.tipFooterRight} onChange={v => setConfig({...config, tipFooterRight: v})} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">系统 UI (状态栏/导航栏)</label>
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">隐藏状态栏</span>
+                      <button onClick={() => setConfig({...config, hideStatusBar: !config.hideStatusBar})} className={`w-8 h-4 rounded-full transition-all relative ${config.hideStatusBar ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.hideStatusBar ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 bg-surface-container rounded-xl">
+                      <span className="text-[10px] font-bold uppercase">隐藏导航栏</span>
+                      <button onClick={() => setConfig({...config, hideNavigationBar: !config.hideNavigationBar})} className={`w-8 h-4 rounded-full transition-all relative ${config.hideNavigationBar ? 'bg-primary' : 'bg-outline-variant'}`}><div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${config.hideNavigationBar ? 'left-4.5' : 'left-0.5'}`}></div></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-surface-container-high border-t border-outline-variant flex items-center gap-3 z-20 backdrop-blur-md">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-surface-container/50 rounded-xl text-secondary text-sm font-bold shadow-sm hover:bg-surface-container transition-all border border-outline-variant/30">取消</button>
+          <button onClick={handleSave} disabled={saving} className="flex-2 px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 relative overflow-hidden group">
+            {saving ? (
+              <>
+                <RefreshCw size={16} className="animate-spin" />
+                <span className="animate-pulse">{syncStatus || '正在处理...'}</span>
+              </>
+            ) : (
+              <>
+                <Share2 size={16} className="group-hover:scale-110 transition-transform" />
+                <span>保存并同步</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {showPicker && (
+        <div 
+          onClick={(e) => e.target === e.currentTarget && setShowPicker(null)}
+          className="absolute inset-0 z-100 bg-on-background/20 backdrop-blur-sm flex items-center justify-end"
+        >
+          <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="w-full md:w-[500px] h-full bg-surface shadow-2xl border-l border-outline-variant flex flex-col">
+            <AssetPicker type={showPicker} fileTree={fileTree} onSelect={(r: any) => {
+                if (r._action === 'ocr') {
+                  loadBaseConfig('image', r);
+                } else if (r._action === 'bg') {
+                  setConfig(prev => ({ ...prev, bgStr: r.path, bgType: 2 }));
+                  setManualAssets(p => ({ ...p, bg: true }));
                 } else {
-                    lines.push(line.join(''));
-                    line = [c];
-                    currentW = cw;
+                  // 原始逻辑
+                  if (showPicker === 'font') { 
+                    loadFont(r.path, r.name); 
+                    setManualAssets(p => ({ ...p, font: true })); 
+                  }
+                  else if (showPicker === 'bg') { 
+                    if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
+                      loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
+                    } else {
+                      const isBlob = r.path.startsWith('blob:');
+                      setConfig(prev => {
+                        const next = { ...prev, bgStr: r.path, bgType: 2 };
+                        if (isBlob) next._bgStrName = r.name;
+                        return next;
+                      });
+                      setManualAssets(p => ({ ...p, bg: true })); 
+                    }
+                  }
+                  else if (showPicker === 'layout') { 
+                    loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); 
+                    setSelectedLayoutName(r.name);
+                  }
                 }
-            } else {
-                line.push(c);
-                currentW += sp + cw;
-            }
-        }
-        if (line.length > 0) lines.push(line.join(''));
-        return lines;
-    };
-
-    // ── 7. 单行绘制引擎 (解决字间距拉伸撕裂问题) ───────────────
-    const drawLine = (
-        text: string, x: number, y: number,
-        align: 'left' | 'center' | 'right' | 'justify' = 'left',
-        curAscent: number = ascent,
-        curFontSize: number = fontSize
-    ) => {
-        const chars = Array.from(text);
-        if (!chars.length) return;
-
-        const ws = chars.map(c => measure(c, curFontSize));
-        const totalCharW = ws.reduce((a, b) => a + b, 0);
-        const totalBaseSp = letterSp * (chars.length - 1);
-
-        let extraSp = 0;
-        if (align === 'justify' && chars.length > 1) {
-            const gap = contentW - totalCharW - totalBaseSp;
-            // 限制最大拉伸宽度，如果缺口太大宁愿留白也不要撕裂排版
-            if (gap > 0 && gap < contentW * 0.4) {
-                extraSp = gap / (chars.length - 1);
-            }
-        }
-
-        const lineW = totalCharW + totalBaseSp + extraSp * (chars.length - 1);
-        let sx = align === 'center' ? x + (contentW - lineW) / 2
-               : align === 'right'  ? x + (contentW - lineW)
-               : x;
-        const dy = y + curAscent;
-
-        for (let i = 0; i < chars.length; i++) {
-            ctx.fillText(chars[i], sx, dy);
-            sx += ws[i] + letterSp + extraSp;
-        }
-    };
-
-    // ── 8. 全局渲染流 ─────────────────────────────────────────
-    let currentY = 0;
-
-    // [层级 1] 状态栏 (修复双重绘制Bug)
-    const statusBarH = cfg.hideStatusBar ? 0 : 24 * d;
-    if (!cfg.hideStatusBar) {
-        const sFontSize = Math.round(12 * d);
-        ctx.font = `600 ${sFontSize}px sans-serif`;
-        ctx.fillStyle = tipColor;
-        const sY = statusBarH / 2 - sFontSize / 2; // 居中Y起点
-        
-        ctx.fillText('12:30', 16 * d, sY + sFontSize * 0.84);
-        const batteryText = '69%';
-        ctx.fillText(batteryText, W - 16 * d - ctx.measureText(batteryText).width, sY + sFontSize * 0.84);
-    }
-    currentY += statusBarH;
-
-    // [层级 2] 页眉 Header
-    if (cfg.headerMode !== 2) {
-        const hFontSize = 11 * d;
-        ctx.font = `${hFontSize}px ${fontString}`;
-        ctx.fillStyle = tipColor;
-        
-        const hY = currentY + (cfg.headerPaddingTop ?? 20) * d;
-        const hBaseY = hY + hFontSize * 0.84;
-        
-        ctx.fillText(getTipText(cfg.tipHeaderLeft ?? 1), pL, hBaseY);
-        const midText = getTipText(cfg.tipHeaderMiddle ?? 0);
-        ctx.fillText(midText, (W - ctx.measureText(midText).width) / 2, hBaseY);
-        const rightText = getTipText(cfg.tipHeaderRight ?? 7);
-        ctx.fillText(rightText, W - pR - ctx.measureText(rightText).width, hBaseY);
-
-        currentY = hY + hFontSize + (cfg.headerPaddingBottom ?? 1) * d;
-
-        if (cfg.showHeaderLine) {
-            ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.2;
-            ctx.lineWidth = 0.5 * d;
-            ctx.beginPath();
-            ctx.moveTo(16 * d, currentY);
-            ctx.lineTo(W - 16 * d, currentY);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-        }
-    }
-
-    // [层级 3] 页面内边距与标题
-    currentY += (cfg.paddingTop ?? 15) * d;
-
-    if (cfg.titleMode !== 2) {
-        const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
-        ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
-        ctx.fillStyle = textColor;
-        const tLineH = tFontSize + (cfg.lineSpacingExtra ?? 12) * d;
-
-        currentY += (cfg.titleTopSpacing ?? 8) * d;
-        const tAlign = cfg.titleMode === 1 ? 'center' : 'left';
-        
-        const tLines = layoutLines(PREVIEW_TITLE, contentW, tFontSize);
-        for (const line of tLines) {
-            drawLine(line, pL, currentY, tAlign, tFontSize * 0.84, tFontSize);
-            currentY += tLineH;
-        }
-        currentY += (cfg.titleBottomSpacing ?? 10) * d;
-    }
-
-    // [层级 4] 正文渲染
-    // 重点：把字体切回正文配置
-    ctx.font = fontString;
-    ctx.fillStyle = textColor;
-    
-    const navH = cfg.hideNavigationBar ? 0 : 10 * d;
-    const fFontSize = 11 * d;
-    const footerSafeH = (cfg.footerMode !== 1) ? 
-        ((cfg.footerPaddingBottom ?? 9) * d + fFontSize * 2 + navH + (cfg.paddingBottom ?? 15) * d) : 0;
-    const maxY = H - footerSafeH;
-
-    outer: for (const para of cleanParas) {
-        if (currentY >= maxY) break;
-        
-        const lines = layoutLines(para, contentW, fontSize);
-        
-        for (let li = 0; li < lines.length; li++) {
-            if (currentY + fontSize > maxY) break outer;
-            
-            const isLast = li === lines.length - 1;
-            drawLine(lines[li], pL, currentY, isLast ? 'left' : 'justify', ascent, fontSize);
-            currentY += lineH;
-        }
-        currentY += paraSpacing; 
-    }
-
-    // [层级 5] 页脚 Footer
-    if (cfg.footerMode !== 1) {
-        ctx.font = `${fFontSize}px ${fontString}`;
-        ctx.fillStyle = tipColor;
-        
-        const fY = H - navH - (cfg.footerPaddingBottom ?? 9) * d - fFontSize;
-        const fBaseY = fY + fFontSize * 0.84;
-
-        if (cfg.showFooterLine) {
-            ctx.strokeStyle = tipColor;
-            ctx.globalAlpha = 0.2;
-            ctx.lineWidth = 0.5 * d;
-            ctx.beginPath();
-            ctx.moveTo(16 * d, Math.floor(fY - 8 * d));
-            ctx.lineTo(W - 16 * d, Math.floor(fY - 8 * d));
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-        }
-
-        ctx.fillText(getTipText(cfg.tipFooterLeft ?? 6), (cfg.footerPaddingLeft ?? 20) * d, fBaseY);
-        const midFText = getTipText(cfg.tipFooterMiddle ?? 0);
-        ctx.fillText(midFText, (W - ctx.measureText(midFText).width) / 2, fBaseY);
-        const rightFText = getTipText(cfg.tipFooterRight ?? 9);
-        ctx.fillText(rightFText, W - (cfg.footerPaddingRight ?? 19) * d - ctx.measureText(rightFText).width, fBaseY);
-    }
-
-    ctx.restore();
+                setShowPicker(null);
+            }} onClose={() => setShowPicker(null)} />
+          </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
 }
