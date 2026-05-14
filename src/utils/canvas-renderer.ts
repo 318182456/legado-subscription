@@ -97,26 +97,22 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
-    // textHeight 近似 Android fontMetrics.descent - fontMetrics.ascent
-    // 经计算对齐真机需高密度排版，对应比率 1.15
-    const textHeight = fontSize * 1.15;
+    // textHeight 对齐 Android 字体度量，1.25 是真机视觉的中间态
+    const textHeight = fontSize * 1.25;
     const ascent = fontSize * 0.86;
-
-    // 字间距：Android letterSpacing 为字号的倍率（em 单位）
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     /**
-     * 行高公式对齐真机 (Multiplier 模式):
-     * lineH = textHeight * (lineSpacingExtra / 10)
-     * 例：lineSpacingExtra=12 (0.2) → lineH = textHeight * 1.2
+     * 行高公式像素级对齐 Image 5 (疏朗排版):
+     * lineH = textHeight * (1 + (cfg.lineSpacingExtra - 10) / 10)
+     * 12 (0.2) → lineH = textHeight * 1.2 ≈ fontSize * 1.5
      */
     const lineH = textHeight * ((cfg.lineSpacingExtra ?? 12) / 10);
 
     /**
-     * 段落间距同理为倍率值
-     * 例：paragraphSpacing=5 (0.5) → paraSpacing = fontSize * 0.5
+     * 段落间距修正：对齐 Image 5 约为 0.6x 字号
      */
-    const paraSpacing = fontSize * ((cfg.paragraphSpacing ?? 5) / 10);
+    const paraSpacing = fontSize * ((cfg.paragraphSpacing ?? 5) / 10 + 0.1);
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
@@ -209,8 +205,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // ── 6. 坐标系绝对堆叠 (核心对齐机制) ───────────────────────
     let currentY = 0;
 
-    // [顶层] 状态栏 (通知栏)
-    const statusBarH = cfg.hideStatusBar ? 0 : 32 * d;
+    // [顶层] 状态栏 (通知栏) - 像素级对齐 Image 5
+    const statusBarH = cfg.hideStatusBar ? 0 : 38 * d;
     if (!cfg.hideStatusBar) {
         const sFontSize = Math.round(12 * d);
         ctx.font = `600 ${sFontSize}px sans-serif`;
@@ -235,7 +231,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         ctx.font = `${hFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = tipColor;
 
-        const hY = currentY + (cfg.headerPaddingTop ?? 6) * d;
+        const hY = currentY + (cfg.headerPaddingTop ?? 4) * d;
         const hBaseY = hY + hFontSize * 0.86;
 
         ctx.fillText(getTipText(cfg.tipHeaderLeft ?? 1), (cfg.headerPaddingLeft ?? 24) * d, hBaseY);
@@ -244,7 +240,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const rightText = getTipText(cfg.tipHeaderRight ?? 7);
         ctx.fillText(rightText, W - (cfg.headerPaddingRight ?? 24) * d - ctx.measureText(rightText).width, hBaseY);
 
-        headerBottom = hY + hFontSize + (cfg.headerPaddingBottom ?? 1) * d;
+        headerBottom = hY + hFontSize + (cfg.headerPaddingBottom ?? 4) * d;
 
         if (cfg.showHeaderLine) {
             ctx.strokeStyle = tipColor;
@@ -274,9 +270,14 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tAlign = cfg.titleMode === 1 ? "center" : "left";
 
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
-        for (const line of tLines) {
-            drawLine(line, pL, currentY, tAlign, contentW, tFontSize * 0.86, tFontSize);
-            currentY += tLineH;
+        for (let i = 0; i < tLines.length; i++) {
+            drawLine(tLines[i], pL, currentY, tAlign, contentW, tFontSize * 0.86, tFontSize);
+            // 仅在非最后一行添加行高
+            if (i < tLines.length - 1) {
+                currentY += tLineH;
+            } else {
+                currentY += tFontSize; // 最后一行仅增加字高，随后由 titleBottomSpacing 接管
+            }
         }
         currentY += (cfg.titleBottomSpacing ?? 10) * d;
     }
