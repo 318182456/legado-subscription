@@ -96,14 +96,15 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
     // 测量实际字体高度（ascent + descent），作为行高基准
-    // 注意：必须在设置 ctx.font 之后测量
-    ctx.font = `${cfg.textBold === 1 ? "bold " : ""}${fontSize}px ${fontStack}`;
+    // ctx.font 已在 L47 正确设置为 fontString
     const bodyMeasure = ctx.measureText("国");
     const bodyAscent  = bodyMeasure.actualBoundingBoxAscent  ?? fontSize * 0.86;
     const bodyDescent = bodyMeasure.actualBoundingBoxDescent ?? fontSize * 0.14;
     const textHeight  = bodyAscent + bodyDescent;
-    // baseline 偏移：用测量值，保持文字在行内垂直居中
     const ascent = bodyAscent;
+
+    // 字间距：Android letterSpacing 为字号的倍率（em 单位）
+    const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
 
     /**
      * 行高公式对齐 Legado ChapterProvider.kt:
