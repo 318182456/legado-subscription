@@ -8,8 +8,7 @@ import * as api from '../api';
 import { Slider } from './Slider';
 import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
-import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
-import { getTipText } from '../utils/preview';
+import { PREVIEW_TITLE, PREVIEW_PARAS, getTipText } from '../utils/constants';
 import { drawTheme } from '../utils/canvas-renderer';
 
 // 外部库引用
