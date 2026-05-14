@@ -149,33 +149,36 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   return (
     <div 
       ref={containerRef} 
-      className={`w-full aspect-[9/19.5] rounded-2xl shadow-lg overflow-hidden group-hover:ring-2 ring-primary/30 transition-all relative ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : 'bg-black p-[2px]'}`}
+      className="w-full aspect-[9/19.5] rounded-[24px] shadow-[0_12px_30px_-6px_rgba(0,0,0,0.3)] group-hover:ring-2 ring-primary/30 transition-all relative bg-[#0a0a0a] p-[3px] border border-white/10"
     >
-      {(initialPreviewUrl || config.preview_url) ? (
-        <img 
-          src={initialPreviewUrl || config.preview_url} 
-          alt={name} 
-          className="w-full h-full object-contain"
-          loading="lazy"
-        />
-      ) : (
-        <div 
-          className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
-          style={{ 
-            ...style, 
-            width: '320px', 
-            height: '693.33px', 
-            transform: `translate(-50%, -50%) scale(${scale})`,
-            borderRadius: `${14 / scale}px` 
-          }}
-        >
-          <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
-            <div className="w-6 h-1 bg-black/20 rounded-full"></div>
-          </div>
+      {/* 屏幕内容 */}
+      <div className={`w-full h-full rounded-[20px] overflow-hidden relative bg-black ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : ''}`}>
+        {(initialPreviewUrl || config.preview_url) ? (
+          <img 
+            src={initialPreviewUrl || config.preview_url} 
+            alt={name} 
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div 
+            className="absolute top-1/2 left-1/2 flex flex-col overflow-hidden origin-center" 
+            style={{ 
+              ...style, 
+              width: '320px', 
+              height: '693.33px', 
+              transform: `translate(-50%, -50%) scale(${scale})`,
+              borderRadius: `${14 / scale}px` 
+            }}
+          >
+            <div className="h-4 w-full flex items-center justify-center shrink-0 z-10">
+              <div className="w-6 h-1 bg-black/20 rounded-full"></div>
+            </div>
 
-          <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
-        </div>
-      )}
+            <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML(config, COMP, getTipText, argbToCss, PREVIEW_TITLE, PREVIEW_PARAS) }} className="w-full h-full flex flex-col" />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

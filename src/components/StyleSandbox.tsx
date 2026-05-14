@@ -499,16 +499,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           if (text.includes('字号')) newConfig.titleSize = val;
           else if (text.includes('上边距')) newConfig.titleTopSpacing = val;
           else if (text.includes('下边距')) newConfig.titleBottomSpacing = val;
-        } else if (currentSection === 'header') {
-          if (text.includes('上边距')) newConfig.headerPaddingTop = val;
-          else if (text.includes('下边距')) newConfig.headerPaddingBottom = val;
-          else if (text.includes('左边距')) newConfig.headerPaddingLeft = val;
-          else if (text.includes('右边距')) newConfig.headerPaddingRight = val;
         } else if (currentSection === 'footer') {
           if (text.includes('上边距')) newConfig.footerPaddingTop = val;
           else if (text.includes('下边距')) newConfig.footerPaddingBottom = val;
-          else if (text.includes('左边距')) newConfig.footerPaddingLeft = val; // 修复：之前误写为 headerPaddingLeft
-          else if (text.includes('右边距')) newConfig.footerPaddingRight = val; // 修复：之前误写为 headerPaddingRight
+          else if (text.includes('左边距')) newConfig.footerPaddingLeft = val;
+          else if (text.includes('右边距')) newConfig.footerPaddingRight = val;
         }
       });
 
@@ -530,36 +525,17 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
   };
 
-  /**
-   * 离屏 div 缩略图生成器 — 高保真方案
-   *
-   * 原理：在 document.body 中创建一个固定尺寸的隐藏容器，注入与预览完全相同的 HTML
-   * （generatePreviewHTML），同时通过内联 @font-face Base64 嵌入字体、通过 inline style
-   * 嵌入 Base64 背景图，再用 html-to-image 截图后缩小，确保缩略图与预览像素级一致。
-   *
-   * 解决的三大问题：
-   * 1. transform:scale 干扰 → 独立离屏容器，不受父级 scale 影响
-   * 2. 跨域 / Base64 竞争 → 字体和背景均使用已预缓存的 Base64 data URL
-   * 3. @font-face 未注入 → 在容器内 <style> 标签中直接 embed Base64 字体
-   */
-    const generateThumbnail = async (
+  const generateThumbnail = async (
     cfg: any,
     bgBase64: string,
   ): Promise<string> => {
-    // 基础屏幕分辨率 (对齐 9:19.5 标准)
+    // 基础屏幕分辨率 (必须与编辑器默认设备一致)
     const SCREEN_W = 360, SCREEN_H = 780; 
-    const BEZEL = 14; // 边框厚度 (增加厚度以确保可见)
-    const RADIUS = 44; // 手机圆角
-    
-    // 最终画布分辨率（包含边框）
-    const RENDER_W = SCREEN_W + BEZEL * 2;
-    const RENDER_H = SCREEN_H + BEZEL * 2;
-    
-    // 缩略图输出尺寸（保持比例）
+    const RENDER_W = SCREEN_W;
+    const RENDER_H = SCREEN_H;
     const THUMB_W  = 240;
-    const THUMB_H  = Math.round(THUMB_W * (RENDER_H / RENDER_W));
+    const THUMB_H  = 520; // 9:19.5
 
-    // ── 1. 背景 Base64 解析 ──
     let resolvedBg = bgBase64;
     if (cfg.bgType === 2 && cfg.bgStr && !cfg.bgStr.startsWith('content://') && !resolvedBg) {
       try {
@@ -578,35 +554,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       }
     }
 
-    // ── 2. 离屏 Canvas 绘制 ──
     const offscreen = document.createElement('canvas');
     offscreen.width  = RENDER_W;
     offscreen.height = RENDER_H;
     const ctx = offscreen.getContext('2d')!;
-
-    // 2.1 绘制手机外壳 (Bezel)
-    const drawRoundedRect = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
-      c.beginPath();
-      c.moveTo(x + r, y);
-      c.arcTo(x + w, y, x + w, y + h, r);
-      c.arcTo(x + w, y + h, x, y + h, r);
-      c.arcTo(x, y + h, x, y, r);
-      c.arcTo(x, y, x + w, y, r);
-      c.closePath();
-    };
-
-    ctx.fillStyle = '#0a0a0a';
-    drawRoundedRect(ctx, 0, 0, RENDER_W, RENDER_H, RADIUS);
-    ctx.fill();
-    // 边框高光
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // 2.2 裁剪出屏幕区域
-    ctx.save();
-    drawRoundedRect(ctx, BEZEL, BEZEL, SCREEN_W, SCREEN_H, RADIUS - BEZEL);
-    ctx.clip();
 
     // 绘制屏幕背景
     if (cfg.bgType === 2 && resolvedBg) {
@@ -614,30 +565,39 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         const img = new Image();
         img.onload = () => {
           const s = Math.max(SCREEN_W / img.width, SCREEN_H / img.height);
-          ctx.drawImage(img, BEZEL + (SCREEN_W - img.width * s) / 2, BEZEL + (SCREEN_H - img.height * s) / 2, img.width * s, img.height * s);
+          ctx.drawImage(img, (SCREEN_W - img.width * s) / 2, (SCREEN_H - img.height * s) / 2, img.width * s, img.height * s);
           resolve();
         };
-        img.onerror = () => { ctx.fillStyle = '#eeeeee'; ctx.fillRect(BEZEL, BEZEL, SCREEN_W, SCREEN_H); resolve(); };
+        img.onerror = () => { ctx.fillStyle = '#eeeeee'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); resolve(); };
         img.src = resolvedBg;
       });
     } else {
       ctx.fillStyle = cfg.bgType === 0 ? argbToCss(cfg.bgStr) : '#eeeeee';
-      ctx.fillRect(BEZEL, BEZEL, SCREEN_W, SCREEN_H);
+      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
     }
 
     const textColor = argbToCss(cfg.textColor);
     const tipColor  = argbToCss(cfg.tipColor || '#803E3D3B');
     const fontFamily = selectedFontName ? `"${selectedFontName}", sans-serif` : 'sans-serif';
     const textSize   = cfg.textSize || 20;
-    const lineH      = textSize + (cfg.lineSpacingExtra || 12);
     const letterSp   = (cfg.letterSpacing || 0) * textSize;
+    const lineH      = (textSize + (cfg.lineSpacingExtra || 0));
 
-    const drawText = (text: string, x: number, baseY: number, maxW?: number) => {
-      if (letterSp <= 0) { ctx.fillText(text, BEZEL + x, BEZEL + baseY, maxW); return; }
-      let cx = x;
+    const drawText = (text: string, x: number, baseY: number, align: 'left'|'center'|'right' = 'left') => {
+      ctx.textAlign = align;
+      if (letterSp <= 0) {
+        ctx.fillText(text, x, baseY);
+        return;
+      }
+      const fullW = ctx.measureText(text).width + (text.length - 1) * letterSp;
+      let startX = x;
+      if (align === 'center') startX = (SCREEN_W - fullW) / 2;
+      else if (align === 'right') startX = SCREEN_W - fullW - x;
+
+      let cx = startX;
       for (const ch of text) {
-        if (maxW && cx - x > maxW) break;
-        ctx.fillText(ch, BEZEL + cx, BEZEL + baseY);
+        ctx.textAlign = 'left';
+        ctx.fillText(ch, cx, baseY);
         cx += ctx.measureText(ch).width + letterSp;
       }
     };
@@ -646,7 +606,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       const lines: string[] = [];
       let cur = '', first = true;
       for (const ch of text) {
-        const w = ctx.measureText(cur + ch).width;
+        const w = ctx.measureText(cur + ch).width + (cur.length * letterSp);
         if (w > (first ? maxW - firstIndent : maxW) && cur) {
           lines.push(cur); cur = ch; first = false;
         } else { cur += ch; }
@@ -655,21 +615,28 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       return lines;
     };
 
-    // 渲染正文内容 (坐标相对于屏幕区域)
     let y = 0;
+    // Status Bar
     if (!cfg.hideStatusBar) {
       ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '600 11px sans-serif';
       drawText('12:30', 16, 18);
-      ctx.textAlign = 'right'; drawText('69%', SCREEN_W - 16, 18); ctx.textAlign = 'left';
+      drawText('69%', 16, 18, 'right');
       y = 24;
     }
 
+    // Header
     if (cfg.headerMode !== 2) {
       const hPT = (cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 24 : 2);
       y += hPT;
       ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '10px sans-serif';
       drawText(getTipText(cfg.tipHeaderLeft ?? 2), cfg.headerPaddingLeft || 0, y + 10);
+      drawText(getTipText(cfg.tipHeaderMiddle ?? 0), SCREEN_W / 2, y + 10, 'center');
+      drawText(getTipText(cfg.tipHeaderRight ?? 3), cfg.headerPaddingRight || 0, y + 10, 'right');
       y += 10 + (cfg.headerPaddingBottom || 0) + 4;
+      if (cfg.showHeaderLine) {
+        ctx.strokeStyle = tipColor; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo((cfg.headerPaddingLeft || 0), y); ctx.lineTo(SCREEN_W - (cfg.headerPaddingRight || 0), y); ctx.stroke();
+      }
     }
 
     ctx.globalAlpha = 1;
@@ -677,52 +644,57 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     const contentW = SCREEN_W - pL - pR;
     y += cfg.paddingTop ?? 6;
 
+    // Title
     if (cfg.titleMode !== 2) {
       const tSize = textSize * (1.05 + (cfg.titleSize || 0) * 0.1);
       ctx.font = `bold ${tSize}px ${fontFamily}`;
       ctx.fillStyle = textColor;
       y += cfg.titleTopSpacing || 0;
-      drawText(PREVIEW_TITLE, pL, y + tSize);
+      const align = cfg.titleMode === 1 ? 'center' : 'left';
+      drawText(PREVIEW_TITLE, align === 'center' ? SCREEN_W / 2 : pL, y + tSize, align);
       y += tSize + (cfg.titleBottomSpacing || 0);
     }
 
+    // Paragraphs
     ctx.font = `${cfg.textBold ? 'bold ' : ''}${textSize}px ${fontFamily}`;
     ctx.fillStyle = textColor;
-    const indentPx = (cfg.paragraphIndent?.length || 0) * textSize * 0.6;
-    const maxY = SCREEN_H - 40;
+    const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
+    const maxY = SCREEN_H - (cfg.hideNavigationBar ? 20 : 40);
 
     outer: for (const para of PREVIEW_PARAS) {
       if (y >= maxY) break;
       const lines = wrap(para, contentW, indentPx);
       for (let i = 0; i < lines.length; i++) {
         if (y + textSize > maxY) break outer;
-        drawText(lines[i], pL + (i === 0 ? indentPx : 0), y + textSize, i === 0 ? contentW - indentPx : contentW);
+        drawText(lines[i], pL + (i === 0 ? indentPx : 0), y + textSize);
         y += lineH;
       }
       y += cfg.paragraphSpacing || 0;
     }
-    ctx.restore();
 
-    // 2.3 绘制顶部挖孔摄像头和底部手势条
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
-    ctx.arc(RENDER_W / 2, BEZEL + 12, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.stroke();
+    // Footer
+    if (cfg.footerMode !== 1) {
+      const fPB = (cfg.footerPaddingBottom || 0) + (cfg.hideNavigationBar ? 10 : 2);
+      const fY = SCREEN_H - fPB - 20;
+      ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '10px sans-serif';
+      if (cfg.showFooterLine) {
+        ctx.strokeStyle = tipColor; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo((cfg.footerPaddingLeft || 0), fY); ctx.lineTo(SCREEN_W - (cfg.footerPaddingRight || 0), fY); ctx.stroke();
+      }
+      drawText(getTipText(cfg.tipFooterLeft ?? 5), cfg.footerPaddingLeft || 0, fY + 12);
+      drawText(getTipText(cfg.tipFooterMiddle ?? 0), SCREEN_W / 2, fY + 12, 'center');
+      drawText(getTipText(cfg.tipFooterRight ?? 6), cfg.footerPaddingRight || 0, fY + 12, 'right');
+    }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    drawRoundedRect(ctx, RENDER_W / 2 - 40, RENDER_H - BEZEL - 8, 80, 4, 2);
-    ctx.fill();
-
-    // ── 3. 输出缩略图 ──
     const thumb = document.createElement('canvas');
     thumb.width = THUMB_W; thumb.height = THUMB_H;
     const tctx = thumb.getContext('2d')!;
+    tctx.imageSmoothingEnabled = true;
+    tctx.imageSmoothingQuality = 'high';
     tctx.drawImage(offscreen, 0, 0, THUMB_W, THUMB_H);
 
-    console.log('[Thumbnail] Generated with Frame, size:', THUMB_W, 'x', THUMB_H);
-    return thumb.toDataURL('image/jpeg', 0.85);
+    console.log('[Thumbnail] Generated Clean (Screen Only), size:', THUMB_W, 'x', THUMB_H);
+    return thumb.toDataURL('image/jpeg', 0.9);
   };
 
   const handleSave = async () => {
