@@ -95,17 +95,30 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
 
-    // 字间距：Android 配置为 0.04，表示 0.04 个字宽
-    const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
+    // 测量实际字体高度（ascent + descent），作为行高基准
+    // 注意：必须在设置 ctx.font 之后测量
+    ctx.font = `${cfg.textBold === 1 ? "bold " : ""}${fontSize}px ${fontStack}`;
+    const bodyMeasure = ctx.measureText("国");
+    const bodyAscent  = bodyMeasure.actualBoundingBoxAscent  ?? fontSize * 0.86;
+    const bodyDescent = bodyMeasure.actualBoundingBoxDescent ?? fontSize * 0.14;
+    const textHeight  = bodyAscent + bodyDescent;
+    // baseline 偏移：用测量值，保持文字在行内垂直居中
+    const ascent = bodyAscent;
 
-    // Ascent 基准线：设为字号的 0.86，最贴合 Android Paint 的 baseline
-    const ascent = fontSize * 0.86;
+    /**
+     * 行高公式对齐 Legado ChapterProvider.kt:
+     *   durY += textHeight + textHeight * lineSpacingExtra
+     *   lineH = textHeight * (1 + lineSpacingExtra/10)
+     * lineSpacingExtra=12 → lineH = textHeight * 2.2
+     */
+    const lineH = textHeight * (1 + (cfg.lineSpacingExtra ?? 12) / 10);
 
-    // 行高公式：字号 * 1.14 (消除系统留白) + 行距附加值
-    const lineH = fontSize * 1.14 + (cfg.lineSpacingExtra ?? 12) * d;
-
-    // 段落间距
-    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
+    /**
+     * 段落间距公式同样以 textHeight 为基准
+     *   paraSpacing = textHeight * paragraphSpacing/10
+     * paragraphSpacing=5 → paraSpacing = textHeight * 0.5
+     */
+    const paraSpacing = textHeight * (cfg.paragraphSpacing ?? 5) / 10;
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
