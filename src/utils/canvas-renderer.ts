@@ -1,3 +1,5 @@
+import { dpToPx } from "./constants";
+
 export interface RenderOptions {
     width: number;
     height: number;
@@ -37,33 +39,27 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
     try {
         if (fontFamily && fontFamily !== "sans-serif") {
-            // 必须严格校验字号和字体
             await (document as any).fonts.load(`${fontSize}px "${fontName}"`);
         }
         await (document as any).fonts.ready;
-    } catch (e) {
-        console.warn("字体加载异常，降级处理", e);
-    }
+    } catch (e) {}
 
-    // 必须在执行任何 measureText 之前，把 context 的 font 设置正确！
     ctx.font = fontString;
     ctx.imageSmoothingEnabled = true;
 
-    // ── 2. 文本彻底净化 (解决半角标点问题) ───────────────────
+    // ── 2. 文本彻底净化 (解决缩进和半角标点问题) ───────────────
     const cleanParas = PREVIEW_PARAS.map(p =>
         p
+            .trim() // ⚠️ 强制去掉源文本的空格，完全交由排版引擎计算缩进
             .replace(/!/g, "！")
             .replace(/\?/g, "？")
             .replace(/,/g, "，")
-            .replace(/"(.*?)"/g, "“$1”") // 简单转换英文双引号
+            .replace(/"(.*?)"/g, "“$1”")
             .replace(/-/g, "－")
     );
 
-    // ── 3. 核心测量器 (解决缩进错乱问题) ───────────────────────
-    // 抛弃所有的缓存，直接实时测量。并强制全角空格宽度等于字号 (1em)
+    // ── 3. 核心测量器 ─────────────────────────────────────────
     const measure = (char: string, currentFontSize: number = fontSize): number => {
-        if (char === "　") return currentFontSize; // 全角空格永远是正方形
-        if (char === " ") return currentFontSize * 0.5; // 半角空格是半个字
         return ctx.measureText(char).width;
     };
 
@@ -97,29 +93,41 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const textColor = toRgba(cfg.textColor ?? "#ff43050a");
     const tipColor = toRgba(cfg.tipColor ?? "#ff4d3838");
     const letterSp = (cfg.letterSpacing ?? 0) * fontSize;
-    const ascent = fontSize * 0.84; // 经验基线值
+    const ascent = fontSize * 0.84;
 
-    // Legado 公式：行高 = 字体大小 + 行距(dp)
-    const lineH = fontSize + (cfg.lineSpacingExtra ?? 12) * d;
-    const paraSpacing = (cfg.paragraphSpacing ?? 5) * d;
+    // ⚠️ 修正行高倍率：Android 原生字体高度约为 1.2 倍字号
+    const lineH = fontSize * 1.2 + (cfg.lineSpacingExtra ?? 12) * d;
+    const paraSpacing = (fontSize * (cfg.paragraphSpacing ?? 5)) / 10;
 
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
 
+    // ⚠️ 强制缩进宽度：读取配置字符长度 * 字号
+    const indentW = (cfg.paragraphIndent?.length ?? 0) * fontSize;
+
     // ── 6. 纯粹的断行引擎 ─────────────────────────────────────
-    const layoutLines = (text: string, maxW: number, curFontSize: number = fontSize): string[] => {
+    const layoutLines = (
+        text: string,
+        maxW: number,
+        firstIndent: number,
+        curFontSize: number = fontSize
+    ): string[] => {
         const chars = Array.from(text);
         const lines: string[] = [];
         let line: string[] = [];
         let currentW = 0;
+        let isFirstLine = true;
 
         for (let i = 0; i < chars.length; i++) {
             const c = chars[i];
             const cw = measure(c, curFontSize);
             const sp = line.length > 0 ? letterSp : 0;
 
-            if (currentW + sp + cw > maxW + 0.5) {
+            // 首行可用宽度需减去缩进量
+            const limit = isFirstLine ? maxW - firstIndent : maxW;
+
+            if (currentW + sp + cw > limit + 0.5) {
                 // 避头尾规则处理
                 if (POST_PANC.has(c) && line.length > 1) {
                     const prevC = line.pop()!;
@@ -136,6 +144,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
                     line = [c];
                     currentW = cw;
                 }
+                isFirstLine = false; // 换行后重置标记
             } else {
                 line.push(c);
                 currentW += sp + cw;
@@ -145,12 +154,13 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         return lines;
     };
 
-    // ── 7. 单行绘制引擎 (解决字间距拉伸撕裂问题) ───────────────
+    // ── 7. 单行绘制引擎 ───────────────────────────────────────
     const drawLine = (
         text: string,
         x: number,
         y: number,
         align: "left" | "center" | "right" | "justify" = "left",
+        targetWidth: number, // ⚠️ 传入该行实际可用宽度用于排版计算
         curAscent: number = ascent,
         curFontSize: number = fontSize
     ) => {
@@ -163,9 +173,9 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
         let extraSp = 0;
         if (align === "justify" && chars.length > 1) {
-            const gap = contentW - totalCharW - totalBaseSp;
-            // 限制最大拉伸宽度，如果缺口太大宁愿留白也不要撕裂排版
-            if (gap > 0 && gap < contentW * 0.4) {
+            const gap = targetWidth - totalCharW - totalBaseSp;
+            // 限制最大拉伸宽度，如果缺口太大宁可留白也不扯裂字间距
+            if (gap > 0 && gap < curFontSize * 2.5) {
                 extraSp = gap / (chars.length - 1);
             }
         }
@@ -173,9 +183,9 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const lineW = totalCharW + totalBaseSp + extraSp * (chars.length - 1);
         let sx =
             align === "center"
-                ? x + (contentW - lineW) / 2
+                ? x + (targetWidth - lineW) / 2
                 : align === "right"
-                  ? x + (contentW - lineW)
+                  ? x + (targetWidth - lineW)
                   : x;
         const dy = y + curAscent;
 
@@ -188,13 +198,13 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // ── 8. 全局渲染流 ─────────────────────────────────────────
     let currentY = 0;
 
-    // [层级 1] 状态栏 (修复双重绘制Bug)
+    // [层级 1] 状态栏
     const statusBarH = cfg.hideStatusBar ? 0 : 24 * d;
     if (!cfg.hideStatusBar) {
         const sFontSize = Math.round(12 * d);
         ctx.font = `600 ${sFontSize}px sans-serif`;
         ctx.fillStyle = tipColor;
-        const sY = statusBarH / 2 - sFontSize / 2; // 居中Y起点
+        const sY = statusBarH / 2 - sFontSize / 2;
 
         ctx.fillText("12:30", 16 * d, sY + sFontSize * 0.84);
         const batteryText = "69%";
@@ -242,21 +252,20 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const tFontSize = fontSize + (cfg.titleSize ?? 3) * d;
         ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         ctx.fillStyle = textColor;
-        const tLineH = tFontSize + (cfg.lineSpacingExtra ?? 12) * d;
+        const tLineH = tFontSize * 1.2 + (cfg.lineSpacingExtra ?? 12) * d;
 
         currentY += (cfg.titleTopSpacing ?? 8) * d;
         const tAlign = cfg.titleMode === 1 ? "center" : "left";
 
-        const tLines = layoutLines(PREVIEW_TITLE, contentW, tFontSize);
+        const tLines = layoutLines(PREVIEW_TITLE, contentW, 0, tFontSize);
         for (const line of tLines) {
-            drawLine(line, pL, currentY, tAlign, tFontSize * 0.84, tFontSize);
+            drawLine(line, pL, currentY, tAlign, contentW, tFontSize * 0.84, tFontSize);
             currentY += tLineH;
         }
         currentY += (cfg.titleBottomSpacing ?? 10) * d;
     }
 
     // [层级 4] 正文渲染
-    // 重点：把字体切回正文配置
     ctx.font = fontString;
     ctx.fillStyle = textColor;
 
@@ -274,13 +283,21 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     outer: for (const para of cleanParas) {
         if (currentY >= maxY) break;
 
-        const lines = layoutLines(para, contentW, fontSize);
+        // 传入计算好的首行缩进宽度
+        const lines = layoutLines(para, contentW, indentW, fontSize);
 
         for (let li = 0; li < lines.length; li++) {
             if (currentY + fontSize > maxY) break outer;
 
-            const isLast = li === lines.length - 1;
-            drawLine(lines[li], pL, currentY, isLast ? "left" : "justify", ascent, fontSize);
+            const isFirstLine = li === 0;
+            const isLastLine = li === lines.length - 1;
+
+            // 第一行起点加上缩进偏移，且可用宽度减少
+            const currentX = pL + (isFirstLine ? indentW : 0);
+            const targetW = isFirstLine ? contentW - indentW : contentW;
+            const justifyMode = isLastLine ? "left" : "justify";
+
+            drawLine(lines[li], currentX, currentY, justifyMode, targetW, ascent, fontSize);
             currentY += lineH;
         }
         currentY += paraSpacing;
