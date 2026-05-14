@@ -10,6 +10,7 @@ import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS } from '../utils/constants';
 import { generatePreviewHTML, getTipText } from '../utils/preview';
+import { generateHighFidelitySnapshot } from '../utils/snapshot';
 
 // 外部库引用
 declare const fflate: any;
@@ -146,6 +147,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [showPicker, setShowPicker] = useState<'font' | 'bg' | 'layout' | null>(null);
   const [resources, setResources] = useState<any>(null);
   const [localBgUrl, setLocalBgUrl] = useState('');
+  const [fontBase64, setFontBase64] = useState('');
 
 
 
@@ -430,6 +432,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       const loaded = await fontFace.load();
       (document.fonts as any).add(loaded);
       setSelectedFontName(fontName);
+      
+      // 预加载字体为 Base64 以供截图使用
+      fetch(fontUrl).then(r => r.blob()).then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => setFontBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
       setConfig(prev => {
         const next = { ...prev, textFont: path };
         if (isBlob) next._textFontName = name;
@@ -527,174 +537,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const generateThumbnail = async (
     cfg: any,
-    bgBase64: string,
   ): Promise<string> => {
-    // 基础屏幕分辨率 (必须与编辑器默认设备一致)
-    const SCREEN_W = 360, SCREEN_H = 780; 
-    const RENDER_W = SCREEN_W;
-    const RENDER_H = SCREEN_H;
-    const THUMB_W  = 240;
-    const THUMB_H  = 520; // 9:19.5
-
-    let resolvedBg = bgBase64;
-    if (cfg.bgType === 2 && cfg.bgStr && !cfg.bgStr.startsWith('content://') && !resolvedBg) {
-      try {
-        const src = cfg.bgStr.startsWith('blob:')
-          ? cfg.bgStr
-          : `${window.location.origin}/repo/${cfg.bgStr.split('/').map((s: string) => encodeURIComponent(s)).join('/')}`;
-        const resp = await fetch(src);
-        const blob = await resp.blob();
-        resolvedBg = await new Promise<string>((res) => {
-          const r = new FileReader();
-          r.onloadend = () => res(r.result as string);
-          r.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.warn('[Thumbnail] BG fetch failed', e);
-      }
-    }
-
-    const offscreen = document.createElement('canvas');
-    offscreen.width  = RENDER_W;
-    offscreen.height = RENDER_H;
-    const ctx = offscreen.getContext('2d')!;
-
-    // 绘制屏幕背景
-    if (cfg.bgType === 2 && resolvedBg) {
-      await new Promise<void>((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const s = Math.max(SCREEN_W / img.width, SCREEN_H / img.height);
-          ctx.drawImage(img, (SCREEN_W - img.width * s) / 2, (SCREEN_H - img.height * s) / 2, img.width * s, img.height * s);
-          resolve();
-        };
-        img.onerror = () => { ctx.fillStyle = '#eeeeee'; ctx.fillRect(0, 0, SCREEN_W, SCREEN_H); resolve(); };
-        img.src = resolvedBg;
-      });
-    } else {
-      ctx.fillStyle = cfg.bgType === 0 ? argbToCss(cfg.bgStr) : '#eeeeee';
-      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
-    }
-
-    const textColor = argbToCss(cfg.textColor);
-    const tipColor  = argbToCss(cfg.tipColor || '#803E3D3B');
-    const fontFamily = selectedFontName ? `"${selectedFontName}", sans-serif` : 'sans-serif';
-    const textSize   = cfg.textSize || 20;
-    const letterSp   = (cfg.letterSpacing || 0) * textSize;
-    const lineH      = (textSize + (cfg.lineSpacingExtra || 0));
-
-    const drawText = (text: string, x: number, baseY: number, align: 'left'|'center'|'right' = 'left') => {
-      ctx.textAlign = align;
-      if (letterSp <= 0) {
-        ctx.fillText(text, x, baseY);
-        return;
-      }
-      const fullW = ctx.measureText(text).width + (text.length - 1) * letterSp;
-      let startX = x;
-      if (align === 'center') startX = (SCREEN_W - fullW) / 2;
-      else if (align === 'right') startX = SCREEN_W - fullW - x;
-
-      let cx = startX;
-      for (const ch of text) {
-        ctx.textAlign = 'left';
-        ctx.fillText(ch, cx, baseY);
-        cx += ctx.measureText(ch).width + letterSp;
-      }
-    };
-
-    const wrap = (text: string, maxW: number, firstIndent = 0): string[] => {
-      const lines: string[] = [];
-      let cur = '', first = true;
-      for (const ch of text) {
-        const w = ctx.measureText(cur + ch).width + (cur.length * letterSp);
-        if (w > (first ? maxW - firstIndent : maxW) && cur) {
-          lines.push(cur); cur = ch; first = false;
-        } else { cur += ch; }
-      }
-      if (cur) lines.push(cur);
-      return lines;
-    };
-
-    let y = 0;
-    // Status Bar
-    if (!cfg.hideStatusBar) {
-      ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '600 11px sans-serif';
-      drawText('12:30', 16, 18);
-      drawText('69%', 16, 18, 'right');
-      y = 24;
-    }
-
-    // Header
-    if (cfg.headerMode !== 2) {
-      const hPT = (cfg.headerPaddingTop || 0) + (cfg.hideStatusBar ? 24 : 2);
-      y += hPT;
-      ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '10px sans-serif';
-      drawText(getTipText(cfg.tipHeaderLeft ?? 2), cfg.headerPaddingLeft || 0, y + 10);
-      drawText(getTipText(cfg.tipHeaderMiddle ?? 0), SCREEN_W / 2, y + 10, 'center');
-      drawText(getTipText(cfg.tipHeaderRight ?? 3), cfg.headerPaddingRight || 0, y + 10, 'right');
-      y += 10 + (cfg.headerPaddingBottom || 0) + 4;
-      if (cfg.showHeaderLine) {
-        ctx.strokeStyle = tipColor; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo((cfg.headerPaddingLeft || 0), y); ctx.lineTo(SCREEN_W - (cfg.headerPaddingRight || 0), y); ctx.stroke();
-      }
-    }
-
-    ctx.globalAlpha = 1;
-    const pL = cfg.paddingLeft ?? 16, pR = cfg.paddingRight ?? 16;
-    const contentW = SCREEN_W - pL - pR;
-    y += cfg.paddingTop ?? 6;
-
-    // Title
-    if (cfg.titleMode !== 2) {
-      const tSize = textSize * (1.05 + (cfg.titleSize || 0) * 0.1);
-      ctx.font = `bold ${tSize}px ${fontFamily}`;
-      ctx.fillStyle = textColor;
-      y += cfg.titleTopSpacing || 0;
-      const align = cfg.titleMode === 1 ? 'center' : 'left';
-      drawText(PREVIEW_TITLE, align === 'center' ? SCREEN_W / 2 : pL, y + tSize, align);
-      y += tSize + (cfg.titleBottomSpacing || 0);
-    }
-
-    // Paragraphs
-    ctx.font = `${cfg.textBold ? 'bold ' : ''}${textSize}px ${fontFamily}`;
-    ctx.fillStyle = textColor;
-    const indentPx = (cfg.paragraphIndent?.length || 0) * textSize;
-    const maxY = SCREEN_H - (cfg.hideNavigationBar ? 20 : 40);
-
-    outer: for (const para of PREVIEW_PARAS) {
-      if (y >= maxY) break;
-      const lines = wrap(para, contentW, indentPx);
-      for (let i = 0; i < lines.length; i++) {
-        if (y + textSize > maxY) break outer;
-        drawText(lines[i], pL + (i === 0 ? indentPx : 0), y + textSize);
-        y += lineH;
-      }
-      y += cfg.paragraphSpacing || 0;
-    }
-
-    // Footer
-    if (cfg.footerMode !== 1) {
-      const fPB = (cfg.footerPaddingBottom || 0) + (cfg.hideNavigationBar ? 10 : 2);
-      const fY = SCREEN_H - fPB - 20;
-      ctx.fillStyle = tipColor; ctx.globalAlpha = 0.8; ctx.font = '10px sans-serif';
-      if (cfg.showFooterLine) {
-        ctx.strokeStyle = tipColor; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.moveTo((cfg.footerPaddingLeft || 0), fY); ctx.lineTo(SCREEN_W - (cfg.footerPaddingRight || 0), fY); ctx.stroke();
-      }
-      drawText(getTipText(cfg.tipFooterLeft ?? 5), cfg.footerPaddingLeft || 0, fY + 12);
-      drawText(getTipText(cfg.tipFooterMiddle ?? 0), SCREEN_W / 2, fY + 12, 'center');
-      drawText(getTipText(cfg.tipFooterRight ?? 6), cfg.footerPaddingRight || 0, fY + 12, 'right');
-    }
-
-    const thumb = document.createElement('canvas');
-    thumb.width = THUMB_W; thumb.height = THUMB_H;
-    const tctx = thumb.getContext('2d')!;
-    tctx.imageSmoothingEnabled = true;
-    tctx.imageSmoothingQuality = 'high';
-    tctx.drawImage(offscreen, 0, 0, THUMB_W, THUMB_H);
-
-    console.log('[Thumbnail] Generated Clean (Screen Only), size:', THUMB_W, 'x', THUMB_H);
-    return thumb.toDataURL('image/jpeg', 0.9);
+    // 使用高保真快照方案
+    return await generateHighFidelitySnapshot(cfg, {
+      width: 360,
+      height: 780,
+      fontFamily: selectedFontName,
+      fontBase64: fontBase64,
+      argbToCss: argbToCss
+    });
   };
 
   const handleSave = async () => {
@@ -728,11 +579,11 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         finalConfig.bgStr = await syncAsset(finalConfig.bgStr, 'bg', finalConfig._bgStrName);
       }
 
-      setSyncStatus('正在生成预览图...');
+      setSyncStatus('正在生成高保真预览图...');
       let previewUrl = '';
       try {
-        previewUrl = await generateThumbnail(finalConfig, localBgUrl);
-        console.log('Thumbnail generated via Canvas 2D, length:', previewUrl?.length);
+        previewUrl = await generateThumbnail({ ...finalConfig, bgStr: localBgUrl });
+        console.log('Thumbnail generated via html-to-image, length:', previewUrl?.length);
       } catch (err) {
         console.error('Thumbnail generation failed, skipping', err);
         setSyncStatus('缩略图生成失败，已跳过');
