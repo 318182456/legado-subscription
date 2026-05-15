@@ -225,16 +225,34 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [resources, setResources] = useState<any>(null);
   const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
   const [fontBase64, setFontBase64] = useState('');
+  const [thumbPreview, setThumbPreview] = useState('');
 
 
 
   // 预加载背景图为 Image 对象
   useEffect(() => {
     if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) {
-      const url = config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      let url = '';
+      if (config.bgStr.startsWith('blob:')) {
+        url = config.bgStr;
+      } else if (config.bgStr.includes('/')) {
+        url = `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+      } else {
+        // 只有文件名，尝试从 /bg/ 目录加载
+        url = `/bg/${encodeURIComponent(config.bgStr)}`;
+      }
+
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => setBgImageObj(img);
+      img.onerror = () => {
+        console.warn(`Failed to load background image: ${url}, trying fallback...`);
+        // 如果 /bg/ 失败，尝试作为普通路径
+        if (!url.includes('/repo/') && !url.startsWith('blob:')) {
+           const fallbackUrl = `${window.location.origin}/repo/${encodeURIComponent(config.bgStr)}`;
+           img.src = fallbackUrl;
+        }
+      };
       img.src = url;
     } else {
       setBgImageObj(null);
@@ -748,6 +766,39 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 loading={loading}
               />
             </div>
+          </div>
+
+          {/* 缩略图预览与生成按钮 */}
+          <div className="absolute bottom-6 left-6 flex flex-col items-start gap-4">
+             <button 
+              onClick={async () => {
+                const url = await generateThumbnail(config);
+                setThumbPreview(url);
+              }}
+              className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 border border-primary/20 transition-all backdrop-blur-sm"
+            >
+              <ImageIcon size={14} />
+              生成并预览缩略图
+            </button>
+            
+            {thumbPreview && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                className="relative group"
+              >
+                <img 
+                  src={thumbPreview} 
+                  className="w-20 h-auto rounded-lg border border-outline-variant shadow-lg" 
+                  alt="Thumbnail Preview"
+                />
+                <button 
+                  onClick={() => setThumbPreview('')}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ×
+                </button>
+              </motion.div>
+            )}
           </div>
         </div>
       </div>
