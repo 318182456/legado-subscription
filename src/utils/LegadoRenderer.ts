@@ -182,13 +182,14 @@ export class LegadoRenderer {
         const { ctx, canvas, scale } = this;
         if (theme.hideNavigationBar) return;
 
+        // 👑 修正：底部导航栏只保留一个极淡的 Home 指示条，不添加任何背景色
         const h = 24 * scale;
         const barW = 100 * scale;
         const barH = 4 * scale;
         const x = (canvas.width - barW) / 2;
         const y = canvas.height - h / 2 - barH / 2;
 
-        ctx.fillStyle = theme.darkStatusIcon ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.25)";
+        ctx.fillStyle = theme.darkStatusIcon ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.15)";
         ctx.beginPath();
         if (ctx.roundRect) {
             ctx.roundRect(x, y, barW, barH, 2 * scale);
@@ -211,12 +212,11 @@ export class LegadoRenderer {
         const { ctx, canvas } = this;
         const scale = this.scale;
 
+        // 👑 修正：使用 clearRect 彻底清空画布，不再填充任何底色，确保透明度生效
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // --- 1. 渲染背景 ---
         if (theme.bgType === 2 && options.bgImage) {
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.globalAlpha = (theme.bgAlpha ?? 100) / 100;
 
             // 👑 修正：使用 Cover 模式绘制背景，防止拉伸变形
