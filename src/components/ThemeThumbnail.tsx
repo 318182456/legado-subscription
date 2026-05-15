@@ -137,14 +137,14 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     return (
       <div 
         ref={containerRef} 
-        className="w-full aspect-9/19.5 rounded-[16px] shadow-lg bg-[#fdf6e3] p-4 overflow-hidden border border-black/5 relative group cursor-pointer"
+        className="w-full aspect-video rounded-lg shadow-sm bg-[#fdf6e3] p-3 overflow-hidden border border-black/5 relative group cursor-pointer"
       >
-        <div className="absolute top-0 right-0 p-2 opacity-20 text-[#657b83]"><FileText size={16} /></div>
-        <div className="text-[10px] text-[#657b83] leading-relaxed whitespace-pre-wrap break-all">
+        <div className="absolute top-0 right-0 p-2 opacity-20 text-[#657b83]"><FileText size={14} /></div>
+        <div className="text-[9px] text-[#657b83] leading-relaxed whitespace-pre-wrap break-all">
           {textContent}
           {textContent.length >= 300 && '...'}
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-[#fdf6e3] to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-[#fdf6e3] to-transparent" />
       </div>
     );
   }
