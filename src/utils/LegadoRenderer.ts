@@ -206,7 +206,11 @@ export class LegadoRenderer {
         const titleSize = (theme.textSize + (theme.titleSize ?? 0)) * scale; 
         
         const fontStack = theme.textFont ? `"${theme.textFont.split('/').pop().replace(/\.[^.]+$/, '')}", sans-serif` : 'sans-serif';
-        const fontWeight = theme.textBold ? 'bold' : 'normal';
+        
+        // 👑 修正：支持 Legado 的三种粗细模式 (0: 正常, 1: 粗体, 2: 细体)
+        let fontWeight = 'normal';
+        if (theme.textBold === 1) fontWeight = 'bold';
+        else if (theme.textBold === 2) fontWeight = '100'; // 细体
 
         // 👑 核心修正：字距 EM 转换逻辑
         const letterSpacing = (theme.letterSpacing ?? 0.04) * textSize * 0.85;
@@ -217,7 +221,11 @@ export class LegadoRenderer {
         const paragraphSpacing = metrics.fontHeight * ((theme.paragraphSpacing ?? 5) / 10);
 
         const textColor = this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B');
-        const tipColor = this.parseAndroidColor(theme.tipColor ?? theme.textColor ?? '#803E3D3B', 60);
+        
+        // 👑 修正：Legado 中 tipColor 为 0 时表示跟随正文颜色 (应用 60% 透明度)
+        let tipColor = (theme.tipColor !== undefined && theme.tipColor !== 0)
+            ? this.parseAndroidColor(theme.tipColor)
+            : this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B', 60);
 
         // --- 3. 绘制 Header & Footer ---
         ctx.font = `normal ${11 * scale}px ${fontStack}`;
@@ -234,8 +242,15 @@ export class LegadoRenderer {
 
         // Header
         let headerBottom = statusBarH;
-        if (theme.headerMode !== 2) {
+        // 👑 修正：headerMode 逻辑
+        // 0: 当状态栏显示时隐藏页眉 (hide_when_status_bar_show)
+        // 1: 始终显示
+        // 2: 隐藏
+        const shouldShowHeader = theme.headerMode === 1 || (theme.headerMode === 0 && theme.hideStatusBar);
+        
+        if (shouldShowHeader) {
             const hPaddingT = (theme.headerPaddingTop ?? 0) * scale;
+            const hPaddingB = (theme.headerPaddingBottom ?? 1) * scale;
             const hPaddingL = (theme.headerPaddingLeft ?? 24) * scale;
             const hPaddingR = (theme.headerPaddingRight ?? 24) * scale;
             const headerY = statusBarH + hPaddingT + 12 * scale;
@@ -247,7 +262,7 @@ export class LegadoRenderer {
             ctx.textAlign = 'right';
             ctx.fillText(options.getTipText(theme.tipHeaderRight ?? 3), canvas.width - hPaddingR, headerY);
             
-            headerBottom = headerY + 10 * scale;
+            headerBottom = headerY + 8 * scale + hPaddingB;
             if (theme.showHeaderLine) {
                 ctx.beginPath();
                 ctx.moveTo(0, headerBottom);
@@ -316,7 +331,8 @@ export class LegadoRenderer {
                 currentY += tLineHeight;
             });
             
-            currentY += (theme.titleBottomSpacing ?? 18) * scale;
+            // 👑 核心修正：标题底边距 = 段间距 + 标题独有下边距
+            currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 18) * scale;
         }
 
         // > 绘制段落
