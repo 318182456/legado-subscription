@@ -20,9 +20,10 @@ export const SCHEMA_STATEMENTS = [
     test_url        TEXT    DEFAULT NULL,
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     is_available    INTEGER NOT NULL DEFAULT 1,
-    last_checked    TEXT    DEFAULT NULL,
-    UNIQUE(subscription_id, book_source_url)
+    last_checked    TEXT    DEFAULT NULL
   )`,
+    `ALTER TABLE rules DROP CONSTRAINT IF EXISTS rules_subscription_id_name_pattern_key`,
+    `ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_subscription_id_book_source_url_key`,
     `CREATE TABLE IF NOT EXISTS rules (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
@@ -31,8 +32,7 @@ export const SCHEMA_STATEMENTS = [
     replacement     TEXT    NOT NULL DEFAULT '',
     enabled         INTEGER NOT NULL DEFAULT 1,
     raw_json        TEXT    NOT NULL,
-    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(subscription_id, name, pattern)
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
   )`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_type    ON subscriptions(type)`,
     `CREATE INDEX IF NOT EXISTS idx_sources_subscription  ON sources(subscription_id)`,
@@ -40,6 +40,8 @@ export const SCHEMA_STATEMENTS = [
     `CREATE INDEX IF NOT EXISTS idx_rules_subscription    ON rules(subscription_id)`,
     `CREATE INDEX IF NOT EXISTS idx_rules_enabled         ON rules(enabled)`,
     `CREATE INDEX IF NOT EXISTS idx_sources_available       ON sources(is_available)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique ON sources(subscription_id, book_source_url)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_unique   ON rules(subscription_id, name, pattern)`,
     `CREATE TABLE IF NOT EXISTS passkeys (
     id          TEXT PRIMARY KEY,
     public_key  TEXT NOT NULL,

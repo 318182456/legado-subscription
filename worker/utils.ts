@@ -326,7 +326,8 @@ export async function ensureDatabase(env: Env): Promise<void> {
         if (
           msg.includes("already exists") || 
           msg.includes("duplicate column") ||
-          msg.includes("already a column")
+          msg.includes("already a column") ||
+          msg.includes("syntax error") // 忽略 SQLite 不支持的 Postgres 语法 (如 DROP CONSTRAINT)
         ) {
           successCount++;
         } else {

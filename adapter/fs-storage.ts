@@ -36,19 +36,19 @@ export class FileSystemR2 {
     }
 
     const contentType = mime.lookup(p) || 'application/octet-stream';
-    const etag = `"${key}-${body.length}"`;
+    const etag = `"${encodeURIComponent(key)}-${body.length}"`;
 
     return {
-      body: {
-        arrayBuffer: async () => body.buffer,
-        text: async () => body.toString(),
-        stream: () => {
-           const { Readable } = require('stream');
-           return Readable.from(body);
-        }
-      },
+      // 模拟 R2ObjectBody 接口
+      body: body, // Buffer 可以直接作为 Response 的 body
+      arrayBuffer: async () => body.buffer,
+      text: async () => body.toString(),
+      json: async () => JSON.parse(body.toString()),
+      blob: async () => new Blob([body], { type: contentType }),
+      
       httpMetadata: { contentType },
       httpEtag: etag,
+      size: body.length,
       writeHttpMetadata: (headers: Headers) => {
         headers.set('Content-Type', contentType);
         headers.set('ETag', etag);
