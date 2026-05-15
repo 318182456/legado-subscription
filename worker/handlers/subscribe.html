@@ -234,13 +234,8 @@
                 const res = await fetch('/api/custom-themes');
                 const json = await res.json();
                 const items = json.data || [];
+                console.log('[Theme] Loaded', items.length, 'themes');
                 
-                if (items.length === 0) {
-                    container.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">暂无精选主题，请先在后台编辑并保存</div>';
-                    document.getElementById('res-loading').style.display = 'none';
-                    return;
-                }
-
                 let html = '<div class="card"><h3>🎨 精选推荐</h3><div class="grid">';
                 items.forEach(item => {
                     const exportUrl = API_ORIGIN + '/api/custom-themes/' + item.id + '/export';
@@ -258,10 +253,16 @@
                 
                 // 渲染预览
                 items.forEach(item => {
-                    renderThemePreview(item.id, JSON.parse(item.config), item.preview_url);
+                    try {
+                        const cfg = typeof item.config === 'string' ? JSON.parse(item.config) : item.config;
+                        renderThemePreview(item.id, cfg, item.preview_url);
+                    } catch (e) {
+                        console.error('Failed to parse theme config', item.id, e);
+                    }
                 });
                 document.getElementById('res-loading').style.display = 'none';
             } catch (e) {
+                console.error('[Theme] Load Error', e);
                 container.innerHTML = '<div style="color:red;padding:20px;">加载失败: ' + e.message + '</div>';
             }
         }

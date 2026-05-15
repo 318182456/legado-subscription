@@ -685,13 +685,19 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       }
 
       setSyncStatus('正在保存主题配置...');
+      // 👑 修正：清理配置中的冗余预览字段，避免 JSON 嵌套过深
+      const configToSave = { ...finalConfig };
+      delete (configToSave as any).preview_url;
+      
       const payload: any = { 
         name: finalConfig.name, 
-        config: JSON.stringify({ ...finalConfig, preview_url: previewUrl }) 
+        config: JSON.stringify({ ...configToSave, preview_url: previewUrl }),
+        preview_url: previewUrl 
       };
-      if (initialType === 'saved') payload.id = initialBase.id;
-      payload.preview_url = previewUrl;
       
+      if (initialType === 'saved') payload.id = initialBase.id;
+      
+      console.log(`[Save] Payload Size: ${(JSON.stringify(payload).length / 1024).toFixed(2)} KB`);
       await api.saveCustomTheme(payload);
       setSyncStatus('同步完成！');
       alert(initialType === 'saved' ? '已更新主题' : '已保存到云端精选');
