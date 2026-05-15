@@ -385,108 +385,95 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             const configFile = Object.keys(unzipped).find(k => k.endsWith('readConfig.json'));
             if (configFile) {
               const str = new TextDecoder().decode(unzipped[configFile]);
-              try {
-                const data = JSON.parse(str);
-                
-                setConfig(prev => {
-                  const next = { ...prev, ...data };
-                  if (manualAssetsRef.current.bg) {
-                    next.bgStr = prev.bgStr;
-                    next.bgType = prev.bgType;
-                  }
-                  if (manualAssetsRef.current.font) {
-                    next.textFont = prev.textFont;
-                  }
-                  return next;
-                });
-                
-                const decodedTextFont = data.textFont ? decodeURIComponent(data.textFont).split('/').pop() : '';
-                const decodedBgStr = data.bgStr ? decodeURIComponent(data.bgStr).split('/').pop() : '';
+                try {
+                  const data = JSON.parse(str);
+                  if (data && typeof data === 'object') {
+                    setConfig(prev => {
+                      const next = { ...prev, ...data };
+                      if (manualAssetsRef.current.bg) {
+                        next.bgStr = prev.bgStr;
+                        next.bgType = prev.bgType;
+                      }
+                      if (manualAssetsRef.current.font) {
+                        next.textFont = prev.textFont;
+                      }
+                      return next;
+                    });
+                    
+                    const decodedTextFont = data.textFont ? decodeURIComponent(data.textFont).split('/').pop() : '';
+                    const decodedBgStr = data.bgStr ? decodeURIComponent(data.bgStr).split('/').pop() : '';
 
-                // 处理 ZIP 内的字体
-                if (data.textFont && !manualAssetsRef.current.font) {
-                  const fontFile = Object.keys(unzipped).find(k => {
-                    const kDecoded = decodeURIComponent(k).split('/').pop();
-                    return kDecoded === decodedTextFont || k.includes(decodedTextFont);
-                  });
-                  
-                  if (fontFile) {
-                    const fileName = decodeURIComponent(fontFile.split('/').pop() || '');
-                    // 1. 优先尝试从云端资源中匹配同名文件
-                    api.getResources().then(res => {
-                      const cloudMatch = res.fonts?.find((f: any) => {
-                        return f.name === fileName || decodeURIComponent(f.path).split('/').pop() === fileName;
+                    // 处理 ZIP 内的字体
+                    if (data.textFont && !manualAssetsRef.current.font) {
+                      const fontFile = Object.keys(unzipped).find(k => {
+                        const kDecoded = decodeURIComponent(k).split('/').pop();
+                        return kDecoded === decodedTextFont || k.includes(decodedTextFont);
                       });
+                      
+                      if (fontFile) {
+                        const fileName = decodeURIComponent(fontFile.split('/').pop() || '');
+                        api.getResources().then(res => {
+                          const cloudMatch = res.fonts?.find((f: any) => {
+                            return f.name === fileName || decodeURIComponent(f.path).split('/').pop() === fileName;
+                          });
 
-                      if (cloudMatch) {
-                        // 匹配到云端资源，直接使用
-                        loadFont(cloudMatch.path, cloudMatch.name);
-                      } else {
-                        // 未匹配到，使用本地 blob:
-                        const fontBlob = new Blob([unzipped[fontFile]]);
-                        const fontUrl = URL.createObjectURL(fontBlob);
-                        const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
-                        const fontFace = new FontFace(fontName, `url(${fontUrl})`);
-                        fontFace.load().then(f => {
-                          (document.fonts as any).add(f);
-                          setSelectedFontName(fontName);
-                          setConfig((prev: any) => ({ 
-                            ...prev, 
-                            textFont: fontUrl,
-                            _textFontName: fileName,
-                            _textFontSourceZip: base.path,
-                            _textFontSourceFile: fontFile
-                          }));
+                          if (cloudMatch) {
+                            loadFont(cloudMatch.path, cloudMatch.name);
+                          } else {
+                            const fontBlob = new Blob([unzipped[fontFile]]);
+                            const fontUrl = URL.createObjectURL(fontBlob);
+                            const fontName = 'ZipFont_' + Math.random().toString(36).substring(7);
+                            const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+                            fontFace.load().then(f => {
+                              (document.fonts as any).add(f);
+                              setSelectedFontName(fontName);
+                              setConfig((prev: any) => ({ 
+                                ...prev, 
+                                textFont: fontUrl,
+                                _textFontName: fileName,
+                                _textFontSourceZip: base.path,
+                                _textFontSourceFile: fontFile
+                              }));
+                            });
+                          }
                         });
                       }
-                    });
-                  } else {
-                    // 如果 ZIP 内没找到，去项目资源里找 (按主题内的原始路径找)
-                    api.getResources().then(res => {
-                      const foundFont = res.fonts?.find((f: any) => {
-                         return f.name === decodedTextFont || decodeURIComponent(f.path).split('/').pop() === decodedTextFont || f.path === data.textFont;
-                      });
-                      if (foundFont) loadFont(foundFont.path, foundFont.name);
-                    });
-                  }
-                }
+                    }
 
-                // 处理 ZIP 内的背景图
-                if (data.bgStr && (data.bgType === 1 || data.bgType === 2) && !manualAssetsRef.current.bg) {
-                  const bgFile = Object.keys(unzipped).find(k => {
-                    const kDecoded = decodeURIComponent(k).split('/').pop();
-                    return kDecoded === decodedBgStr || k.includes(decodedBgStr);
-                  });
-                  if (bgFile) {
-                    const fileName = decodeURIComponent(bgFile.split('/').pop() || '');
-                    api.getResources().then(res => {
-                      const cloudMatch = res.backgrounds?.find((b: any) => {
-                        return b.name === fileName || decodeURIComponent(b.path).split('/').pop() === fileName;
+                    // 处理 ZIP 内的背景图
+                    if (data.bgStr && (data.bgType === 1 || data.bgType === 2) && !manualAssetsRef.current.bg) {
+                      const bgFile = Object.keys(unzipped).find(k => {
+                        const kDecoded = decodeURIComponent(k).split('/').pop();
+                        return kDecoded === decodedBgStr || k.includes(decodedBgStr);
                       });
+                      if (bgFile) {
+                        const fileName = decodeURIComponent(bgFile.split('/').pop() || '');
+                        api.getResources().then(res => {
+                          const cloudMatch = res.backgrounds?.find((b: any) => {
+                            return b.name === fileName || decodeURIComponent(b.path).split('/').pop() === fileName;
+                          });
 
-                      if (cloudMatch) {
-                        // 匹配到云端资源，直接使用
-                        setConfig(prev => ({ ...prev, bgStr: cloudMatch.path, bgType: 2 }));
-                      } else {
-                        // 未匹配到，使用本地 blob:
-                        const bgBlob = new Blob([unzipped[bgFile]]);
-                        const bgUrl = URL.createObjectURL(bgBlob);
-                        setConfig(prev => ({ 
-                          ...prev, 
-                          bgStr: bgUrl, 
-                          bgType: 2, 
-                          _bgStrName: fileName,
-                          _bgStrSourceZip: base.path,
-                          _bgStrSourceFile: bgFile
-                        }));
+                          if (cloudMatch) {
+                            setConfig(prev => ({ ...prev, bgStr: cloudMatch.path, bgType: 2 }));
+                          } else {
+                            const bgBlob = new Blob([unzipped[bgFile]]);
+                            const bgUrl = URL.createObjectURL(bgBlob);
+                            setConfig(prev => ({ 
+                              ...prev, 
+                              bgStr: bgUrl, 
+                              bgType: 2, 
+                              _bgStrName: fileName,
+                              _bgStrSourceZip: base.path,
+                              _bgStrSourceFile: bgFile
+                            }));
+                          }
+                        });
                       }
-                    });
+                    }
                   }
+                } catch (e) {
+                  console.warn('Skipping invalid config file in ZIP:', configFile);
                 }
-              } catch (e) {
-                console.error('Failed to parse readConfig.json in ZIP', e);
-                alert('解析压缩包内的配置文件失败');
-              }
             }
           }
         })
@@ -564,8 +551,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       console.log('正在创建 OCR Worker...');
       worker = await t.createWorker('chi_sim+eng', 1, {
         logger: (m: any) => console.log('OCR 进度:', m),
-        // 强制使用稳定的 v5 核心和 worker 路径，防止 v7 core 自动加载导致的参数错误
-        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.0.0/tesseract-core-relaxedsimd-lstm.wasm.js',
+        // 使用更统一的 CDN 源，防止 importScripts 跨域失败
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm.js',
         workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/dist/worker.min.js',
       });
 

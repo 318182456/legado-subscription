@@ -41,13 +41,19 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     if (!inView || config || !path) return;
     setLoading(true);
     fetch(`${window.location.origin}/repo/${path}`)
-      .then(res => res.json())
-      .then(data => {
-        setConfig(data);
-        setLoading(false);
+      .then(res => res.text())
+      .then(text => {
+        try {
+          const data = JSON.parse(text);
+          setConfig(data);
+          setLoading(false);
+        } catch (e) {
+          throw new Error('Invalid JSON');
+        }
       })
       .catch(e => {
-        console.error('Failed to load theme config', e);
+        // 静默处理或仅记录警告，因为这可能是个普通的说明文档而非主题配置
+        console.warn(`[ThemeThumbnail] Skipping non-theme file: ${path}`);
         setError(true);
         setLoading(false);
       });
