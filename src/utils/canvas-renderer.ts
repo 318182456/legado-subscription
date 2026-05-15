@@ -134,6 +134,20 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
+    // 👑 修正 1：剥离 measure 的字距，只测字宽，防止累加误差爆炸
+    const measure = (
+        str: string,
+        font?: string
+    ): number => {
+        const old = ctx.font;
+        if (font) {
+            ctx.font = font;
+        }
+        const width = ctx.measureText(str).width;
+        ctx.font = old;
+        return width;
+    };
+
     const paragraphIndent =
         cfg.paragraphIndent ?? "　　";
 
@@ -150,25 +164,6 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         typeof Intl !== "undefined" && Intl.Segmenter
             ? new Intl.Segmenter("zh-CN", { granularity: "word" })
             : null;
-
-    // 👑 修正 1：剥离 measure 的字距，只测字宽，防止累加误差爆炸
-    const measure = (
-        str: string,
-        font?: string
-    ): number => {
-
-        const old = ctx.font;
-
-        if (font) {
-            ctx.font = font;
-        }
-
-        const width = ctx.measureText(str).width;
-
-        ctx.font = old;
-
-        return width;
-    };
 
     const layoutLines = (
         text: string,
