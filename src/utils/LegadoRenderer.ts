@@ -427,7 +427,29 @@ export class LegadoRenderer {
         return lines;
     }
 
+    /**
+     * 👑 核心优化：生成压缩后的缩略图
+     * 将 3x DPI 的画布缩小到 1/6 (约 180px 宽)，并使用 webp 进一步压缩体积
+     */
     getThumbnail() {
-        return this.canvas.toDataURL("image/jpeg", 0.9);
+        try {
+            const thumbWidth = 180;
+            const thumbHeight = (this.canvas.height / this.canvas.width) * thumbWidth;
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = thumbWidth;
+            tempCanvas.height = thumbHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            if (tempCtx) {
+                tempCtx.drawImage(this.canvas, 0, 0, thumbWidth, thumbHeight);
+                // 使用 webp 格式，质量设为 0.7，体积通常在 10-20KB 左右，非常适合数据库存储
+                return tempCanvas.toDataURL("image/webp", 0.7);
+            }
+            return this.canvas.toDataURL("image/jpeg", 0.5);
+        } catch (e) {
+            console.error("生成缩略图失败 (可能存在跨域图片污染):", e);
+            return "";
+        }
     }
 }
