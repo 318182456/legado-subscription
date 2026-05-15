@@ -296,9 +296,10 @@ export class LegadoRenderer {
         const statusBarH = (theme.hideStatusBar ? 0 : 38) * scale;
         const navBarH = (theme.hideNavigationBar ? 0 : 24) * scale;
 
-        // 👑 修正：使用指定的分割线颜色 (tipDividerColor)
+        // 👑 修正：Legado 分割线颜色回退逻辑
+        // 如果 tipDividerColor 为 -1 (Color.WHITE) 或未定义，通常应跟随 tipColor 产生融合感
         const dividerColor =
-            theme.tipDividerColor !== undefined
+            theme.tipDividerColor !== undefined && theme.tipDividerColor !== -1
                 ? this.parseAndroidColor(theme.tipDividerColor)
                 : tipColor;
 
@@ -337,7 +338,7 @@ export class LegadoRenderer {
                 ctx.lineTo(canvas.width, headerBottom);
                 ctx.strokeStyle = dividerColor;
                 ctx.lineWidth = 0.5 * scale;
-                ctx.globalAlpha = 0.4;
+                ctx.globalAlpha = 0.2;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
             }
@@ -373,7 +374,7 @@ export class LegadoRenderer {
                 ctx.lineTo(canvas.width, footerTop);
                 ctx.strokeStyle = dividerColor;
                 ctx.lineWidth = 0.5 * scale;
-                ctx.globalAlpha = 0.4;
+                ctx.globalAlpha = 0.2;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
             }
