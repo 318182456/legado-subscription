@@ -80,7 +80,7 @@ export async function handlePasskeyRegisterFinish(request: Request, env: Env): P
   const expectedChallenge = await env.KV.get("passkey:reg_challenge");
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
-  const body = await request.json<RegistrationResponseJSON>();
+  const body = (await request.json()) as RegistrationResponseJSON;
   const rpID = new URL(request.url).hostname;
   const expectedOrigin = getOrigins(request);
   const expectedRPID = rpID;
@@ -137,7 +137,7 @@ export async function handlePasskeyLoginFinish(request: Request, env: Env): Prom
   const expectedChallenge = await env.KV.get("passkey:auth_challenge");
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
-  const body = await request.json<AuthenticationResponseJSON>();
+  const body = (await request.json()) as AuthenticationResponseJSON;
   const allPasskeys = await env.DB.prepare("SELECT * FROM passkeys").all();
   let passkey = allPasskeys.results.find((p: any) => p.id === body.id);
 
@@ -172,8 +172,8 @@ export async function handlePasskeyLoginFinish(request: Request, env: Env): Prom
       expectedOrigin,
       expectedRPID,
       authenticator: {
-        credentialID: b64urlToU8(passkey.id as string),
-        credentialPublicKey: b64urlToU8(passkey.public_key as string),
+        credentialID: b64urlToU8(passkey.id as string) as any,
+        credentialPublicKey: b64urlToU8(passkey.public_key as string) as any,
         counter: passkey.counter as number,
         transports: JSON.parse((passkey.transports as string) || "[]"),
       },

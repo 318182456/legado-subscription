@@ -49,7 +49,6 @@ export async function parseBody<T = Record<string, unknown>>(
 export async function fetchSources(url: string): Promise<unknown[]> {
   const res = await fetch(url, {
     headers: { "User-Agent": "LegadoSubscription/1.0" },
-    cf: { cacheTtl: 300 },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
   const text = await res.text();
@@ -66,7 +65,6 @@ export async function fetchSources(url: string): Promise<unknown[]> {
 export async function fetchRules(url: string): Promise<unknown[]> {
   const res = await fetch(url, {
     headers: { "User-Agent": "LegadoSubscription/1.0" },
-    cf: { cacheTtl: 300 },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
   const text = await res.text();

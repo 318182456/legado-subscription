@@ -192,3 +192,9 @@ export const extractAssetFromZip = (zipPath: string, internalPath: string, categ
     body: JSON.stringify({ zipPath, internalPath, category }) 
   });
 
+export const getSystemVersion = () => 
+  apiFetch<{ current: string, latest: string, hasUpdate: boolean, changelog?: string }>("/api/system/version");
+
+export const performUpdate = () => 
+  apiFetch<any>("/api/system/update", { method: "POST" });
+

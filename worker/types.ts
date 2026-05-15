@@ -1,8 +1,33 @@
-import type {
-  KVNamespace,
-  D1Database,
-  R2Bucket,
-} from "@cloudflare/workers-types";
+// ─── 核心接口定义 (脱离 Cloudflare Types) ──────────────────────────
+
+export interface KVNamespace {
+  get(key: string, type?: string): Promise<any>;
+  put(key: string, value: string | ArrayBuffer, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{ keys: { name: string }[] }>;
+}
+
+export interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch(statements: D1PreparedStatement[]): Promise<any>;
+  exec(query: string): Promise<any>;
+}
+
+export interface D1PreparedStatement {
+  bind(...params: any[]): D1PreparedStatement;
+  first(column?: string): Promise<any>;
+  all(): Promise<{ results: any[] }>;
+  run(): Promise<any>;
+  raw(): Promise<any[]>;
+}
+
+export interface R2Bucket {
+  get(key: string, options?: { range?: string }): Promise<any>;
+  put(key: string, value: any, options?: { httpMetadata?: { contentType?: string } }): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<any>;
+  head(key: string): Promise<any>;
+}
 
 // ─── 环境绑定 ────────────────────────────────────────────────────
 export interface Env {

@@ -15,10 +15,11 @@ import * as sources from "./handlers/sources";
 import * as rules from "./handlers/rules";
 import * as assets from "./handlers/assets";
 import * as subscribe from "./handlers/subscribe";
+import * as system from "./handlers/system";
 import { handleScheduled } from "./handlers/scheduled";
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
@@ -160,6 +161,13 @@ export default {
         return assets.handleExportCustomTheme(request, env, themeExportMatch[1]);
       }
 
+      // ── /api/system ─────────────────────────────────────────────
+      if (path === "/api/system/version" && method === "GET") return system.handleGetVersion();
+      if (path === "/api/system/update" && method === "POST") {
+        if (!auth.isAuthed(request, env)) return err("Unauthorized", 401);
+        return system.handlePerformUpdate();
+      }
+
       return err("Not Found", 404);
     } catch (e) {
       console.error(e);
@@ -173,7 +181,7 @@ export default {
     }
   },
 
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: any, env: Env, ctx: any) {
     ctx.waitUntil(handleScheduled(env));
   },
 };

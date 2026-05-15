@@ -42,6 +42,8 @@ export default function App() {
   const [isAddRuleModalOpen, setIsAddRuleModalOpen] = useState(false);
   const [editRuleData, setEditRuleData] = useState<any>(null);
   const [isDiscoveryModalOpen, setIsDiscoveryModalOpen] = useState(false);
+  const [versionInfo, setVersionInfo] = useState<any>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Global Testing State (Shared for consistency)
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
@@ -61,8 +63,26 @@ export default function App() {
     };
 
     window.addEventListener('unauthorized', handleUnauthorized);
+    
+    // 获取版本信息
+    api.getSystemVersion().then(setVersionInfo).catch(console.error);
+
     return () => window.removeEventListener('unauthorized', handleUnauthorized);
   }, []);
+
+  const handleUpdate = async () => {
+    if (!versionInfo?.hasUpdate) return;
+    if (!confirm(`确定要更新到 v${versionInfo.latest} 吗？系统将在更新后自动重启。`)) return;
+
+    setIsUpdating(true);
+    try {
+      await api.performUpdate();
+      alert('更新指令已发送，系统正在重启，请稍后刷新页面。');
+    } catch (e) {
+      alert('更新失败: ' + String(e));
+      setIsUpdating(false);
+    }
+  };
 
   const handleLogout = () => {
     api.clearToken();
@@ -251,7 +271,17 @@ export default function App() {
             )}
             <h1 className="font-bold text-lg text-on-surface capitalize">{activeTab.replace('-', ' ')}</h1>
           </div>
-          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+            {versionInfo?.hasUpdate && (
+              <button 
+                onClick={handleUpdate}
+                disabled={isUpdating}
+                className="flex items-center gap-2 px-4 py-1.5 bg-primary text-on-primary rounded-full text-xs font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Sparkles size={14} className={isUpdating ? 'animate-spin' : ''} />
+                {isUpdating ? '正在更新...' : `发现新版本 v${versionInfo.latest}`}
+              </button>
+            )}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container border border-outline-variant rounded-full">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-[11px] font-bold text-secondary uppercase tracking-widest">Server Online</span>

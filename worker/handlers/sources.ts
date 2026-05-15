@@ -49,7 +49,7 @@ export async function handleAllSourceIds(env: Env): Promise<Response> {
   return ok(results.map((r: any) => r.id));
 }
 
-export async function handleTestSources(env: Env, request: Request, ctx: ExecutionContext): Promise<Response> {
+export async function handleTestSources(env: Env, request: Request, ctx: any): Promise<Response> {
   const body = await parseBody<{ ids: number[] }>(request);
   const ids = body?.ids || [];
   if (!ids.length) return ok({});

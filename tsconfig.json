@@ -16,7 +16,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": []
   },
   "include": ["src", "worker"],
   "exclude": ["node_modules", "dist"]
