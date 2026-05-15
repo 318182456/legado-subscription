@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Zap, AlignLeft, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight,
-  ImageIcon
+  Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
+  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
@@ -205,7 +204,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const DEVICES = [
     { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 26, bezel: 1.5, notch: 'hole' },
-    { id: 'modern', name: '现代安卓 (412dp)', width: 412, height: 915, ratio: '20:9', radius: 36, innerRadius: 28, bezel: 2.0, notch: 'hole' },
     { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 42, innerRadius: 34, bezel: 2.5, notch: 'island' },
     { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 24, bezel: 2.0, notch: 'hole' },
     { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 8, innerRadius: 4, bezel: 4.0, notch: 'none' }
@@ -233,31 +231,10 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   // 预加载背景图为 Image 对象
   useEffect(() => {
     if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) {
-      let url = '';
-      if (config.bgStr.startsWith('blob:')) {
-        url = config.bgStr;
-      } else {
-        // 统一从 /repo/ 解析
-        const purePath = config.bgStr.startsWith('/') ? config.bgStr.slice(1) : config.bgStr;
-        if (!purePath.includes('/')) {
-           // 如果没有斜杠，尝试 repo 中的 backgrounds 目录
-           url = `${window.location.origin}/repo/backgrounds/${encodeURIComponent(purePath)}`;
-        } else {
-           url = `${window.location.origin}/repo/${purePath.split('/').map(s => encodeURIComponent(s)).join('/')}`;
-        }
-      }
-
+      const url = config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => setBgImageObj(img);
-      img.onerror = () => {
-        console.warn(`Failed to load background image: ${url}`);
-        // 最后的兜底：尝试直接从 repo 根目录加载
-        if (!url.includes('/repo/') || url.includes('/backgrounds/')) {
-          const fallbackUrl = `${window.location.origin}/repo/${encodeURIComponent(config.bgStr.split('/').pop()!)}`;
-          img.src = fallbackUrl;
-        }
-      };
       img.src = url;
     } else {
       setBgImageObj(null);
@@ -772,7 +749,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
               />
             </div>
           </div>
-
         </div>
       </div>
 
