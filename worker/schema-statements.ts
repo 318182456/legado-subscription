@@ -48,9 +48,6 @@ export const SCHEMA_STATEMENTS = [
     name        TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
-    `ALTER TABLE sources ADD COLUMN is_available INTEGER NOT NULL DEFAULT 1`,
-    `ALTER TABLE sources ADD COLUMN last_checked TEXT DEFAULT NULL`,
-    `ALTER TABLE sources ADD COLUMN test_url TEXT DEFAULT NULL`,
     `CREATE TABLE IF NOT EXISTS custom_themes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,

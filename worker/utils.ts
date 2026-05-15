@@ -289,34 +289,63 @@ export let schemaVerified = false;
 export async function ensureDatabase(env: Env): Promise<void> {
   if (schemaVerified) return;
 
-  // 1. 尝试从 KV 读取初始化状态，如果已初始化则直接跳过
+  // 1. 尝试从 KV 读取初始化状态
   const isVerified = await env.KV.get("db_verified");
+  
+  // 即使已验证，也做一个快速检查，防止回滚导致的空库
   if (isVerified === "true") {
-    schemaVerified = true;
-    return;
+    try {
+      // 检查核心表是否存在
+      await env.DB.prepare("SELECT 1 FROM subscriptions LIMIT 1").run();
+      schemaVerified = true;
+      return;
+    } catch (e) {
+      // 如果报错说明表不存在，清除标志位重新初始化
+      console.warn("数据库标志位存在但核心表缺失，正在强制重新初始化...");
+    }
   }
 
   console.log("正在执行数据库初始化...");
+  let successCount = 0;
+  let failCount = 0;
+
   try {
-    // 开启外键支持
-    await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+    // 开启外键支持 (Postgres 不需要这个，但 D1 需要)
+    try {
+      await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+    } catch (_) {}
 
-    // 批量执行初始化语句
-    // 使用 batch 一次性发送，减少网络往返开销
-    const batch = SCHEMA_STATEMENTS.map(sql => env.DB.prepare(sql));
-    await env.DB.batch(batch);
+    // 逐条执行初始化语句，避免单个语句失败导致全局回滚
+    for (const sql of SCHEMA_STATEMENTS) {
+      try {
+        await env.DB.prepare(sql).run();
+        successCount++;
+      } catch (e: any) {
+        const msg = e.message?.toLowerCase() || "";
+        // 忽略已经存在的错误
+        if (
+          msg.includes("already exists") || 
+          msg.includes("duplicate column") ||
+          msg.includes("already a column")
+        ) {
+          successCount++;
+        } else {
+          console.error(`SQL 执行失败: ${sql.substring(0, 50)}...`, e);
+          failCount++;
+        }
+      }
+    }
 
-    // 2. 写入 KV 标志位，持久化初始化状态
-    await env.KV.put("db_verified", "true");
-    schemaVerified = true;
-  } catch (e: any) {
-    // 容错处理：如果是因为列已存在报错，依然标记为成功
-    if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
+    // 只要有成功的语句，且没有严重的致命错误，就标记为成功
+    if (successCount > 0 && failCount === 0) {
       await env.KV.put("db_verified", "true");
       schemaVerified = true;
-      return;
+      console.log(`数据库初始化完成: 成功 ${successCount} 条`);
+    } else {
+      console.error(`数据库初始化不完整: 成功 ${successCount}, 失败 ${failCount}`);
     }
-    console.error("数据库初始化失败:", e);
+  } catch (e: any) {
+    console.error("数据库初始化过程发生致命错误:", e);
     throw e;
   }
 }
