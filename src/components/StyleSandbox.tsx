@@ -9,7 +9,7 @@ import { Slider } from './Slider';
 import { AssetPicker } from './AssetPicker';
 import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS, getTipText } from '../utils/constants';
-import { drawTheme } from '../utils/canvas-renderer';
+import { LegadoRenderer } from '../utils/LegadoRenderer';
 
 // --- Canvas 预览组件 ---
 const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
@@ -27,8 +27,9 @@ const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) =>
     let cancelled = false;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    
+    // 实例化渲染器
+    const renderer = new LegadoRenderer(canvas);
 
     const runDraw = async () => {
       if (isRunning.current) {
@@ -38,7 +39,6 @@ const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) =>
 
       const { config: c, device: d_dev, fontFamily: f, bgImage: b } = latestRef.current;
 
-      // 若配置指定了字体但 fontFamily 还未设置，说明字体正在加载中
       if (c.textFont && !c.textFont.startsWith('content://') && !f) {
         return;
       }
@@ -50,11 +50,8 @@ const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) =>
         canvas.height = d_dev.height * PHONE_DPR;
         
         if (!cancelled) {
-          await drawTheme(ctx, c, {
-            width: d_dev.width,
-            height: d_dev.height,
-            pixelRatio: PHONE_DPR,
-            fontFamily: f,
+          renderer.scale = PHONE_DPR; // 同步缩放比例
+          await renderer.renderTheme(c, {
             bgImage: b,
             getTipText,
             PREVIEW_TITLE,
@@ -629,22 +626,21 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   ): Promise<string> => {
     const canvas = document.createElement('canvas');
     const width = 360, height = 780;
-    const pixelRatio = 3; // 固定 3x 高清
+    const pixelRatio = 3; 
     canvas.width = width * pixelRatio;
     canvas.height = height * pixelRatio;
-    const ctx = canvas.getContext('2d')!;
     
-    // 渲染 (必须 await)
-    await drawTheme(ctx, cfg, {
-      width, height, pixelRatio,
-      fontFamily: selectedFontName,
+    const renderer = new LegadoRenderer(canvas);
+    renderer.scale = pixelRatio;
+
+    await renderer.renderTheme(cfg, {
       bgImage: bgImageObj,
       getTipText,
       PREVIEW_TITLE,
       PREVIEW_PARAS
     });
 
-    return canvas.toDataURL('image/jpeg', 0.95);
+    return renderer.getThumbnail();
   };
 
   const handleSave = async () => {
