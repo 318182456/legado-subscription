@@ -1,6 +1,10 @@
 import { Env } from "../types";
-// @ts-ignore - 这种导入方式需要 Wrangler 规则支持，已在 wrangler.toml 中配置
-import TEMPLATE_STR from "./subscribe.html";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TEMPLATE_STR = fs.readFileSync(path.join(__dirname, "subscribe.html"), "utf-8");
 
 export async function handleSubscribeOutput(env: Env, type: "sources" | "rules"): Promise<Response> {
   try {
