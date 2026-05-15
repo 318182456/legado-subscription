@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight
+  Zap, AlignLeft, Type as FontIcon, Palette, 
+  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight,
+  ImageIcon
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
@@ -204,6 +205,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   const DEVICES = [
     { id: 'ace6t', name: '一加 Ace 6T', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 26, bezel: 1.5, notch: 'hole' },
+    { id: 'modern', name: '现代安卓 (412dp)', width: 412, height: 915, ratio: '20:9', radius: 36, innerRadius: 28, bezel: 2.0, notch: 'hole' },
     { id: 'iphone15', name: 'iPhone 15 Pro', width: 393, height: 852, ratio: '19.5:9', radius: 42, innerRadius: 34, bezel: 2.5, notch: 'island' },
     { id: 'pixel8', name: 'Pixel 8', width: 360, height: 800, ratio: '20:9', radius: 32, innerRadius: 24, bezel: 2.0, notch: 'hole' },
     { id: 'classic', name: 'Classic Android', width: 360, height: 640, ratio: '16:9', radius: 8, innerRadius: 4, bezel: 4.0, notch: 'none' }
@@ -225,7 +227,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [resources, setResources] = useState<any>(null);
   const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
   const [fontBase64, setFontBase64] = useState('');
-  const [thumbPreview, setThumbPreview] = useState('');
 
 
 
@@ -235,22 +236,26 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       let url = '';
       if (config.bgStr.startsWith('blob:')) {
         url = config.bgStr;
-      } else if (config.bgStr.includes('/')) {
-        url = `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
       } else {
-        // 只有文件名，尝试从 /bg/ 目录加载
-        url = `/bg/${encodeURIComponent(config.bgStr)}`;
+        // 统一从 /repo/ 解析
+        const purePath = config.bgStr.startsWith('/') ? config.bgStr.slice(1) : config.bgStr;
+        if (!purePath.includes('/')) {
+           // 如果没有斜杠，尝试 repo 中的 backgrounds 目录
+           url = `${window.location.origin}/repo/backgrounds/${encodeURIComponent(purePath)}`;
+        } else {
+           url = `${window.location.origin}/repo/${purePath.split('/').map(s => encodeURIComponent(s)).join('/')}`;
+        }
       }
 
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => setBgImageObj(img);
       img.onerror = () => {
-        console.warn(`Failed to load background image: ${url}, trying fallback...`);
-        // 如果 /bg/ 失败，尝试作为普通路径
-        if (!url.includes('/repo/') && !url.startsWith('blob:')) {
-           const fallbackUrl = `${window.location.origin}/repo/${encodeURIComponent(config.bgStr)}`;
-           img.src = fallbackUrl;
+        console.warn(`Failed to load background image: ${url}`);
+        // 最后的兜底：尝试直接从 repo 根目录加载
+        if (!url.includes('/repo/') || url.includes('/backgrounds/')) {
+          const fallbackUrl = `${window.location.origin}/repo/${encodeURIComponent(config.bgStr.split('/').pop()!)}`;
+          img.src = fallbackUrl;
         }
       };
       img.src = url;
@@ -768,38 +773,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
             </div>
           </div>
 
-          {/* 缩略图预览与生成按钮 */}
-          <div className="absolute bottom-6 left-6 flex flex-col items-start gap-4">
-             <button 
-              onClick={async () => {
-                const url = await generateThumbnail(config);
-                setThumbPreview(url);
-              }}
-              className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 border border-primary/20 transition-all backdrop-blur-sm"
-            >
-              <ImageIcon size={14} />
-              生成并预览缩略图
-            </button>
-            
-            {thumbPreview && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className="relative group"
-              >
-                <img 
-                  src={thumbPreview} 
-                  className="w-20 h-auto rounded-lg border border-outline-variant shadow-lg" 
-                  alt="Thumbnail Preview"
-                />
-                <button 
-                  onClick={() => setThumbPreview('')}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-error text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  ×
-                </button>
-              </motion.div>
-            )}
-          </div>
         </div>
       </div>
 
