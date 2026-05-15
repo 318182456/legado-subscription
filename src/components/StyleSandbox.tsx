@@ -570,32 +570,41 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         else if (text.includes('正文') && !text.includes('标题')) currentSection = 'main';
 
         const findValue = () => {
-          // 增强匹配逻辑：匹配冒号或空格后的数字
-          const matches = text.match(/[-?]?\d+(\.\d+)?/g);
-          return (matches && matches.length > 0) ? parseFloat(matches[matches.length - 1]) : null;
+          // 增强匹配逻辑：排除滑块符号干扰，匹配冒号或文字后的最后一个有效数字
+          const cleanText = text.replace(/[-+]/g, ''); 
+          const matches = cleanText.match(/\d+(\.\d+)?/);
+          return (matches && matches.length > 0) ? parseFloat(matches[0]) : null;
         };
 
         const val = findValue();
         if (val === null || isNaN(val)) return;
 
+        // 关键词模糊匹配
+        const is = (key: string) => text.includes(key);
+
         if (currentSection === 'main') {
-          if (text.includes('字号')) newConfig.textSize = val;
-          else if (text.includes('字距')) newConfig.letterSpacing = val;
-          else if (text.includes('行距')) newConfig.lineSpacingExtra = val;
-          else if (text.includes('段距')) newConfig.paragraphSpacing = val;
-          else if (text.includes('上边距')) newConfig.paddingTop = val;
-          else if (text.includes('下边距')) newConfig.paddingBottom = val;
-          else if (text.includes('左边距')) newConfig.paddingLeft = val;
-          else if (text.includes('右边距')) newConfig.paddingRight = val;
+          if (is('字号')) newConfig.textSize = val;
+          else if (is('字距')) newConfig.letterSpacing = val;
+          else if (is('行距')) newConfig.lineSpacingExtra = val;
+          else if (is('段距')) newConfig.paragraphSpacing = val;
+          else if (is('上边距')) newConfig.paddingTop = val;
+          else if (is('下边距')) newConfig.paddingBottom = val;
+          else if (is('左边距')) newConfig.paddingLeft = val;
+          else if (is('右边距')) newConfig.paddingRight = val;
         } else if (currentSection === 'title') {
-          if (text.includes('字号')) newConfig.titleSize = val;
-          else if (text.includes('上边距')) newConfig.titleTopSpacing = val;
-          else if (text.includes('下边距')) newConfig.titleBottomSpacing = val;
+          if (is('字号')) newConfig.titleSize = val;
+          else if (is('上边距')) newConfig.titleTopSpacing = val;
+          else if (is('下边距')) newConfig.titleBottomSpacing = val;
+        } else if (currentSection === 'header') {
+          if (is('上边距')) newConfig.headerPaddingTop = val;
+          else if (is('下边距')) newConfig.headerPaddingBottom = val;
+          else if (is('左边距')) newConfig.headerPaddingLeft = val;
+          else if (is('右边距')) newConfig.headerPaddingRight = val;
         } else if (currentSection === 'footer') {
-          if (text.includes('上边距')) newConfig.footerPaddingTop = val;
-          else if (text.includes('下边距')) newConfig.footerPaddingBottom = val;
-          else if (text.includes('左边距')) newConfig.footerPaddingLeft = val;
-          else if (text.includes('右边距')) newConfig.footerPaddingRight = val;
+          if (is('上边距')) newConfig.footerPaddingTop = val;
+          else if (is('下边距')) newConfig.footerPaddingBottom = val;
+          else if (is('左边距')) newConfig.footerPaddingLeft = val;
+          else if (is('右边距')) newConfig.footerPaddingRight = val;
         }
       });
 
