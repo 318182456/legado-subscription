@@ -91,16 +91,21 @@ export class LegadoRenderer {
         }
     }
 
-    // 👑 核心工具：获取精确的字体高度测算
+    // 👑 核心工具：获取精确的字体高度测算 (对齐 Android Paint.FontMetrics)
     getRealFontMetrics(fontSize: number, fontStack: string, isBold: boolean) {
         const { ctx } = this;
         const oldFont = ctx.font;
         ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
         const m = ctx.measureText("国Agy");
-        const ascent = m.actualBoundingBoxAscent || fontSize * 0.85;
-        const descent = m.actualBoundingBoxDescent || fontSize * 0.15;
+        
+        // 👑 修正：使用 fontBoundingBox 以包含字体的建议留白，而非紧贴字形的 actualBoundingBox
+        // 这样测算出来的 fontHeight 才会跟 Android 的 Paint.FontMetrics 一致
+        const ascent = m.fontBoundingBoxAscent || m.actualBoundingBoxAscent || fontSize * 0.95;
+        const descent = m.fontBoundingBoxDescent || m.actualBoundingBoxDescent || fontSize * 0.20;
+        
         ctx.font = oldFont;
-        return { ascent, descent, fontHeight: ascent + descent };
+        // 稍微增加一点 Leading 补偿，让排版更开阔，对齐 Legado 视觉感
+        return { ascent, descent, fontHeight: (ascent + descent) * 1.05 };
     }
 
     drawStatusBar(theme: any) {
@@ -332,7 +337,8 @@ export class LegadoRenderer {
             });
             
             // 👑 核心修正：标题底边距 = 段间距 + 标题独有下边距
-            currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 18) * scale;
+            // 增加额外的物理补偿以匹配真机视觉
+            currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 18) * scale + 5 * scale;
         }
 
         // > 绘制段落
