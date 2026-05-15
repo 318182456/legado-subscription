@@ -1,7 +1,17 @@
 import { Env, CACHE_TTL } from "./types";
 import { SCHEMA_STATEMENTS } from "./schema-statements";
+import fs from "fs-extra";
+import path from "path";
 
 // ─── 工具函数 ─────────────────────────────────────────────────────
+
+/** 字符串哈希工具 (Web Crypto API) */
+export async function hashText(text: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-1", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 /** 标准 JSON 响应 */
 export function json(data: unknown, status = 200): Response {
@@ -106,7 +116,7 @@ export async function syncSourceSubscription(
   for (let i = 0; i < items.length; i += BATCH) {
     const chunk = items.slice(i, i + BATCH);
     const stmts = chunk
-      .map((src) => {
+      .map(async (src) => {
         const bsUrl = String(src["bookSourceUrl"] ?? src["sourceUrl"] ?? "").trim();
         const name = String(src["bookSourceName"] ?? src["name"] ?? "未知书源").trim();
         const group = String(src["bookSourceGroup"] ?? src["group"] ?? "");
@@ -130,18 +140,26 @@ export async function syncSourceSubscription(
             }
           }
         } catch (_) {}
+
+        // 生成哈希以绕过 Postgres 索引限制
+        const urlHash = await hashText(bsUrl);
+        
         return env.DB.prepare(
-          `INSERT INTO sources (subscription_id, book_source_url, name, group_name, raw_json, test_url, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-           ON CONFLICT(subscription_id, book_source_url)
+          `INSERT INTO sources (subscription_id, book_source_url, name, group_name, raw_json, test_url, url_hash, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(subscription_id, url_hash)
            DO UPDATE SET name=excluded.name, group_name=excluded.group_name,
                          raw_json=excluded.raw_json, test_url=excluded.test_url, updated_at=excluded.updated_at
            WHERE sources.raw_json != excluded.raw_json`
-        ).bind(subId, bsUrl, name, group, rawJson, testUrl);
+        ).bind(subId, bsUrl, name, group, rawJson, testUrl, urlHash);
       });
-    if (stmts.length > 0) {
-      await env.DB.batch(stmts);
-      count += stmts.length;
+    
+    // 需要等待所有哈希生成完毕
+    const resolvedStmts = await Promise.all(stmts);
+
+    if (resolvedStmts.length > 0) {
+      await env.DB.batch(resolvedStmts);
+      count += resolvedStmts.length;
     }
   }
 
@@ -183,7 +201,7 @@ export async function syncRuleSubscription(
   for (let i = 0; i < items.length; i += BATCH) {
     const chunk = items.slice(i, i + BATCH);
     const stmts = chunk
-      .map((rule) => {
+      .map(async (rule) => {
         const name = String(rule["name"] ?? rule["ruleName"] ?? "").trim();
         const pattern = String(rule["regex"] ?? rule["pattern"] ?? "").trim();
         const replacement = String(rule["replacement"] ?? rule["replace"] ?? "");
@@ -199,18 +217,26 @@ export async function syncRuleSubscription(
         };
         
         const rawJson = JSON.stringify(normalizedRule);
+        
+        // 生成哈希以绕过 Postgres 索引限制
+        const patternHash = await hashText(pattern);
+
         return env.DB.prepare(
-          `INSERT INTO rules (subscription_id, name, pattern, replacement, raw_json, updated_at)
-           VALUES (?, ?, ?, ?, ?, datetime('now'))
-           ON CONFLICT(subscription_id, name, pattern)
+          `INSERT INTO rules (subscription_id, name, pattern, replacement, raw_json, pattern_hash, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(subscription_id, name, pattern_hash)
            DO UPDATE SET replacement=excluded.replacement,
                          raw_json=excluded.raw_json, updated_at=excluded.updated_at
            WHERE rules.raw_json != excluded.raw_json`
-        ).bind(subId, name, pattern, replacement, rawJson);
+        ).bind(subId, name, pattern, replacement, rawJson, patternHash);
       });
-    if (stmts.length > 0) {
-      await env.DB.batch(stmts);
-      count += stmts.length;
+    
+    // 需要等待所有哈希生成完毕
+    const resolvedStmts = await Promise.all(stmts);
+
+    if (resolvedStmts.length > 0) {
+      await env.DB.batch(resolvedStmts);
+      count += resolvedStmts.length;
     }
   }
 
@@ -228,21 +254,21 @@ export async function syncRuleSubscription(
  */
 export async function rebuildCache(env: Env, type: "source" | "rule") {
   if (type === "source") {
-    // 跨订阅全局去重：直接使用 SQL GROUP BY book_source_url 避免在 JS 层消耗 CPU 解析庞大的 JSON
+    // 跨订阅全局去重：使用 url_hash 避免长文本索引限制
     const rows = await env.DB.prepare(
-      `SELECT raw_json FROM sources WHERE id IN (SELECT MIN(id) FROM sources WHERE enabled=1 GROUP BY book_source_url) ORDER BY id`
+      `SELECT raw_json FROM sources WHERE id IN (SELECT MIN(id) FROM sources WHERE enabled=1 GROUP BY url_hash) ORDER BY id`
     ).all();
     
-    // 直接拼接 raw_json 字符串，完全省去 JSON.parse 和 JSON.stringify 的 CPU 开销（约省下 8-10ms CPU 时间）
+    // 直接拼接 raw_json 字符串，完全省去 JSON.parse 和 JSON.stringify 的 CPU 开销
     const mergedStr = "[" + rows.results.map((r) => r.raw_json as string).join(",") + "]";
     
     await env.KV.put("sources", mergedStr, {
       expirationTtl: CACHE_TTL,
     });
   } else {
-    // 净化规则去重：按 name 和 pattern 去重
+    // 净化规则去重：按 name 和 pattern_hash 去重
     const rows = await env.DB.prepare(
-      `SELECT raw_json FROM rules WHERE id IN (SELECT MIN(id) FROM rules WHERE enabled=1 GROUP BY name, pattern) ORDER BY id`
+      `SELECT raw_json FROM rules WHERE id IN (SELECT MIN(id) FROM rules WHERE enabled=1 GROUP BY name, pattern_hash) ORDER BY id`
     ).all();
     
     const mergedStr = "[" + rows.results.map((r) => r.raw_json as string).join(",") + "]";
@@ -342,6 +368,35 @@ export async function ensureDatabase(env: Env): Promise<void> {
       await env.KV.put("db_verified", "true");
       schemaVerified = true;
       console.log(`数据库初始化完成: 成功 ${successCount} 条`);
+
+      // ─── 版本同步逻辑 ──────────────────
+      try {
+        const versionPath = path.join(process.cwd(), "VERSION");
+        if (await fs.pathExists(versionPath)) {
+          const fileVersion = (await fs.readFile(versionPath, "utf-8")).trim();
+          
+          // 获取 DB 中的版本
+          const dbVerRow = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'version'").first() as any;
+          const dbVersion = dbVerRow?.value;
+
+          if (fileVersion !== dbVersion) {
+            console.log(`检测到版本更新: ${dbVersion || 'NONE'} -> ${fileVersion}`);
+            // 更新 DB 版本
+            await env.DB.prepare("INSERT INTO system_config (key, value) VALUES ('version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+              .bind(fileVersion)
+              .run();
+            // 标记 KV，前端可以通过此标志位显示“更新成功”或执行后续迁移
+            await env.KV.put("last_version_update", JSON.stringify({
+              old: dbVersion,
+              new: fileVersion,
+              time: new Date().toISOString()
+            }));
+          }
+        }
+      } catch (verErr) {
+        console.error("版本同步失败:", verErr);
+      }
+      // ──────────────────────────────────
     } else {
       console.error(`数据库初始化不完整: 成功 ${successCount}, 失败 ${failCount}`);
     }

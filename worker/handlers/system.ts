@@ -5,9 +5,15 @@ import fs from "fs-extra";
 import { unzipSync } from "fflate";
 
 const GITHUB_REPO = "318182456/legado-subscription"; // 请确认您的仓库地址
-const CURRENT_VERSION = "1.0.0"; // 对应 package.json
-
 export async function handleGetVersion() {
+  let currentVersion = "1.0.0";
+  try {
+    const versionPath = path.join(process.cwd(), "VERSION");
+    if (await fs.pathExists(versionPath)) {
+      currentVersion = (await fs.readFile(versionPath, "utf-8")).trim();
+    }
+  } catch (_) {}
+
   try {
     const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
       headers: { "User-Agent": "LegadoSubscription-Updater" }
@@ -17,13 +23,13 @@ export async function handleGetVersion() {
     const latestVersion = data.tag_name.replace(/^v/, "");
     
     return ok({
-      current: CURRENT_VERSION,
+      current: currentVersion,
       latest: latestVersion,
-      hasUpdate: latestVersion !== CURRENT_VERSION,
+      hasUpdate: latestVersion !== currentVersion,
       changelog: data.body
     });
   } catch (e) {
-    return ok({ current: CURRENT_VERSION, latest: CURRENT_VERSION, hasUpdate: false });
+    return ok({ current: currentVersion, latest: currentVersion, hasUpdate: false });
   }
 }
 
