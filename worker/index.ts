@@ -6,6 +6,7 @@ import { Env } from "./types";
 import {
   err,
   ensureDatabase,
+  schemaVerified,
 } from "./utils";
 
 import * as auth from "./handlers/auth";
@@ -23,11 +24,15 @@ export default {
     const method = request.method.toUpperCase();
 
     // 数据库运行时初始化
+    // 仅针对写操作或未经验证的实例执行初始化检查，且优先依赖内存缓存
     if (path.startsWith("/api/")) {
-      try {
-        await ensureDatabase(env);
-      } catch (e) {
-        return err(`Database Init Failed: ${(e as Error).message}`, 500);
+      const isWrite = method !== "GET";
+      if (isWrite || !schemaVerified) {
+        try {
+          await ensureDatabase(env);
+        } catch (e) {
+          return err(`Database Init Failed: ${(e as Error).message}`, 500);
+        }
       }
     }
 
@@ -153,7 +158,13 @@ export default {
       return err("Not Found", 404);
     } catch (e) {
       console.error(e);
-      return err(`Internal Error: ${(e as Error).message}`, 500);
+      return new Response(JSON.stringify({ ok: false, error: `Internal Error: ${(e as Error).message}` }), {
+        status: 500,
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*" 
+        }
+      });
     }
   },
 

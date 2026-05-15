@@ -282,35 +282,42 @@ export function b64urlToU8(s: string): Uint8Array {
 
 // ─── 数据库初始化 (参照 NodeWarden) ───────────────────────────────
 
-let schemaVerified = false;
+export let schemaVerified = false;
 
 /**
  * 确保数据库表结构已初始化
- * 采用 NodeWarden 的运行时校验模式，每个 Isolate 仅运行一次
+ * 优化：使用 KV 标志位 + 内存缓存，双重保障减少 CPU 开销
  */
 export async function ensureDatabase(env: Env): Promise<void> {
   if (schemaVerified) return;
 
+  // 1. 尝试从 KV 读取初始化状态，如果已初始化则直接跳过
+  const isVerified = await env.KV.get("db_verified");
+  if (isVerified === "true") {
+    schemaVerified = true;
+    return;
+  }
+
+  console.log("正在执行数据库初始化...");
   try {
     // 开启外键支持
     await env.DB.prepare("PRAGMA foreign_keys = ON").run();
 
-    // 批量执行初始化语句 (IF NOT EXISTS)
-    // 分离建表和改表语句，改表语句单独执行并容错
-    for (const sql of SCHEMA_STATEMENTS) {
-      try {
-        await env.DB.prepare(sql).run();
-      } catch (e: any) {
-        // 忽略 "duplicate column" 错误
-        if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
-          continue;
-        }
-        console.error(`SQL Execution Error: ${sql}`, e);
-      }
-    }
+    // 批量执行初始化语句
+    // 使用 batch 一次性发送，减少网络往返开销
+    const batch = SCHEMA_STATEMENTS.map(sql => env.DB.prepare(sql));
+    await env.DB.batch(batch);
 
+    // 2. 写入 KV 标志位，持久化初始化状态
+    await env.KV.put("db_verified", "true");
     schemaVerified = true;
-  } catch (e) {
+  } catch (e: any) {
+    // 容错处理：如果是因为列已存在报错，依然标记为成功
+    if (e.message?.includes("duplicate column") || e.message?.includes("already exists")) {
+      await env.KV.put("db_verified", "true");
+      schemaVerified = true;
+      return;
+    }
     console.error("数据库初始化失败:", e);
     throw e;
   }
