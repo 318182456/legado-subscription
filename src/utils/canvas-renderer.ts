@@ -16,14 +16,32 @@ const POST_PANC = new Set(`，。：？！、”’）》】)\]」}；;·…~～
 const PRE_PANC = new Set(`“‘（《【(\[「{`.split(""));
 
 // 👑 修正 5：优先取 actualBoundingBox，加入安全 fallback 防止发布环境报 0
-const getRealFontMetrics = (ctx: CanvasRenderingContext2D, fontSize: number, sample = "国Agy") => {
+const getRealFontMetrics = (
+    ctx: CanvasRenderingContext2D,
+    fontSize: number,
+    sample = "国Agy"
+) => {
     const m = ctx.measureText(sample);
-    const ascent = m.actualBoundingBoxAscent || m.fontBoundingBoxAscent || fontSize * 0.8;
-    const descent = m.actualBoundingBoxDescent || m.fontBoundingBoxDescent || fontSize * 0.2;
+
+    const ascent =
+        m.actualBoundingBoxAscent ||
+        m.fontBoundingBoxAscent ||
+        fontSize * 0.8;
+
+    const descent =
+        m.actualBoundingBoxDescent ||
+        m.fontBoundingBoxDescent ||
+        fontSize * 0.2;
+
     return {
         ascent,
         descent,
-        fontSpacing: ascent + descent // 对应 Android Paint.getFontSpacing()
+
+        // Android Paint.getFontSpacing() 更接近这个值
+        fontSpacing: Math.max(
+            ascent + descent,
+            fontSize * 1.15
+        )
     };
 };
 
@@ -60,8 +78,21 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     // 👑 修正 6：彻底解决开发正常、发布不对的“字体未加载完”幽灵 Bug
     try {
         const fontFaceSet = (document as any).fonts;
-        await fontFaceSet.load(`${fontSize}px "${fontName}"`, "国Agy");
+
+        await fontFaceSet.load(
+            `${fontSize}px "${fontName}"`,
+            "国Agy"
+        );
+
         await fontFaceSet.ready;
+
+        // 等待真正进入渲染管线
+        await new Promise(resolve =>
+            requestAnimationFrame(() =>
+                requestAnimationFrame(resolve)
+            )
+        );
+
     } catch (e) {}
 
     ctx.font = fontString;
@@ -103,7 +134,16 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
     const pL = (cfg.paddingLeft ?? 23) * d;
     const pR = (cfg.paddingRight ?? 23) * d;
     const contentW = W - pL - pR;
-    const indentW = ctx.measureText(cfg.paragraphIndent ?? "　　").width;
+    const paragraphIndent =
+        cfg.paragraphIndent ?? "　　";
+
+    const indentW =
+        measure(paragraphIndent) +
+        (paragraphIndent.length - 1) *
+        getLetterSpacing(
+            fontSize,
+            letterSpacingEm
+        );
 
     // ── 2. 分词与测量引擎 ─────────────────────────────────
     const segmenter =
@@ -112,7 +152,23 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
             : null;
 
     // 👑 修正 1：剥离 measure 的字距，只测字宽，防止累加误差爆炸
-    const measure = (str: string): number => ctx.measureText(str).width;
+    const measure = (
+        str: string,
+        font?: string
+    ): number => {
+
+        const old = ctx.font;
+
+        if (font) {
+            ctx.font = font;
+        }
+
+        const width = ctx.measureText(str).width;
+
+        ctx.font = old;
+
+        return width;
+    };
 
     const layoutLines = (
         text: string,
@@ -138,7 +194,8 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
 
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i];
-            const cw = measure(token);
+            const currentFont = `${isBold}${curFontSize}px "${fontName}", "PingFang SC", sans-serif`;
+            const cw = measure(token, currentFont);
             const limit = isFirstLine ? maxW - firstIndent : maxW;
             const expectedW = currentW + (line.length > 0 ? currentLetterSp : 0) + cw;
 
@@ -147,12 +204,12 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
-                    currentW = measure(prevToken) + currentLetterSp + measure(token);
+                    currentW = measure(prevToken, currentFont) + currentLetterSp + measure(token, currentFont);
                 } else if (PRE_PANC.has(line[line.length - 1]) && line.length > 1) {
                     const prevToken = line.pop()!;
                     lines.push([...line]);
                     line = [prevToken, token];
-                    currentW = measure(prevToken) + currentLetterSp + measure(token);
+                    currentW = measure(prevToken, currentFont) + currentLetterSp + measure(token, currentFont);
                 } else {
                     lines.push([...line]);
                     line = [token];
@@ -185,6 +242,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         const totalBaseSp = currentLetterSp * (tokens.length - 1);
 
         let extraSpacePerGap = 0;
+        let remainGap = 0;
         let extraSpacePerSpaceChar = 0;
 
         if (align === "justify" && tokens.length > 1) {
@@ -198,6 +256,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
                     extraSpacePerSpaceChar = Math.floor(remainingW / spaceCount);
                 } else {
                     extraSpacePerGap = Math.floor(remainingW / (tokens.length - 1));
+                    remainGap = remainingW % (tokens.length - 1);
                 }
             }
         }
@@ -212,6 +271,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
                 ws[i] +
                 (isLast ? 0 : currentLetterSp) +
                 extraSpacePerGap +
+                (i < remainGap ? 1 : 0) +
                 (tokens[i].trim() === "" ? extraSpacePerSpaceChar : 0);
         }
     };
@@ -294,6 +354,7 @@ export async function drawTheme(ctx: CanvasRenderingContext2D, cfg: any, options
         currentY += (cfg.titleTopSpacing ?? 8) * d;
         let titleBaseline = currentY + tAscent;
 
+        ctx.font = `bold ${tFontSize}px "${fontName}", "PingFang SC", sans-serif`;
         const tLines = layoutLines(cleanTitle, contentW, 0, tFontSize);
         for (let i = 0; i < tLines.length; i++) {
             drawLineBaseline(tLines[i], pL, titleBaseline, "left", contentW, tFontSize);
