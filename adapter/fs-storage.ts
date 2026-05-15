@@ -104,8 +104,19 @@ export class FileSystemR2 {
       await walk(this.root);
     }
 
+    const objects = [];
+    for (const f of files.sort()) {
+      const p = this.getPath(f);
+      const stat = await fs.stat(p);
+      objects.push({
+        key: f,
+        size: stat.size,
+        uploaded: stat.mtime
+      });
+    }
+
     return {
-      objects: files.sort().map(f => ({ key: f })),
+      objects,
       truncated: false,
     };
   }

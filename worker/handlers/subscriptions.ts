@@ -38,11 +38,11 @@ export async function handleDeleteSubscription(env: Env, id: number): Promise<Re
 export async function handleToggleSubscription(request: Request, env: Env, id: number): Promise<Response> {
   const body = await parseBody<{ enabled: boolean }>(request);
   const enabled = body?.enabled ? 1 : 0;
-  await env.DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=? AND enabled IS NOT ?").bind(enabled, id, enabled).run();
+  await env.DB.prepare("UPDATE subscriptions SET enabled=? WHERE id=? AND enabled != ?").bind(enabled, id, enabled).run();
   const sub = (await env.DB.prepare("SELECT type FROM subscriptions WHERE id=?").bind(id).first()) as any;
   if (sub) {
     const table = sub.type === "source" ? "sources" : "rules";
-    await env.DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=? AND enabled IS NOT ?`).bind(enabled, id, enabled).run();
+    await env.DB.prepare(`UPDATE ${table} SET enabled=? WHERE subscription_id=? AND enabled != ?`).bind(enabled, id, enabled).run();
     await rebuildCache(env, sub.type);
   }
   return ok();

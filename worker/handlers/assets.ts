@@ -70,6 +70,43 @@ export async function handleResourcesList(env: Env): Promise<Response> {
   });
 }
 
+/**
+ * 重新扫描 R2 并重建资源索引
+ */
+export async function handleResourcesRefresh(env: Env): Promise<Response> {
+  const listed = await env.ASSETS_R2.list();
+  const index: Record<string, any[]> = {};
+
+  for (const obj of listed.objects) {
+    const key = obj.key;
+    const parts = key.split('/');
+    if (parts.length < 2) continue;
+    
+    let category, name;
+    if (parts[0] === 'uploads' && parts.length >= 3) {
+      category = parts[1];
+      name = parts.slice(2).join('/');
+    } else {
+      category = parts[0];
+      name = parts.slice(1).join('/');
+    }
+    
+    if (!index[category]) index[category] = [];
+    
+    index[category].push({
+      name,
+      path: key,
+      size: obj.size,
+      mtime: obj.uploaded ? new Date(obj.uploaded).toISOString() : new Date().toISOString()
+    });
+  }
+
+  await env.KV.put("resources-index", JSON.stringify(index));
+  return new Response(JSON.stringify({ ok: true, data: index }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}
+
 export async function handleR2List(request: Request, env: Env): Promise<Response> {
   await checkAuth(request, env);
   const keys: string[] = [];

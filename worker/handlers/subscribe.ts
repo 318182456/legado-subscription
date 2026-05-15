@@ -18,7 +18,7 @@ export async function handleSubscribeOutput(env: Env, type: "sources" | "rules")
 
     const table = type === "sources" ? "sources" : "rules";
     const groupBy = type === "sources" ? "book_source_url" : "name, pattern";
-    const { results } = await env.DB.prepare(`SELECT raw_json FROM ${table} WHERE enabled=1 GROUP BY ${groupBy} ORDER BY id`).all();
+    const { results } = await env.DB.prepare(`SELECT raw_json FROM ${table} WHERE id IN (SELECT MIN(id) FROM ${table} WHERE enabled=1 GROUP BY ${groupBy}) ORDER BY id`).all();
     const jsonArray = "[" + results.map(r => r.raw_json).join(",") + "]";
     
     return new Response(jsonArray, {

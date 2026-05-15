@@ -148,6 +148,7 @@ export const getRules = (q = "", page = 1) => apiFetch<any[]>(`/api/rules?q=${q}
 export const addRule = (data: { name: string; pattern: string; replacement: string }) => apiFetch<any>("/api/rules", { method: "POST", body: JSON.stringify(data) });
 
 export const getResources = () => apiFetch<any>("/api/resources");
+export const refreshResources = () => apiFetch<any>("/api/resources/refresh", { method: "POST" });
 
 export const testSources = (ids: number[]) => apiFetch<Record<number, boolean>>("/api/sources/test", { method: "POST", body: JSON.stringify({ ids }) });
 export const toggleSource = (id: number, enabled: boolean) => apiFetch<any>(`/api/sources/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });

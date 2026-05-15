@@ -53,11 +53,11 @@ export default function AssetsView() {
     }
   };
 
-  const fetchAll = async () => {
+  const fetchAll = async (refresh = false) => {
     setLoading(true);
     try {
       const [res, themes] = await Promise.all([
-        api.getResources(),
+        refresh ? api.refreshResources() : api.getResources(),
         api.getCustomThemes()
       ]);
       setData(res);
@@ -254,7 +254,7 @@ export default function AssetsView() {
             </button>
           </div>
           <button 
-            onClick={fetchAll}
+            onClick={() => fetchAll(true)}
             className="p-2.5 bg-surface-container-lowest border border-outline-variant text-primary rounded-xl hover:bg-surface-container-low transition-colors shadow-sm"
             title="刷新数据"
           >

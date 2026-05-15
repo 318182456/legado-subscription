@@ -230,7 +230,7 @@ export async function rebuildCache(env: Env, type: "source" | "rule") {
   if (type === "source") {
     // 跨订阅全局去重：直接使用 SQL GROUP BY book_source_url 避免在 JS 层消耗 CPU 解析庞大的 JSON
     const rows = await env.DB.prepare(
-      `SELECT raw_json FROM sources WHERE enabled=1 GROUP BY book_source_url ORDER BY id`
+      `SELECT raw_json FROM sources WHERE id IN (SELECT MIN(id) FROM sources WHERE enabled=1 GROUP BY book_source_url) ORDER BY id`
     ).all();
     
     // 直接拼接 raw_json 字符串，完全省去 JSON.parse 和 JSON.stringify 的 CPU 开销（约省下 8-10ms CPU 时间）
@@ -242,7 +242,7 @@ export async function rebuildCache(env: Env, type: "source" | "rule") {
   } else {
     // 净化规则去重：按 name 和 pattern 去重
     const rows = await env.DB.prepare(
-      `SELECT raw_json FROM rules WHERE enabled=1 GROUP BY name, pattern ORDER BY id`
+      `SELECT raw_json FROM rules WHERE id IN (SELECT MIN(id) FROM rules WHERE enabled=1 GROUP BY name, pattern) ORDER BY id`
     ).all();
     
     const mergedStr = "[" + rows.results.map((r) => r.raw_json as string).join(",") + "]";

@@ -134,6 +134,7 @@ export default {
       if (path.startsWith("/repo/")) return assets.handleRepoProxy(request, env);
 
       // ── /api/resources (资源列表) ────────────────────────────────
+      if (path === "/api/resources/refresh" && method === "POST") return assets.handleResourcesRefresh(env);
       if (path === "/api/resources" && method === "GET") return assets.handleResourcesList(env);
 
       // ── /api/r2-list (R2 完整文件清单) ─────────────────────────────

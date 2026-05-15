@@ -25,8 +25,19 @@ export function isAuthed(request: Request, env: Env): boolean {
   return auth === `Bearer ${pwd}`;
 }
 
+function getRpID(request: Request): string {
+  const host = request.headers.get("x-forwarded-host") || new URL(request.url).host;
+  return host.split(":")[0];
+}
+
 function getOrigins(request: Request): string | string[] {
-  const origin = new URL(request.url).origin;
+  const url = new URL(request.url);
+  
+  // 支持反向代理头，以获取正确的协议和域名
+  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+  const host = request.headers.get("x-forwarded-host") || url.host;
+  const origin = `${proto}://${host}`;
+
   if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
     return [origin, "http://localhost:5173", "http://localhost:3000", "http://localhost:8787"];
   }
@@ -57,7 +68,7 @@ export async function handlePasskeyDelete(id: string, env: Env): Promise<Respons
 
 export async function handlePasskeyRegisterBegin(request: Request, env: Env): Promise<Response> {
   const { results } = await env.DB.prepare("SELECT id, transports FROM passkeys").all();
-  const rpID = new URL(request.url).hostname;
+  const rpID = getRpID(request);
 
   const options = await generateRegistrationOptions({
     rpName: "Legado Subscription",
@@ -81,9 +92,8 @@ export async function handlePasskeyRegisterFinish(request: Request, env: Env): P
   if (!expectedChallenge) return err("Challenge 已过期", 400);
 
   const body = (await request.json()) as RegistrationResponseJSON;
-  const rpID = new URL(request.url).hostname;
+  const expectedRPID = getRpID(request);
   const expectedOrigin = getOrigins(request);
-  const expectedRPID = rpID;
 
   try {
     const verification = await verifyRegistrationResponse({
@@ -122,7 +132,7 @@ export async function handlePasskeyRegisterFinish(request: Request, env: Env): P
 }
 
 export async function handlePasskeyLoginBegin(request: Request, env: Env): Promise<Response> {
-  const rpID = new URL(request.url).hostname;
+  const rpID = getRpID(request);
 
   const options = await generateAuthenticationOptions({
     rpID,
@@ -161,9 +171,8 @@ export async function handlePasskeyLoginFinish(request: Request, env: Env): Prom
     return err("找不到凭证", 404);
   }
 
-  const rpID = new URL(request.url).hostname;
+  const expectedRPID = getRpID(request);
   const expectedOrigin = getOrigins(request);
-  const expectedRPID = rpID;
 
   try {
     const verification = await verifyAuthenticationResponse({
