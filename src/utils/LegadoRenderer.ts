@@ -346,9 +346,12 @@ export class LegadoRenderer {
         // Footer
         let footerTop = canvas.height - navBarH;
         if (theme.footerMode !== 1) {
+            const fPaddingT = (theme.footerPaddingTop ?? 0) * scale;
             const fPaddingB = (theme.footerPaddingBottom ?? 6) * scale;
             const fPaddingL = (theme.footerPaddingLeft ?? 24) * scale;
             const fPaddingR = (theme.footerPaddingRight ?? 24) * scale;
+            
+            // 👑 修正：页脚 Y 坐标计算
             const footerY = canvas.height - navBarH - fPaddingB - 12 * scale;
 
             ctx.textAlign = "left";
@@ -362,7 +365,8 @@ export class LegadoRenderer {
                 footerY
             );
 
-            footerTop = footerY - 15 * scale;
+            // 👑 修正：页脚线的位置应包含 fPaddingT
+            footerTop = footerY - 15 * scale - fPaddingT;
             if (theme.showFooterLine) {
                 ctx.beginPath();
                 ctx.moveTo(0, footerTop);
@@ -377,14 +381,13 @@ export class LegadoRenderer {
 
         // --- 4. 绘制正文 (带裁切范围) ---
         const drawWidth = canvas.width - pL - pR;
-        // 👑 综合优化：顶部保持安全避让（防止遮挡页眉），底部使用物理对齐（找回缺失行）
+        // 👑 回退：恢复避让页眉的起始点
         let currentY = headerBottom + pT;
-        const contentBottom = canvas.height - pB;
 
         ctx.save();
         ctx.beginPath();
-        // 👑 修正：裁切范围允许延伸到物理边距，防止最后一行文字被裁切
-        ctx.rect(0, headerBottom, canvas.width, Math.max(0, contentBottom - headerBottom));
+        // 👑 回退：恢复避让页眉页脚的裁切范围
+        ctx.rect(0, headerBottom, canvas.width, Math.max(0, footerTop - headerBottom));
         ctx.clip();
 
         // > 绘制标题
@@ -440,8 +443,8 @@ export class LegadoRenderer {
 
             for (let index = 0; index < lines.length; index++) {
                 const isLastLine = index === lines.length - 1;
-                // 👑 修正：使用物理底边界判定，找回缺失行
-                if (currentY + metrics.fontHeight > contentBottom) break;
+                // 👑 回退：恢复避让页脚的判定
+                if (currentY + metrics.fontHeight > footerTop - pB) break;
 
                 this.drawJustifiedText(
                     lines[index],
@@ -467,7 +470,7 @@ export class LegadoRenderer {
                 currentY += lineHeight;
             }
             currentY += paragraphSpacing;
-            if (currentY > contentBottom) break;
+            if (currentY > footerTop - pB) break;
         }
 
         ctx.restore();
