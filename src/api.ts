@@ -52,7 +52,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   const res = await fetch(path, { ...options, headers });
   
   // 提前解析 JSON 以便统一处理 ok 字段
-  const body = await res.json().catch(() => ({ ok: false, error: res.statusText }));
+  const body = (await res.json().catch(() => ({ ok: false, error: res.statusText }))) as {
+    ok?: boolean;
+    data?: T;
+    error?: string;
+  };
 
   if (res.status === 401) {
     if (!path.includes("/api/auth/login")) {
@@ -154,7 +158,7 @@ export const deleteRule = (id: number) => apiFetch<any>(`/api/rules/${id}`, { me
 export const updateRule = (id: number, data: { name: string; pattern: string; replacement: string }) => apiFetch<any>(`/api/rules/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const parseLinks = (url: string) => apiFetch<{ name: string; url: string }[]>(`/api/parse-links?url=${encodeURIComponent(url)}`);
 
-export const getCustomThemes = () => apiFetch<any[]>("/api/custom-themes");
+export const getCustomThemes = () => apiFetch<any[]>(`/api/custom-themes?t=${Date.now()}`);
 export const saveCustomTheme = (data: { name: string; config: string; preview_url?: string }) => 
   apiFetch<any>("/api/custom-themes", { method: "POST", body: JSON.stringify(data) });
 export const deleteCustomTheme = (id: number) => 
@@ -174,7 +178,7 @@ export const ensureAsset = async (file: Blob, category: string, name: string) =>
     body: formData
   });
 
-  const body = await res.json();
+  const body = (await res.json()) as { ok: boolean; path?: string; error?: string };
   if (!res.ok || body.ok === false) throw new Error(body.error || '上传失败');
   return body.path as string;
 };

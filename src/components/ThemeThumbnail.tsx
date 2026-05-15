@@ -107,11 +107,12 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     >
       {/* 屏幕内容 */}
       <div className={`w-full h-full rounded-[13px] overflow-hidden relative bg-black ${(initialPreviewUrl || config.preview_url) ? 'bg-surface-container-low' : ''}`}>
-        {(initialPreviewUrl || config.preview_url) ? (
+        {(initialPreviewUrl || config?.preview_url) ? (
           <img 
-            src={initialPreviewUrl || config.preview_url} 
+            key={initialPreviewUrl || config?.preview_url}
+            src={initialPreviewUrl || config?.preview_url} 
             alt={name} 
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover animate-in fade-in duration-500"
             loading="lazy"
           />
         ) : (
