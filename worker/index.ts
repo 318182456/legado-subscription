@@ -66,6 +66,7 @@ export default {
           path === "/api/custom-themes" || 
           path === "/api/resources" || 
           path === "/api/stats" ||
+          path === "/api/zip/list" ||
           path.endsWith("/export")
         );
         if (!isPublicGet && !auth.isAuthed(request, env)) return err("Unauthorized", 401);
@@ -139,6 +140,10 @@ export default {
 
       // ── /api/assets/ensure (资源确保存储) ──────────────────────────
       if (path === "/api/assets/ensure" && method === "POST") return assets.handleEnsureAsset(request, env);
+
+      // ── /api/zip (ZIP 资产管理) ───────────────────────────────────
+      if (path === "/api/zip/list" && method === "GET") return assets.handleListZipAssets(request, env);
+      if (path === "/api/zip/extract" && method === "POST") return assets.handleExtractAssetFromZip(request, env);
 
       // ── /api/custom-themes (精选主题) ──────────────────────────────
       if (path === "/api/custom-themes") {

@@ -182,3 +182,13 @@ export const ensureAsset = async (file: Blob, category: string, name: string) =>
   if (!res.ok || body.ok === false) throw new Error(body.error || '上传失败');
   return body.path as string;
 };
+
+export const listZipAssets = (path: string) => 
+  apiFetch<{ name: string; path: string; size: number }[]>(`/api/zip/list?path=${encodeURIComponent(path)}`);
+
+export const extractAssetFromZip = (zipPath: string, internalPath: string, category: string) => 
+  apiFetch<{ path: string }>("/api/zip/extract", { 
+    method: "POST", 
+    body: JSON.stringify({ zipPath, internalPath, category }) 
+  });
+

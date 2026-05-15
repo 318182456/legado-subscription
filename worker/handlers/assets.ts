@@ -3,6 +3,8 @@ import {
   err,
   checkAuth,
 } from "../utils";
+import { unzipSync } from "fflate";
+
 
 export async function handleRepoProxy(path: string, env: Env): Promise<Response> {
   const rawKey = path.replace("/repo/", "");
@@ -28,7 +30,7 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
   if (!object) return err(`Resource Not Found: ${rawKey}`, 404);
   
   const headers = new Headers();
-  object.writeHttpMetadata(headers);
+  object.writeHttpMetadata(headers as any);
   headers.set("Access-Control-Allow-Origin", "*");
   
   // 强缓存策略：对于仓库资源，设置为 1 年长缓存且不可变
@@ -52,7 +54,7 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
     headers.set("Content-Type", mimeTypes[ext]);
   }
   
-  return new Response(object.body, { headers });
+  return new Response(object.body as any, { headers });
 }
 
 export async function handleResourcesList(env: Env): Promise<Response> {
@@ -294,7 +296,7 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
   // 4. 添加 JSON 配置
   zip.addFile('readConfig.json', JSON.stringify(config, null, 2));
 
-  return new Response(zip.generate(), {
+  return new Response(zip.generate() as any, {
     headers: { 
       "Content-Type": "application/zip", 
       "Access-Control-Allow-Origin": "*",
@@ -305,66 +307,126 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
 
 // ---------- 资源确保存储逻辑 (查重 -> 上传 -> 更新索引) ----------
 
-export async function handleEnsureAsset(request: Request, env: Env): Promise<Response> {
-  const formData = await request.formData();
-  const file = formData.get('file') as File;
-  const category = formData.get('category') as string; // 'fonts' | 'bg'
-  const originalName = formData.get('name') as string;
-
-  if (!file || !category) return err("File and category are required");
-
-  const buffer = await file.arrayBuffer();
-  const uint8Array = new Uint8Array(buffer);
+/** 
+ * 核心存储逻辑：计算哈希 -> 存入 R2 -> 更新 KV 索引
+ * 支持去重复，如果内容一致则跳过上传
+ */
+async function saveAsset(
+  env: Env, 
+  data: Uint8Array, 
+  category: string, 
+  name: string, 
+  contentType?: string
+): Promise<string> {
+  // 1. 计算 SHA-256 哈希
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data as any);
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
   
-  // 1. 计算 SHA-256 哈希值作为唯一标识
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  const decodedName = decodeURIComponent(originalName).split('/').pop() || originalName;
-  const ext = decodedName.split('.').pop()?.toLowerCase() || '';
+  const decodedName = decodeURIComponent(name).split('/').pop() || name;
   const r2Key = `uploads/${category}/${decodedName}`;
 
-  // 2. 检查 R2 是否已存在同名文件
+  // 2. 检查 R2 去重
   const existing = await env.ASSETS_R2.get(r2Key);
   if (existing) {
-    // 检查内容哈希是否一致 (去重检查)
     const existingBuffer = await existing.arrayBuffer();
     const existingHashBuffer = await crypto.subtle.digest('SHA-256', existingBuffer);
     const existingHashHex = Array.from(new Uint8Array(existingHashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
     
-    if (existingHashHex === hashHex) {
-      return new Response(JSON.stringify({ ok: true, path: r2Key, status: 'existing' }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-      });
-    }
-    // 如果哈希不一致，说明是同名但内容不同的文件，后续执行覆盖上传
+    if (existingHashHex === hashHex) return r2Key;
   }
 
-  // 3. 上传到 R2 (保留原始文件名)
-  await env.ASSETS_R2.put(r2Key, uint8Array, {
-    httpMetadata: { contentType: file.type }
+  // 3. 上传 R2
+  await env.ASSETS_R2.put(r2Key, data, {
+    httpMetadata: contentType ? { contentType } : undefined
   });
 
-  // 4. 更新 KV 索引 (resources-index)
-  const data = await env.KV.get("resources-index");
-  const index = data ? JSON.parse(data) : {};
-  
+  // 4. 更新 KV 索引
+  const indexData = await env.KV.get("resources-index");
+  const index = indexData ? JSON.parse(indexData) : {};
   if (!index[category]) index[category] = [];
   
-  // 避免索引重复
   const existsInIndex = index[category].some((item: any) => item.path === r2Key);
   if (!existsInIndex) {
     index[category].push({
       name: decodedName,
       path: r2Key,
-      size: file.size,
+      size: data.length,
       mtime: new Date().toISOString()
     });
     await env.KV.put("resources-index", JSON.stringify(index));
   }
 
-  return new Response(JSON.stringify({ ok: true, path: r2Key, status: 'uploaded' }), {
+  return r2Key;
+}
+
+export async function handleEnsureAsset(request: Request, env: Env): Promise<Response> {
+  const formData = await request.formData();
+  const file = formData.get('file') as File;
+  const category = formData.get('category') as string;
+  const originalName = formData.get('name') as string;
+
+  if (!file || !category) return err("File and category are required");
+
+  const buffer = await file.arrayBuffer();
+  const path = await saveAsset(env, new Uint8Array(buffer), category, originalName, file.type);
+
+  return new Response(JSON.stringify({ ok: true, path }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
+
+// ---------- ZIP 资产记录与提取 ----------
+
+export async function handleListZipAssets(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const zipPath = url.searchParams.get("path");
+  if (!zipPath) return err("path is required");
+
+  const object = await env.ASSETS_R2.get(zipPath);
+  if (!object) return err("ZIP not found", 404);
+
+  const buffer = await object.arrayBuffer();
+  const unzipped = unzipSync(new Uint8Array(buffer));
+  
+  const assets = Object.keys(unzipped)
+    .filter(name => {
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+      return ['ttf', 'otf', 'woff', 'woff2', 'jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
+    })
+    .map(name => ({
+      name: name.split('/').pop() || name,
+      path: name,
+      size: unzipped[name].length
+    }));
+
+  return new Response(JSON.stringify({ ok: true, data: assets }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}
+
+export async function handleExtractAssetFromZip(request: Request, env: Env): Promise<Response> {
+  const { zipPath, internalPath, category } = await request.json() as any;
+  if (!zipPath || !internalPath || !category) return err("zipPath, internalPath and category are required");
+
+  const object = await env.ASSETS_R2.get(zipPath);
+  if (!object) return err("ZIP not found", 404);
+
+  const buffer = await object.arrayBuffer();
+  const unzipped = unzipSync(new Uint8Array(buffer));
+  const fileData = unzipped[internalPath];
+
+  if (!fileData) return err("File not found in ZIP", 404);
+
+  const ext = internalPath.split('.').pop()?.toLowerCase() || '';
+  const mimeTypes: Record<string, string> = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
+    "ttf": "font/ttf", "otf": "font/otf", "woff": "font/woff", "woff2": "font/woff2"
+  };
+
+  const path = await saveAsset(env, fileData, category, internalPath, mimeTypes[ext]);
+
+  return new Response(JSON.stringify({ ok: true, data: { path } }), {
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+  });
+}
+

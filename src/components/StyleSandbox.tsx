@@ -433,7 +433,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                           setConfig((prev: any) => ({ 
                             ...prev, 
                             textFont: fontUrl,
-                            _textFontName: fileName 
+                            _textFontName: fileName,
+                            _textFontSourceZip: base.path,
+                            _textFontSourceFile: fontFile
                           }));
                         });
                       }
@@ -469,7 +471,14 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                         // 未匹配到，使用本地 blob:
                         const bgBlob = new Blob([unzipped[bgFile]]);
                         const bgUrl = URL.createObjectURL(bgBlob);
-                        setConfig(prev => ({ ...prev, bgStr: bgUrl, bgType: 2, _bgStrName: fileName }));
+                        setConfig(prev => ({ 
+                          ...prev, 
+                          bgStr: bgUrl, 
+                          bgType: 2, 
+                          _bgStrName: fileName,
+                          _bgStrSourceZip: base.path,
+                          _bgStrSourceFile: bgFile
+                        }));
                       }
                     });
                   }
@@ -649,9 +658,22 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     try {
       const finalConfig = { ...config };
       
-      // 检查并同步临时资源 (来自 ZIP 的 blob:)
-      const syncAsset = async (path: string, category: 'fonts' | 'bg', preferredName?: string) => {
-        if (!path || !path.startsWith('blob:')) return path;
+      // 检查并同步临时资源 (来自 ZIP 的 blob: 或后端提取)
+      const syncAsset = async (path: string, category: 'fonts' | 'bg', preferredName?: string, sourceZip?: string, sourceFile?: string) => {
+        if (!path) return path;
+
+        // 优先尝试服务器端转存 (不经历浏览器上传)
+        if (sourceZip && sourceFile) {
+          try {
+            setSyncStatus(`正在从 ZIP 转存${category === 'fonts' ? '字体' : '背景'}: ${preferredName || sourceFile}...`);
+            const res = await api.extractAssetFromZip(sourceZip, sourceFile, category);
+            return res.path;
+          } catch (e) {
+            console.error(`ZIP extraction failed, falling back to upload:`, e);
+          }
+        }
+
+        if (!path.startsWith('blob:')) return path;
         try {
           const decodedName = preferredName ? decodeURIComponent(decodeURIComponent(preferredName)).split('/').pop() : 'asset';
           setSyncStatus(`正在上传${category === 'fonts' ? '字体' : '背景'}: ${decodedName}...`);
@@ -667,10 +689,16 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       };
 
       if (finalConfig.textFont) {
-        finalConfig.textFont = await syncAsset(finalConfig.textFont, 'fonts', finalConfig._textFontName);
+        finalConfig.textFont = await syncAsset(
+          finalConfig.textFont, 'fonts', finalConfig._textFontName, 
+          finalConfig._textFontSourceZip, finalConfig._textFontSourceFile
+        );
       }
       if (finalConfig.bgType === 2 && finalConfig.bgStr) {
-        finalConfig.bgStr = await syncAsset(finalConfig.bgStr, 'bg', finalConfig._bgStrName);
+        finalConfig.bgStr = await syncAsset(
+          finalConfig.bgStr, 'bg', finalConfig._bgStrName,
+          finalConfig._bgStrSourceZip, finalConfig._bgStrSourceFile
+        );
       }
 
       setSyncStatus('正在生成高保真预览图...');
