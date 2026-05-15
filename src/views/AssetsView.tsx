@@ -352,7 +352,7 @@ export default function AssetsView() {
                           <img src={url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         ) : (['json', 'zip', 'txt'].includes(item.extension) || item.category === 'themes') ? (
                           <div className="w-full h-full p-2 flex items-center justify-center bg-surface-container-low">
-                            <div className="w-[80px] transition-transform group-hover:scale-105">
+                            <div className={`${item.extension === 'txt' ? 'w-full' : 'w-[80px]'} transition-transform group-hover:scale-105`}>
                               <ThemeThumbnail path={item.path} name={item.name} />
                             </div>
                           </div>
