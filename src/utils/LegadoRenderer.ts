@@ -377,13 +377,14 @@ export class LegadoRenderer {
 
         // --- 4. 绘制正文 (带裁切范围) ---
         const drawWidth = canvas.width - pL - pR;
-        // 👑 回退：恢复避让页眉的起始点
+        // 👑 综合优化：顶部保持安全避让（防止遮挡页眉），底部使用物理对齐（找回缺失行）
         let currentY = headerBottom + pT;
+        const contentBottom = canvas.height - pB;
 
         ctx.save();
         ctx.beginPath();
-        // 👑 回退：恢复避让页眉页脚的裁切范围
-        ctx.rect(0, headerBottom, canvas.width, Math.max(0, footerTop - headerBottom));
+        // 👑 修正：裁切范围允许延伸到物理边距，防止最后一行文字被裁切
+        ctx.rect(0, headerBottom, canvas.width, Math.max(0, contentBottom - headerBottom));
         ctx.clip();
 
         // > 绘制标题
@@ -439,8 +440,8 @@ export class LegadoRenderer {
 
             for (let index = 0; index < lines.length; index++) {
                 const isLastLine = index === lines.length - 1;
-                // 👑 回退：恢复避让页脚的判定
-                if (currentY + metrics.fontHeight > footerTop - pB) break;
+                // 👑 修正：使用物理底边界判定，找回缺失行
+                if (currentY + metrics.fontHeight > contentBottom) break;
 
                 this.drawJustifiedText(
                     lines[index],
@@ -466,7 +467,7 @@ export class LegadoRenderer {
                 currentY += lineHeight;
             }
             currentY += paragraphSpacing;
-            if (currentY > footerTop - pB) break;
+            if (currentY > contentBottom) break;
         }
 
         ctx.restore();
