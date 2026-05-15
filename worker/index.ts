@@ -130,7 +130,7 @@ export default {
       }
 
       // ── /repo/* (R2 资源代理) ───────────────────────────────────
-      if (path.startsWith("/repo/")) return assets.handleRepoProxy(path, env);
+      if (path.startsWith("/repo/")) return assets.handleRepoProxy(request, env);
 
       // ── /api/resources (资源列表) ────────────────────────────────
       if (path === "/api/resources" && method === "GET") return assets.handleResourcesList(env);
@@ -157,7 +157,7 @@ export default {
 
       const themeExportMatch = path.match(/^\/api\/custom-themes\/(\d+)\/export$/);
       if (themeExportMatch && method === "GET") {
-        return assets.handleExportCustomTheme(Number(themeExportMatch[1]), env);
+        return assets.handleExportCustomTheme(request, env, themeExportMatch[1]);
       }
 
       return err("Not Found", 404);

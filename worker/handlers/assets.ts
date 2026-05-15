@@ -6,16 +6,24 @@ import {
 import { unzipSync } from "fflate";
 
 
-export async function handleRepoProxy(path: string, env: Env): Promise<Response> {
+export async function handleRepoProxy(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname;
   const rawKey = path.replace("/repo/", "");
   
-  let object = await env.ASSETS_R2.get(rawKey);
+  // 1. 获取客户端请求的 Range
+  const range = request.headers.get('Range');
+  
+  // 2. 尝试从 R2 获取对象
+  let object = await env.ASSETS_R2.get(rawKey, {
+    range: range || undefined,
+  });
   
   if (!object) {
     try {
       const decodedKey = decodeURIComponent(rawKey);
       if (decodedKey !== rawKey) {
-        object = await env.ASSETS_R2.get(decodedKey);
+        object = await env.ASSETS_R2.get(decodedKey, { range: range || undefined });
       }
     } catch (e) {}
   }
@@ -23,7 +31,7 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
   if (!object && rawKey.includes("+")) {
     try {
       const spaceKey = decodeURIComponent(rawKey.replace(/\+/g, " "));
-      object = await env.ASSETS_R2.get(spaceKey);
+      object = await env.ASSETS_R2.get(spaceKey, { range: range || undefined });
     } catch (e) {}
   }
 
@@ -32,29 +40,26 @@ export async function handleRepoProxy(path: string, env: Env): Promise<Response>
   const headers = new Headers();
   object.writeHttpMetadata(headers as any);
   headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Accept-Ranges", "bytes");
   
-  // 强缓存策略：对于仓库资源，设置为 1 年长缓存且不可变
-  // 如果是中文字体或背景图，这能极大减少重复下载
+  // 强缓存策略
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
   headers.set("ETag", object.httpEtag);
   
+  // 处理分片下载的状态码
+  const status = range ? 206 : 200;
+
   const ext = rawKey.split(".").pop()?.toLowerCase();
   const mimeTypes: Record<string, string> = {
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "webp": "image/webp",
-    "gif": "image/gif",
-    "ttf": "font/ttf",
-    "otf": "font/otf",
-    "woff": "font/woff",
-    "woff2": "font/woff2"
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+    "webp": "image/webp", "gif": "image/gif", "ttf": "font/ttf",
+    "otf": "font/otf", "woff": "font/woff", "woff2": "font/woff2"
   };
   if (ext && mimeTypes[ext]) {
     headers.set("Content-Type", mimeTypes[ext]);
   }
   
-  return new Response(object.body as any, { headers });
+  return new Response(object.body as any, { status, headers });
 }
 
 export async function handleResourcesList(env: Env): Promise<Response> {
@@ -233,7 +238,8 @@ class ZipWriter {
   }
 }
 
-export async function handleExportCustomTheme(id: number, env: Env): Promise<Response> {
+export async function handleExportCustomTheme(request: Request, env: Env, idStr: string): Promise<Response> {
+  const id = parseInt(idStr);
   const result = await env.DB.prepare(
     "SELECT config FROM custom_themes WHERE id = ?"
   ).bind(id).first() as any;
@@ -274,23 +280,28 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
     return key.split('/').pop()!;
   };
 
-  // 1. 处理字体
+  const tasks: Promise<any>[] = [];
+
+  // 1. 处理字体 (并行)
   if (config.textFont) {
-    config.textFont = await processResource(config.textFont, 'fonts');
+    tasks.push(processResource(config.textFont, 'fonts').then(v => config.textFont = v));
   }
 
-  // 2. 处理三个背景字段，分别根据对应的类型判断
+  // 2. 处理三个背景字段 (并行)
   if (config.bgType === 2 && config.bgStr) {
-    config.bgStr = await processResource(config.bgStr, 'bg');
+    tasks.push(processResource(config.bgStr, 'bg').then(v => config.bgStr = v));
   }
   if (config.bgTypeNight === 2 && config.bgStrNight) {
-    config.bgStrNight = await processResource(config.bgStrNight, 'bg');
+    tasks.push(processResource(config.bgStrNight, 'bg').then(v => config.bgStrNight = v));
   }
   if (config.bgTypeEInk === 2 && config.bgStrEInk) {
-    config.bgStrEInk = await processResource(config.bgStrEInk, 'bg');
+    tasks.push(processResource(config.bgStrEInk, 'bg').then(v => config.bgStrEInk = v));
   }
 
-  // 3. 清理非标准字段，减小体积并提高兼容性
+  // 并行等待所有资源处理完成
+  await Promise.all(tasks);
+
+  // 3. 清理非标准字段
   delete config.preview_url;
 
   // 4. 添加 JSON 配置
@@ -300,7 +311,8 @@ export async function handleExportCustomTheme(id: number, env: Env): Promise<Res
     headers: { 
       "Content-Type": "application/zip", 
       "Access-Control-Allow-Origin": "*",
-      "Content-Disposition": `attachment; filename="theme_${id}.zip"`
+      "Content-Disposition": `attachment; filename="theme_${id}.zip"`,
+      "Cache-Control": "public, max-age=3600"
     }
   });
 }
