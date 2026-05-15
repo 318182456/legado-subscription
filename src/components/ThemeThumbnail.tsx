@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle, ImageIcon, FileText, Archive } from 'lucide-react';
+import { LegadoRendererComponent } from '../utils/LegadoRenderer';
 
 export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: initialPreviewUrl }: { path?: string; name: string; config?: any; previewUrl?: string }) {
   const [config, setConfig] = useState<any>(initialConfig);
@@ -132,7 +133,23 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     </div>
   );
 
-  if (error || !config) {
+  if (textContent) {
+    return (
+      <div 
+        ref={containerRef} 
+        className="w-full aspect-9/19.5 rounded-[16px] shadow-lg bg-[#fdf6e3] p-4 overflow-hidden border border-black/5 relative group cursor-pointer"
+      >
+        <div className="absolute top-0 right-0 p-2 opacity-20 text-[#657b83]"><FileText size={16} /></div>
+        <div className="text-[10px] text-[#657b83] leading-relaxed whitespace-pre-wrap break-all">
+          {textContent}
+          {textContent.length >= 300 && '...'}
+        </div>
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-[#fdf6e3] to-transparent" />
+      </div>
+    );
+  }
+
+  if (error || (!config && !loading)) {
     const ext = path?.split('.').pop()?.toLowerCase();
     let Icon = AlertCircle;
     let label = '加载失败';
@@ -189,6 +206,15 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
             className="w-full h-full object-cover animate-in fade-in duration-500"
             loading="lazy"
           />
+        ) : config ? (
+          /* 实时渲染：当没有预览图时，根据配置画一个 */
+          <div className="w-full h-full scale-[0.2] origin-top-left" style={{ width: '500%', height: '500%' }}>
+            <LegadoRendererComponent 
+              config={config} 
+              fontFamily={fontFamily}
+              bgBase64={config.bgStr?.startsWith('data:') ? config.bgStr : undefined}
+            />
+          </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-outline/30 bg-surface-container-lowest">
             <ImageIcon size={32} strokeWidth={1} />

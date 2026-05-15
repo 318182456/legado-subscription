@@ -1,3 +1,5 @@
+import React, { useEffect, useRef } from 'react'; // JSX 启用
+
 const POST_PANC = new Set(`，。：？！、”’）》】)\]」}；;·…~～!?,.`.split(""));
 const PRE_PANC = new Set(`“‘（《【(\[「{`.split(""));
 
@@ -554,3 +556,71 @@ export class LegadoRenderer {
         }
     }
 }
+
+/**
+ * 👑 React 组件包装器：让 LegadoRenderer 可以在 React 中像普通组件一样使用
+ */
+export const LegadoRendererComponent: React.FC<{
+    config: any;
+    fontFamily?: string;
+    bgBase64?: string;
+    className?: string;
+    style?: React.CSSProperties;
+}> = ({ config, fontFamily = 'sans-serif', bgBase64, className, style }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        if (!canvasRef.current || !config) return;
+
+        const canvas = canvasRef.current;
+        const renderer = new LegadoRenderer(canvas);
+        
+        const PREVIEW_TITLE = "预览效果演示";
+        const PREVIEW_PARAS = [
+            "排版预览演示：这是第一段正文，用于检查字距、行距以及段落间距。Legado 的排版引擎能够自动处理避头尾规则。",
+            "这是第二段正文。通过实时渲染，您可以立即看到调整参数后的视觉变化，确保在 App 中拥有最佳阅读体验。"
+        ];
+
+        const render = async () => {
+            let bgImg: HTMLImageElement | null = null;
+            if (bgBase64) {
+                bgImg = new Image();
+                bgImg.src = bgBase64;
+                try {
+                    await new Promise((resolve, reject) => {
+                        bgImg!.onload = resolve;
+                        bgImg!.onerror = reject;
+                        // 超时处理
+                        setTimeout(resolve, 2000);
+                    });
+                } catch (e) {
+                    bgImg = null;
+                }
+            }
+
+            renderer.renderTheme(config, {
+                bgImage: bgImg,
+                getTipText: (type) => {
+                    const texts: any = {
+                        1: "12%", 2: "书名", 3: "章节名", 4: "16:10", 6: "1/2", 0: ""
+                    };
+                    return texts[type] || "";
+                },
+                PREVIEW_TITLE,
+                PREVIEW_PARAS
+            });
+        };
+
+        render();
+    }, [config, fontFamily, bgBase64]);
+
+    return (
+        <canvas 
+            ref={canvasRef} 
+            width={1080} // 默认 1080p 宽度
+            height={2280} // 默认长比例
+            className={className}
+            style={{ width: '100%', height: '100%', display: 'block', ...style }}
+        />
+    );
+};
