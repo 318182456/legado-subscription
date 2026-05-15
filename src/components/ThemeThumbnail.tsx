@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, AlertCircle, ImageIcon } from 'lucide-react';
+import { Loader2, AlertCircle, ImageIcon, FileText, Archive } from 'lucide-react';
 
 export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: initialPreviewUrl }: { path?: string; name: string; config?: any; previewUrl?: string }) {
   const [config, setConfig] = useState<any>(initialConfig);
@@ -9,6 +9,7 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
   const containerRef = useRef<HTMLDivElement>(null);
   const [resources, setResources] = useState<any>(null);
   const [fontFamily, setFontFamily] = useState('sans-serif');
+  const [textContent, setTextContent] = useState<string>('');
 
   useEffect(() => {
     import('../api').then(api => {
@@ -39,21 +40,55 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
 
   useEffect(() => {
     if (!inView || config || !path) return;
+    
+    const ext = path.split('.').pop()?.toLowerCase();
+
+    // 如果是文本文件，尝试读取内容片段
+    if (ext === 'txt') {
+      fetch(`${window.location.origin}/repo/${path}`)
+        .then(res => res.text())
+        .then(text => {
+          setTextContent(text.slice(0, 300)); // 取前 300 字
+          setLoading(false);
+        })
+        .catch(() => {
+          setError(true);
+          setLoading(false);
+        });
+      return;
+    }
+
     setLoading(true);
     fetch(`${window.location.origin}/repo/${path}`)
-      .then(res => res.text())
-      .then(text => {
-        try {
-          const data = JSON.parse(text);
-          setConfig(data);
-          setLoading(false);
-        } catch (e) {
-          throw new Error('Invalid JSON');
+      .then(res => res.arrayBuffer())
+      .then(async buf => {
+        const uint8 = new Uint8Array(buf);
+        
+        // 如果是 ZIP，尝试读取内部配置
+        if (ext === 'zip') {
+          let f = (window as any).fflate;
+          if (!f) {
+            // @ts-ignore
+            const mod = await import('https://cdn.skypack.dev/fflate');
+            f = mod; (window as any).fflate = f;
+          }
+          const unzipped = f.unzipSync(uint8);
+          const configFile = Object.keys(unzipped).find(k => k.endsWith('readConfig.json'));
+          if (configFile) {
+            const str = new TextDecoder().decode(unzipped[configFile]);
+            setConfig(JSON.parse(str));
+          } else {
+            throw new Error('Not a theme zip');
+          }
+        } else {
+          // 普通 JSON 主题
+          const str = new TextDecoder().decode(uint8);
+          setConfig(JSON.parse(str));
         }
+        setLoading(false);
       })
       .catch(e => {
-        // 静默处理或仅记录警告，因为这可能是个普通的说明文档而非主题配置
-        console.warn(`[ThemeThumbnail] Skipping non-theme file: ${path}`);
+        console.warn(`[ThemeThumbnail] Non-theme or invalid file: ${path}`);
         setError(true);
         setLoading(false);
       });
@@ -97,14 +132,47 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
     </div>
   );
 
-  if (error || !config) return (
-    <div ref={containerRef} className="w-full aspect-9/19 bg-surface-container rounded-lg flex flex-col items-center justify-center text-error/40">
-      <AlertCircle size={24} />
-      <span className="text-[10px]">加载失败</span>
-    </div>
-  );
+  if (error || !config) {
+    const ext = path?.split('.').pop()?.toLowerCase();
+    let Icon = AlertCircle;
+    let label = '加载失败';
+    let color = 'text-error/40';
+
+    if (ext === 'txt') {
+      Icon = FileText;
+      label = '说明文档';
+      color = 'text-primary/30';
+    } else if (ext === 'zip') {
+      Icon = Archive;
+      label = '压缩包';
+      color = 'text-secondary/30';
+    }
+
+    return (
+      <div ref={containerRef} className={`w-full aspect-9/19 bg-surface-container rounded-lg flex flex-col items-center justify-center ${color}`}>
+        <Icon size={24} />
+        <span className="text-[10px] mt-1 font-medium">{label}</span>
+      </div>
+    );
+  }
 
 
+
+  if (textContent) {
+    return (
+      <div 
+        ref={containerRef} 
+        className="w-full aspect-9/19.5 rounded-[16px] shadow-lg bg-[#fdf6e3] p-4 overflow-hidden border border-black/5 relative group cursor-pointer"
+      >
+        <div className="absolute top-0 right-0 p-2 opacity-20 text-[#657b83]"><FileText size={16} /></div>
+        <div className="text-[10px] text-[#657b83] leading-relaxed whitespace-pre-wrap break-all">
+          {textContent}
+          {textContent.length >= 300 && '...'}
+        </div>
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#fdf6e3] to-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div 
