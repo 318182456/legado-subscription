@@ -61,7 +61,7 @@ export class LegadoRenderer {
      */
     drawJustifiedText(text: string, x: number, y: number, maxWidth: number, isLastLine: boolean, letterSpacing: number = 0) {
         const { ctx } = this;
-        let words = text.split('');
+        const words = Array.from(text); // 👑 修正：支持 Emoji 等特殊字符
         if (words.length === 0) return;
 
         // 如果是段落最后一行，或者是单个字符，采用左对齐
@@ -71,25 +71,36 @@ export class LegadoRenderer {
         }
 
         const metrics = ctx.measureText(text);
-        const textWidth = metrics.width + (text.length - 1) * letterSpacing;
+        // 👑 修正：测算宽度时必须严格包含字距补偿
+        const textWidth = metrics.width + (words.length - 1) * letterSpacing;
         
-        // 计算需要补充的总空白宽度
         const extraSpace = maxWidth - textWidth;
         
-        // 如果文字本来就超出了（理论上不应该），或者空白过大（比如只有两个字），放弃对齐直接左对齐
         if (extraSpace < 0 || extraSpace > maxWidth * 0.4) {
             ctx.fillText(text, x, y);
             return;
         }
 
-        // 均摊到每个字元之间的间距
         const spacePerChar = extraSpace / (words.length - 1);
         
         let currentX = x;
         for (let i = 0; i < words.length; i++) {
             ctx.fillText(words[i], currentX, y);
+            // 👑 修正：每个字符的步进 = 字符自身宽度 + 字距 + 两端对齐增量
             currentX += ctx.measureText(words[i]).width + letterSpacing + spacePerChar;
         }
+    }
+
+    // 👑 核心工具：获取精确的字体高度测算
+    getRealFontMetrics(fontSize: number, fontStack: string, isBold: boolean) {
+        const { ctx } = this;
+        const oldFont = ctx.font;
+        ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
+        const m = ctx.measureText("国Agy");
+        const ascent = m.actualBoundingBoxAscent || fontSize * 0.85;
+        const descent = m.actualBoundingBoxDescent || fontSize * 0.15;
+        ctx.font = oldFont;
+        return { ascent, descent, fontHeight: ascent + descent };
     }
 
     drawStatusBar(theme: any) {
@@ -192,18 +203,21 @@ export class LegadoRenderer {
         const pB = (theme.paddingBottom ?? 15) * scale;
         
         const textSize = (theme.textSize ?? 20) * scale;
-        // 👑 修正：titleSize 是 textSize 的偏移量
         const titleSize = (theme.textSize + (theme.titleSize ?? 0)) * scale; 
         
-        const lineSpacing = (theme.lineSpacingExtra ?? 12) * scale;
-        const paragraphSpacing = (theme.paragraphSpacing ?? 2) * scale;
-        const letterSpacing = (theme.letterSpacing ?? 0) * scale;
+        const fontStack = theme.textFont ? `"${theme.textFont.split('/').pop().replace(/\.[^.]+$/, '')}", sans-serif` : 'sans-serif';
+        const fontWeight = theme.textBold ? 'bold' : 'normal';
+
+        // 👑 核心修正：字距 EM 转换逻辑
+        const letterSpacing = (theme.letterSpacing ?? 0.04) * textSize * 0.85;
+
+        // 👑 核心修正：行距与段距倍率算法 (对齐用户原版逻辑)
+        const metrics = this.getRealFontMetrics(textSize, fontStack, !!theme.textBold);
+        const lineHeight = metrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
+        const paragraphSpacing = metrics.fontHeight * ((theme.paragraphSpacing ?? 5) / 10);
 
         const textColor = this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B');
         const tipColor = this.parseAndroidColor(theme.tipColor ?? theme.textColor ?? '#803E3D3B', 60);
-
-        const fontStack = theme.textFont ? `"${theme.textFont.split('/').pop().replace(/\.[^.]+$/, '')}", sans-serif` : 'sans-serif';
-        const fontWeight = theme.textBold ? 'bold' : 'normal';
 
         // --- 3. 绘制 Header & Footer ---
         ctx.font = `normal ${11 * scale}px ${fontStack}`;
@@ -212,6 +226,11 @@ export class LegadoRenderer {
         
         const statusBarH = (theme.hideStatusBar ? 0 : 38) * scale;
         const navBarH = (theme.hideNavigationBar ? 0 : 24) * scale;
+
+        // 👑 修正：使用指定的分割线颜色 (tipDividerColor)
+        const dividerColor = theme.tipDividerColor !== undefined 
+            ? this.parseAndroidColor(theme.tipDividerColor) 
+            : tipColor;
 
         // Header
         let headerBottom = statusBarH;
@@ -231,17 +250,18 @@ export class LegadoRenderer {
             headerBottom = headerY + 10 * scale;
             if (theme.showHeaderLine) {
                 ctx.beginPath();
-                ctx.moveTo(0, headerBottom); // 👑 修正：顶到头
+                ctx.moveTo(0, headerBottom);
                 ctx.lineTo(canvas.width, headerBottom);
-                ctx.strokeStyle = tipColor;
+                ctx.strokeStyle = dividerColor;
                 ctx.lineWidth = 0.5 * scale;
-                ctx.globalAlpha = 0.3;
+                ctx.globalAlpha = 0.4;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
             }
         }
 
         // Footer
+        let footerTop = canvas.height - navBarH;
         if (theme.footerMode !== 1) {
             const fPaddingB = (theme.footerPaddingBottom ?? 6) * scale;
             const fPaddingL = (theme.footerPaddingLeft ?? 24) * scale;
@@ -255,61 +275,87 @@ export class LegadoRenderer {
             ctx.textAlign = 'right';
             ctx.fillText(options.getTipText(theme.tipFooterRight ?? 6), canvas.width - fPaddingR, footerY);
 
+            footerTop = footerY - 15 * scale;
             if (theme.showFooterLine) {
-                const lineY = footerY - 15 * scale;
                 ctx.beginPath();
-                ctx.moveTo(0, lineY); // 👑 修正：顶到头
-                ctx.lineTo(canvas.width, lineY);
-                ctx.strokeStyle = tipColor;
+                ctx.moveTo(0, footerTop);
+                ctx.lineTo(canvas.width, footerTop);
+                ctx.strokeStyle = dividerColor;
                 ctx.lineWidth = 0.5 * scale;
-                ctx.globalAlpha = 0.3;
+                ctx.globalAlpha = 0.4;
                 ctx.stroke();
                 ctx.globalAlpha = 1.0;
             }
         }
 
-        // --- 4. 绘制正文 ---
+        // --- 4. 绘制正文 (带裁切范围) ---
         const drawWidth = canvas.width - pL - pR;
-        // 👑 修正起始 Y 坐标逻辑：Header 底部 + 正文上边距
         let currentY = headerBottom + pT;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, headerBottom, canvas.width, footerTop - headerBottom);
+        ctx.clip();
 
         // > 绘制标题
         if (theme.titleMode !== 2) {
+            const tMetrics = this.getRealFontMetrics(titleSize, fontStack, true);
+            const tLineHeight = tMetrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
+            
             currentY += (theme.titleTopSpacing ?? 8) * scale;
             ctx.font = `bold ${titleSize}px ${fontStack}`;
             ctx.fillStyle = textColor;
-            ctx.textAlign = 'left';
+            // 👑 修正：支持居中标题模式
+            ctx.textAlign = theme.titleMode === 1 ? 'center' : 'left';
             ctx.textBaseline = 'top';
             
+            const titleX = theme.titleMode === 1 ? canvas.width / 2 : pL;
             const titleLines = this.layoutLines(options.PREVIEW_TITLE, drawWidth, 0, titleSize, fontStack, true, letterSpacing);
             titleLines.forEach(line => {
-                ctx.fillText(line, pL, currentY);
-                currentY += titleSize + lineSpacing; // 👑 修正：标题行高应包含 lineSpacing
+                ctx.fillText(line, titleX, currentY);
+                currentY += tLineHeight;
             });
             
-            // 👑 修正：titleBottomSpacing 应该在标题行高之后额外累加
-            currentY += (theme.titleBottomSpacing ?? 10) * scale;
+            currentY += (theme.titleBottomSpacing ?? 18) * scale;
         }
 
         // > 绘制段落
         ctx.font = `${fontWeight} ${textSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
 
         const indent = theme.paragraphIndent ?? "　　";
-        const indentW = ctx.measureText(indent).width;
 
-        options.PREVIEW_PARAS.forEach(paragraph => {
+        for (const paragraph of options.PREVIEW_PARAS) {
             const fullPara = indent + paragraph;
-            const lines = this.layoutLines(fullPara, drawWidth, 0, textSize, fontStack, false, letterSpacing);
+            const lines = this.layoutLines(fullPara, drawWidth, 0, textSize, fontStack, !!theme.textBold, letterSpacing);
             
-            lines.forEach((line, index) => {
+            for (let index = 0; index < lines.length; index++) {
                 const isLastLine = index === lines.length - 1;
-                this.drawJustifiedText(line, pL, currentY, drawWidth, isLastLine, letterSpacing);
-                currentY += textSize + lineSpacing;
-            });
+                if (currentY + metrics.fontHeight > footerTop - pB) break;
+
+                this.drawJustifiedText(lines[index], pL, currentY, drawWidth, isLastLine, letterSpacing);
+                
+                // 👑 修正：支持下划线模式 (underline)
+                if (theme.underline) {
+                    ctx.beginPath();
+                    ctx.moveTo(pL, currentY + metrics.fontHeight + 1 * scale);
+                    ctx.lineTo(pL + drawWidth, currentY + metrics.fontHeight + 1 * scale);
+                    ctx.strokeStyle = textColor;
+                    ctx.lineWidth = 1 * scale;
+                    ctx.globalAlpha = 0.5;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                }
+
+                currentY += lineHeight;
+            }
             currentY += paragraphSpacing;
-        });
+            if (currentY > footerTop - pB) break;
+        }
+
+        ctx.restore();
     }
 
     /**
@@ -317,6 +363,7 @@ export class LegadoRenderer {
      */
     layoutLines(text: string, maxW: number, firstIndent: number, fontSize: number, fontStack: string, isBold: boolean, letterSpacing: number = 0): string[] {
         const { ctx } = this;
+        const oldFont = ctx.font;
         ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
         
         const lines: string[] = [];
@@ -327,18 +374,16 @@ export class LegadoRenderer {
             const char = chars[i];
             const testLine = currentLine + char;
             const metrics = ctx.measureText(testLine);
+            // 👑 修正：换行判定必须包含字距
             const testW = metrics.width + (testLine.length - 1) * letterSpacing;
             
             if (testW > maxW && currentLine.length > 0) {
-                // 避头尾检查
                 if (POST_PANC.has(char) && currentLine.length > 1) {
-                    // 如果当前字是避头标点，把上一个字也带到下一行
                     const lastChar = currentLine.slice(-1);
                     currentLine = currentLine.slice(0, -1);
                     lines.push(currentLine);
                     currentLine = lastChar + char;
                 } else if (PRE_PANC.has(currentLine.slice(-1)) && currentLine.length > 1) {
-                    // 如果当前行最后一个字是避尾标点，把它带到下一行
                     const lastChar = currentLine.slice(-1);
                     currentLine = currentLine.slice(0, -1);
                     lines.push(currentLine);
