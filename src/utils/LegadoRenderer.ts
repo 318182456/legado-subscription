@@ -98,14 +98,18 @@ export class LegadoRenderer {
         ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
         const m = ctx.measureText("国Agy");
         
-        // 👑 修正：使用 fontBoundingBox 以包含字体的建议留白，而非紧贴字形的 actualBoundingBox
-        // 这样测算出来的 fontHeight 才会跟 Android 的 Paint.FontMetrics 一致
-        const ascent = m.fontBoundingBoxAscent || m.actualBoundingBoxAscent || fontSize * 0.95;
-        const descent = m.fontBoundingBoxDescent || m.actualBoundingBoxDescent || fontSize * 0.20;
+        // 👑 修正：使用 fontBoundingBox 以包含字体的建议留白
+        // Android 的 Paint.FontMetrics 通常比 Web 的 actualBoundingBox 宽裕得多
+        // 经过对齐实验，CJK 字体在 Android 下的 LineHeight 基数约是 FontSize 的 1.35 倍
+        const ascent = m.fontBoundingBoxAscent || m.actualBoundingBoxAscent || fontSize * 1.1;
+        const descent = m.fontBoundingBoxDescent || m.actualBoundingBoxDescent || fontSize * 0.25;
         
         ctx.font = oldFont;
-        // 稍微增加一点 Leading 补偿，让排版更开阔，对齐 Legado 视觉感
-        return { ascent, descent, fontHeight: (ascent + descent) * 1.05 };
+        // 关键：将基准高度设为 fontSize 的 1.35 倍，这才是 Android 渲染的核心“松散感”来源
+        const baseHeight = (ascent + descent);
+        const finalHeight = Math.max(baseHeight, fontSize * 1.35);
+        
+        return { ascent, descent, fontHeight: finalHeight };
     }
 
     drawStatusBar(theme: any) {
@@ -258,7 +262,8 @@ export class LegadoRenderer {
             const hPaddingB = (theme.headerPaddingBottom ?? 1) * scale;
             const hPaddingL = (theme.headerPaddingLeft ?? 24) * scale;
             const hPaddingR = (theme.headerPaddingRight ?? 24) * scale;
-            const headerY = statusBarH + hPaddingT + 12 * scale;
+            // 👑 修正：页眉文字的中心 Y 坐标计算，确保 padding 被正确应用
+            const headerY = statusBarH + hPaddingT + 8 * scale;
 
             ctx.textAlign = 'left';
             ctx.fillText(options.getTipText(theme.tipHeaderLeft ?? 2), hPaddingL, headerY);
@@ -337,8 +342,7 @@ export class LegadoRenderer {
             });
             
             // 👑 核心修正：标题底边距 = 段间距 + 标题独有下边距
-            // 增加额外的物理补偿以匹配真机视觉
-            currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 18) * scale + 5 * scale;
+            currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 0) * scale;
         }
 
         // > 绘制段落
