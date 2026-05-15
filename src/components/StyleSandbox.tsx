@@ -625,10 +625,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     cfg: any,
   ): Promise<string> => {
     const canvas = document.createElement('canvas');
-    const width = 360, height = 780;
     const pixelRatio = 3; 
-    canvas.width = width * pixelRatio;
-    canvas.height = height * pixelRatio;
+    canvas.width = device.width * pixelRatio;
+    canvas.height = device.height * pixelRatio;
     
     const renderer = new LegadoRenderer(canvas);
     renderer.scale = pixelRatio;

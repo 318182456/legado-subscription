@@ -8,7 +8,7 @@ export class LegadoRenderer {
 
     constructor(canvasElement: HTMLCanvasElement) {
         this.canvas = canvasElement;
-        this.ctx = this.canvas.getContext('2d')!;
+        this.ctx = this.canvas.getContext("2d")!;
     }
 
     /**
@@ -17,34 +17,43 @@ export class LegadoRenderer {
     parseAndroidColor(colorStr: string | number, extraAlpha: number = 100): string {
         if (!colorStr) return `rgba(0, 0, 0, 0)`;
 
-        let a = 1, r = 0, g = 0, b = 0;
+        let a = 1,
+            r = 0,
+            g = 0,
+            b = 0;
 
         // 兼容十进制负数颜色 (Legado 源码中默认颜色有时是 -1)
-        if (typeof colorStr === 'number' || !isNaN(Number(colorStr))) {
+        if (typeof colorStr === "number" || !isNaN(Number(colorStr))) {
             let colorInt = Number(colorStr);
             if (colorInt === -1) {
-                r = 255; g = 255; b = 255; a = 1;
+                r = 255;
+                g = 255;
+                b = 255;
+                a = 1;
             } else {
                 // 处理 Android Int Color: (A << 24) | (R << 16) | (G << 8) | B
                 // 转为无符号 32 位整数处理
                 const uintColor = colorInt >>> 0;
-                a = ((uintColor >> 24) & 0xFF) / 255;
-                r = (uintColor >> 16) & 0xFF;
-                g = (uintColor >> 8) & 0xFF;
-                b = uintColor & 0xFF;
+                a = ((uintColor >> 24) & 0xff) / 255;
+                r = (uintColor >> 16) & 0xff;
+                g = (uintColor >> 8) & 0xff;
+                b = uintColor & 0xff;
             }
         } else {
-            let hex = (colorStr as string).replace('#', '');
-            if (hex.length === 8) { // AARRGGBB
+            let hex = (colorStr as string).replace("#", "");
+            if (hex.length === 8) {
+                // AARRGGBB
                 a = parseInt(hex.substring(0, 2), 16) / 255;
                 r = parseInt(hex.substring(2, 4), 16);
                 g = parseInt(hex.substring(4, 6), 16);
                 b = parseInt(hex.substring(6, 8), 16);
-            } else if (hex.length === 6) { // RRGGBB
+            } else if (hex.length === 6) {
+                // RRGGBB
                 r = parseInt(hex.substring(0, 2), 16);
                 g = parseInt(hex.substring(2, 4), 16);
                 b = parseInt(hex.substring(4, 6), 16);
-            } else if (hex.length === 3) { // RGB
+            } else if (hex.length === 3) {
+                // RGB
                 r = parseInt(hex[0] + hex[0], 16);
                 g = parseInt(hex[1] + hex[1], 16);
                 b = parseInt(hex[2] + hex[2], 16);
@@ -59,7 +68,14 @@ export class LegadoRenderer {
     /**
      * 核心排版：绘制两端对齐的文本 (复刻 Legado 的 Justify 特性)
      */
-    drawJustifiedText(text: string, x: number, y: number, maxWidth: number, isLastLine: boolean, letterSpacing: number = 0) {
+    drawJustifiedText(
+        text: string,
+        x: number,
+        y: number,
+        maxWidth: number,
+        isLastLine: boolean,
+        letterSpacing: number = 0
+    ) {
         const { ctx } = this;
         const words = Array.from(text); // 👑 修正：支持 Emoji 等特殊字符
         if (words.length === 0) return;
@@ -73,16 +89,16 @@ export class LegadoRenderer {
         const metrics = ctx.measureText(text);
         // 👑 修正：测算宽度时必须严格包含字距补偿
         const textWidth = metrics.width + (words.length - 1) * letterSpacing;
-        
+
         const extraSpace = maxWidth - textWidth;
-        
+
         if (extraSpace < 0 || extraSpace > maxWidth * 0.4) {
             ctx.fillText(text, x, y);
             return;
         }
 
         const spacePerChar = extraSpace / (words.length - 1);
-        
+
         let currentX = x;
         for (let i = 0; i < words.length; i++) {
             ctx.fillText(words[i], currentX, y);
@@ -95,20 +111,20 @@ export class LegadoRenderer {
     getRealFontMetrics(fontSize: number, fontStack: string, isBold: boolean) {
         const { ctx } = this;
         const oldFont = ctx.font;
-        ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
+        ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px ${fontStack}`;
         const m = ctx.measureText("国Agy");
-        
+
         // 👑 修正：使用 fontBoundingBox 以包含字体的建议留白
         // Android 的 Paint.FontMetrics 通常比 Web 的 actualBoundingBox 宽裕得多
         // 经过对齐实验，CJK 字体在 Android 下的 LineHeight 基数约是 FontSize 的 1.35 倍
         const ascent = m.fontBoundingBoxAscent || m.actualBoundingBoxAscent || fontSize * 1.1;
         const descent = m.fontBoundingBoxDescent || m.actualBoundingBoxDescent || fontSize * 0.25;
-        
+
         ctx.font = oldFont;
         // 关键：将基准高度设为 fontSize 的 1.35 倍，这才是 Android 渲染的核心“松散感”来源
-        const baseHeight = (ascent + descent);
+        const baseHeight = ascent + descent;
         const finalHeight = Math.max(baseHeight, fontSize * 1.35);
-        
+
         return { ascent, descent, fontHeight: finalHeight };
     }
 
@@ -119,11 +135,11 @@ export class LegadoRenderer {
         const h = 38 * scale;
         const fontSize = 12 * scale;
         ctx.font = `600 ${fontSize}px sans-serif`;
-        
-        const iconColor = theme.darkStatusIcon ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)';
+
+        const iconColor = theme.darkStatusIcon ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)";
         ctx.fillStyle = iconColor;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
 
         const padding = 16 * scale;
         const centerY = h / 2;
@@ -132,9 +148,9 @@ export class LegadoRenderer {
         ctx.fillText("16:10", padding, centerY);
 
         // 右侧图标 (模拟: Wifi, 信号, 电池)
-        ctx.textAlign = 'right';
+        ctx.textAlign = "right";
         const rightEdge = canvas.width - padding;
-        
+
         // 模拟电池图标
         const batW = 18 * scale;
         const batH = 9 * scale;
@@ -143,8 +159,13 @@ export class LegadoRenderer {
         ctx.lineWidth = 1 * scale;
         ctx.strokeStyle = iconColor;
         ctx.strokeRect(batX, batY, batW, batH);
-        ctx.fillRect(batX + 2 * scale, batY + 2 * scale, (batW - 4 * scale) * 0.8, batH - 4 * scale);
-        
+        ctx.fillRect(
+            batX + 2 * scale,
+            batY + 2 * scale,
+            (batW - 4 * scale) * 0.8,
+            batH - 4 * scale
+        );
+
         // 5G 文本
         ctx.font = `italic bold ${10 * scale}px sans-serif`;
         ctx.fillText("5G", batX - 6 * scale, centerY);
@@ -153,7 +174,7 @@ export class LegadoRenderer {
         const sigX = batX - 22 * scale;
         for (let i = 1; i <= 4; i++) {
             const barH = i * 2 * scale;
-            ctx.fillRect(sigX + (i-1) * 3 * scale, centerY + 4 * scale - barH, 2 * scale, barH);
+            ctx.fillRect(sigX + (i - 1) * 3 * scale, centerY + 4 * scale - barH, 2 * scale, barH);
         }
     }
 
@@ -165,9 +186,9 @@ export class LegadoRenderer {
         const barW = 100 * scale;
         const barH = 4 * scale;
         const x = (canvas.width - barW) / 2;
-        const y = canvas.height - (h / 2) - (barH / 2);
+        const y = canvas.height - h / 2 - barH / 2;
 
-        ctx.fillStyle = theme.darkStatusIcon ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.25)';
+        ctx.fillStyle = theme.darkStatusIcon ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.25)";
         ctx.beginPath();
         if (ctx.roundRect) {
             ctx.roundRect(x, y, barW, barH, 2 * scale);
@@ -177,27 +198,52 @@ export class LegadoRenderer {
         ctx.fill();
     }
 
-    async renderTheme(theme: any, options: { 
-        bgImage?: HTMLImageElement | null, 
-        getTipText: (type: number) => string,
-        PREVIEW_TITLE: string,
-        PREVIEW_PARAS: string[]
-    }) {
+    async renderTheme(
+        theme: any,
+        options: {
+            bgImage?: HTMLImageElement | null;
+            getTipText: (type: number) => string;
+            PREVIEW_TITLE: string;
+            PREVIEW_PARAS: string[];
+        }
+    ) {
         if (!theme) return;
         const { ctx, canvas } = this;
         const scale = this.scale;
-        
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // --- 1. 渲染背景 ---
         if (theme.bgType === 2 && options.bgImage) {
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.globalAlpha = (theme.bgAlpha ?? 100) / 100;
-            ctx.drawImage(options.bgImage, 0, 0, canvas.width, canvas.height);
+
+            // 👑 修正：使用 Cover 模式绘制背景，防止拉伸变形
+            const img = options.bgImage;
+            const imgRatio = img.width / img.height;
+            const canvasRatio = canvas.width / canvas.height;
+            let drawW, drawH, drawX, drawY;
+
+            if (imgRatio > canvasRatio) {
+                drawH = canvas.height;
+                drawW = img.width * (canvas.height / img.height);
+                drawX = (canvas.width - drawW) / 2;
+                drawY = 0;
+            } else {
+                drawW = canvas.width;
+                drawH = img.height * (canvas.width / img.width);
+                drawX = 0;
+                drawY = (canvas.height - drawH) / 2;
+            }
+
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
             ctx.globalAlpha = 1.0;
         } else {
-            ctx.fillStyle = this.parseAndroidColor(theme.bgStr || '#FFFFFFFF', theme.bgAlpha ?? 100);
+            ctx.fillStyle = this.parseAndroidColor(
+                theme.bgStr || "#FFFFFFFF",
+                theme.bgAlpha ?? 100
+            );
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
@@ -210,16 +256,21 @@ export class LegadoRenderer {
         const pR = (theme.paddingRight ?? 16) * scale;
         const pT = (theme.paddingTop ?? 15) * scale;
         const pB = (theme.paddingBottom ?? 15) * scale;
-        
+
         const textSize = (theme.textSize ?? 20) * scale;
-        const titleSize = (theme.textSize + (theme.titleSize ?? 0)) * scale; 
-        
-        const fontStack = theme.textFont ? `"${theme.textFont.split('/').pop().replace(/\.[^.]+$/, '')}", sans-serif` : 'sans-serif';
-        
+        const titleSize = (theme.textSize + (theme.titleSize ?? 0)) * scale;
+
+        const fontStack = theme.textFont
+            ? `"${theme.textFont
+                  .split("/")
+                  .pop()
+                  .replace(/\.[^.]+$/, "")}", sans-serif`
+            : "sans-serif";
+
         // 👑 修正：支持 Legado 的三种粗细模式 (0: 正常, 1: 粗体, 2: 细体)
-        let fontWeight = 'normal';
-        if (theme.textBold === 1) fontWeight = 'bold';
-        else if (theme.textBold === 2) fontWeight = '100'; // 细体
+        let fontWeight = "normal";
+        if (theme.textBold === 1) fontWeight = "bold";
+        else if (theme.textBold === 2) fontWeight = "100"; // 细体
 
         // 👑 核心修正：字距 EM 转换逻辑
         const letterSpacing = (theme.letterSpacing ?? 0.04) * textSize * 0.85;
@@ -229,25 +280,27 @@ export class LegadoRenderer {
         const lineHeight = metrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
         const paragraphSpacing = metrics.fontHeight * ((theme.paragraphSpacing ?? 5) / 10);
 
-        const textColor = this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B');
-        
+        const textColor = this.parseAndroidColor(theme.textColor ?? "#FF3E3D3B");
+
         // 👑 修正：Legado 中 tipColor 为 0 时表示跟随正文颜色 (应用 60% 透明度)
-        let tipColor = (theme.tipColor !== undefined && theme.tipColor !== 0)
-            ? this.parseAndroidColor(theme.tipColor)
-            : this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B', 60);
+        let tipColor =
+            theme.tipColor !== undefined && theme.tipColor !== 0
+                ? this.parseAndroidColor(theme.tipColor)
+                : this.parseAndroidColor(theme.textColor ?? "#FF3E3D3B", 60);
 
         // --- 3. 绘制 Header & Footer ---
         ctx.font = `normal ${11 * scale}px ${fontStack}`;
         ctx.fillStyle = tipColor;
-        ctx.textBaseline = 'middle';
-        
+        ctx.textBaseline = "middle";
+
         const statusBarH = (theme.hideStatusBar ? 0 : 38) * scale;
         const navBarH = (theme.hideNavigationBar ? 0 : 24) * scale;
 
         // 👑 修正：使用指定的分割线颜色 (tipDividerColor)
-        const dividerColor = theme.tipDividerColor !== undefined 
-            ? this.parseAndroidColor(theme.tipDividerColor) 
-            : tipColor;
+        const dividerColor =
+            theme.tipDividerColor !== undefined
+                ? this.parseAndroidColor(theme.tipDividerColor)
+                : tipColor;
 
         // Header
         let headerBottom = statusBarH;
@@ -255,8 +308,9 @@ export class LegadoRenderer {
         // 0: 当状态栏显示时隐藏页眉 (hide_when_status_bar_show)
         // 1: 始终显示
         // 2: 隐藏
-        const shouldShowHeader = theme.headerMode === 1 || (theme.headerMode === 0 && theme.hideStatusBar);
-        
+        const shouldShowHeader =
+            theme.headerMode === 1 || (theme.headerMode === 0 && theme.hideStatusBar);
+
         if (shouldShowHeader) {
             const hPaddingT = (theme.headerPaddingTop ?? 0) * scale;
             const hPaddingB = (theme.headerPaddingBottom ?? 1) * scale;
@@ -265,13 +319,17 @@ export class LegadoRenderer {
             // 👑 修正：页眉文字的中心 Y 坐标计算，确保 padding 被正确应用
             const headerY = statusBarH + hPaddingT + 8 * scale;
 
-            ctx.textAlign = 'left';
+            ctx.textAlign = "left";
             ctx.fillText(options.getTipText(theme.tipHeaderLeft ?? 2), hPaddingL, headerY);
-            ctx.textAlign = 'center';
+            ctx.textAlign = "center";
             ctx.fillText(options.getTipText(theme.tipHeaderMiddle ?? 0), canvas.width / 2, headerY);
-            ctx.textAlign = 'right';
-            ctx.fillText(options.getTipText(theme.tipHeaderRight ?? 3), canvas.width - hPaddingR, headerY);
-            
+            ctx.textAlign = "right";
+            ctx.fillText(
+                options.getTipText(theme.tipHeaderRight ?? 3),
+                canvas.width - hPaddingR,
+                headerY
+            );
+
             headerBottom = headerY + 8 * scale + hPaddingB;
             if (theme.showHeaderLine) {
                 ctx.beginPath();
@@ -293,12 +351,16 @@ export class LegadoRenderer {
             const fPaddingR = (theme.footerPaddingRight ?? 24) * scale;
             const footerY = canvas.height - navBarH - fPaddingB - 12 * scale;
 
-            ctx.textAlign = 'left';
+            ctx.textAlign = "left";
             ctx.fillText(options.getTipText(theme.tipFooterLeft ?? 1), fPaddingL, footerY);
-            ctx.textAlign = 'center';
+            ctx.textAlign = "center";
             ctx.fillText(options.getTipText(theme.tipFooterMiddle ?? 0), canvas.width / 2, footerY);
-            ctx.textAlign = 'right';
-            ctx.fillText(options.getTipText(theme.tipFooterRight ?? 6), canvas.width - fPaddingR, footerY);
+            ctx.textAlign = "right";
+            ctx.fillText(
+                options.getTipText(theme.tipFooterRight ?? 6),
+                canvas.width - fPaddingR,
+                footerY
+            );
 
             footerTop = footerY - 15 * scale;
             if (theme.showFooterLine) {
@@ -328,21 +390,29 @@ export class LegadoRenderer {
         if (theme.titleMode !== 2) {
             const tMetrics = this.getRealFontMetrics(titleSize, fontStack, true);
             const tLineHeight = tMetrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
-            
+
             currentY += (theme.titleTopSpacing ?? 8) * scale;
             ctx.font = `bold ${titleSize}px ${fontStack}`;
             ctx.fillStyle = textColor;
             // 👑 修正：支持居中标题模式
-            ctx.textAlign = theme.titleMode === 1 ? 'center' : 'left';
-            ctx.textBaseline = 'top';
-            
+            ctx.textAlign = theme.titleMode === 1 ? "center" : "left";
+            ctx.textBaseline = "top";
+
             const titleX = theme.titleMode === 1 ? canvas.width / 2 : pL;
-            const titleLines = this.layoutLines(options.PREVIEW_TITLE, drawWidth, 0, titleSize, fontStack, true, letterSpacing);
+            const titleLines = this.layoutLines(
+                options.PREVIEW_TITLE,
+                drawWidth,
+                0,
+                titleSize,
+                fontStack,
+                true,
+                letterSpacing
+            );
             titleLines.forEach(line => {
                 ctx.fillText(line, titleX, currentY);
                 currentY += tLineHeight;
             });
-            
+
             // 👑 核心修正：标题底边距 = 段间距 + 标题独有下边距
             currentY += paragraphSpacing + (theme.titleBottomSpacing ?? 0) * scale;
         }
@@ -350,22 +420,37 @@ export class LegadoRenderer {
         // > 绘制段落
         ctx.font = `${fontWeight} ${textSize}px ${fontStack}`;
         ctx.fillStyle = textColor;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
 
         const indent = theme.paragraphIndent ?? "　　";
 
         for (const paragraph of options.PREVIEW_PARAS) {
             const fullPara = indent + paragraph;
-            const lines = this.layoutLines(fullPara, drawWidth, 0, textSize, fontStack, !!theme.textBold, letterSpacing);
-            
+            const lines = this.layoutLines(
+                fullPara,
+                drawWidth,
+                0,
+                textSize,
+                fontStack,
+                !!theme.textBold,
+                letterSpacing
+            );
+
             for (let index = 0; index < lines.length; index++) {
                 const isLastLine = index === lines.length - 1;
                 // 👑 回退：恢复避让页脚的判定
                 if (currentY + metrics.fontHeight > footerTop - pB) break;
 
-                this.drawJustifiedText(lines[index], pL, currentY, drawWidth, isLastLine, letterSpacing);
-                
+                this.drawJustifiedText(
+                    lines[index],
+                    pL,
+                    currentY,
+                    drawWidth,
+                    isLastLine,
+                    letterSpacing
+                );
+
                 // 👑 修正：支持下划线模式 (underline)
                 if (theme.underline) {
                     ctx.beginPath();
@@ -390,14 +475,22 @@ export class LegadoRenderer {
     /**
      * 增强版换行算法，集成避头尾规则
      */
-    layoutLines(text: string, maxW: number, firstIndent: number, fontSize: number, fontStack: string, isBold: boolean, letterSpacing: number = 0): string[] {
+    layoutLines(
+        text: string,
+        maxW: number,
+        firstIndent: number,
+        fontSize: number,
+        fontStack: string,
+        isBold: boolean,
+        letterSpacing: number = 0
+    ): string[] {
         const { ctx } = this;
         const oldFont = ctx.font;
-        ctx.font = `${isBold ? 'bold' : 'normal'} ${fontSize}px ${fontStack}`;
-        
+        ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px ${fontStack}`;
+
         const lines: string[] = [];
-        let currentLine = '';
-        
+        let currentLine = "";
+
         const chars = Array.from(text);
         for (let i = 0; i < chars.length; i++) {
             const char = chars[i];
@@ -405,7 +498,7 @@ export class LegadoRenderer {
             const metrics = ctx.measureText(testLine);
             // 👑 修正：换行判定必须包含字距
             const testW = metrics.width + (testLine.length - 1) * letterSpacing;
-            
+
             if (testW > maxW && currentLine.length > 0) {
                 if (POST_PANC.has(char) && currentLine.length > 1) {
                     const lastChar = currentLine.slice(-1);
@@ -425,25 +518,25 @@ export class LegadoRenderer {
                 currentLine = testLine;
             }
         }
-        
+
         if (currentLine) lines.push(currentLine);
         return lines;
     }
 
     /**
      * 👑 核心优化：生成压缩后的缩略图
-     * 将 3x DPI 的画布缩小到 1/6 (约 180px 宽)，并使用 webp 进一步压缩体积
+     * 将 3x DPI 的画布缩小到 1/6 (约 360px 宽)，并使用 webp 进一步压缩体积
      */
     getThumbnail() {
         try {
-            const thumbWidth = 180;
+            const thumbWidth = 360;
             const thumbHeight = (this.canvas.height / this.canvas.width) * thumbWidth;
-            
-            const tempCanvas = document.createElement('canvas');
+
+            const tempCanvas = document.createElement("canvas");
             tempCanvas.width = thumbWidth;
             tempCanvas.height = thumbHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            
+            const tempCtx = tempCanvas.getContext("2d");
+
             if (tempCtx) {
                 tempCtx.drawImage(this.canvas, 0, 0, thumbWidth, thumbHeight);
                 // 使用 webp 格式，质量设为 0.7，体积通常在 10-20KB 左右，非常适合数据库存储
