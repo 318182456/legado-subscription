@@ -337,7 +337,14 @@ export default function AssetsView() {
                   const isImg = isImage(item.path);
                   
                   return (
-                    <div key={idx} onClick={() => isFolder && navigateTo([...currentPath, item.name])} className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
+                    <div 
+                      key={idx} 
+                      onClick={() => {
+                        if (isFolder) navigateTo([...currentPath, item.name]);
+                        else if (['txt', 'zip', 'json'].includes(item.extension)) setPreviewItem({ ...item, url });
+                      }} 
+                      className="group flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl p-3 transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer"
+                    >
                       <div className="relative aspect-video rounded-lg bg-surface-container overflow-hidden flex items-center justify-center mb-3">
                         {isFolder ? (
                           <Folder size={48} className="text-primary/40 group-hover:scale-110 transition-transform" />

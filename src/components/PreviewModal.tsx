@@ -107,9 +107,17 @@ export function PreviewModal({ item, onClose }: { item: any; onClose: () => void
                   </div>
                 </div>
               ) : content ? (
-                <pre className="w-full text-xs font-mono p-6 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-x-auto whitespace-pre-wrap">
-                  {content}
-                </pre>
+                <div className={`w-full p-8 border border-outline-variant rounded-xl overflow-x-auto ${item.extension === 'txt' ? 'bg-[#fdf6e3] text-[#657b83] font-sans leading-relaxed' : 'bg-surface-container-lowest font-mono text-xs'}`}>
+                  {item.extension === 'txt' ? (
+                    <div className="whitespace-pre-wrap text-sm">
+                      {content}
+                    </div>
+                  ) : (
+                    <pre className="whitespace-pre-wrap text-[10px]">
+                      {content}
+                    </pre>
+                  )}
+                </div>
               ) : (
                 <div className="py-20 text-center text-secondary">
                    <Package size={64} className="mx-auto mb-4 opacity-10" />
