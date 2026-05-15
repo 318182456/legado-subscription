@@ -226,8 +226,12 @@ export class LegadoRenderer {
 
         // 👑 核心修正：行距与段距倍率算法 (对齐用户原版逻辑)
         const metrics = this.getRealFontMetrics(textSize, fontStack, !!theme.textBold);
-        const lineHeight = metrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
-        const paragraphSpacing = metrics.fontHeight * ((theme.paragraphSpacing ?? 5) / 10);
+        // 👑 修正：Legado 的行高公式是 fontHeight + lineSpacingExtra (单位 dp)
+        const lineSpacingExtra = (theme.lineSpacingExtra ?? 12) * scale;
+        const lineHeight = metrics.fontHeight + lineSpacingExtra;
+        
+        // 👑 修正：段间距也是直接叠加像素值
+        const paragraphSpacing = (theme.paragraphSpacing ?? 5) * scale;
 
         const textColor = this.parseAndroidColor(theme.textColor ?? '#FF3E3D3B');
         
@@ -315,17 +319,21 @@ export class LegadoRenderer {
 
         // --- 4. 绘制正文 (带裁切范围) ---
         const drawWidth = canvas.width - pL - pR;
-        let currentY = headerBottom + pT;
+        // 👑 核心对齐：Legado 正文严格从 paddingTop 开始，不避让页眉
+        let currentY = pT;
+        // 👑 核心对齐：Legado 正文结束边界严格等于 屏幕高度 - paddingBottom
+        const contentBottom = canvas.height - pB;
 
         ctx.save();
         ctx.beginPath();
-        ctx.rect(0, headerBottom, canvas.width, footerTop - headerBottom);
+        // 👑 修正：裁切范围也应与正文边距一致
+        ctx.rect(0, pT, canvas.width, Math.max(0, contentBottom - pT));
         ctx.clip();
 
         // > 绘制标题
         if (theme.titleMode !== 2) {
             const tMetrics = this.getRealFontMetrics(titleSize, fontStack, true);
-            const tLineHeight = tMetrics.fontHeight * ((theme.lineSpacingExtra ?? 12) / 10);
+            const tLineHeight = tMetrics.fontHeight + ((theme.lineSpacingExtra ?? 12) * scale);
             
             currentY += (theme.titleTopSpacing ?? 8) * scale;
             ctx.font = `bold ${titleSize}px ${fontStack}`;
@@ -359,7 +367,8 @@ export class LegadoRenderer {
             
             for (let index = 0; index < lines.length; index++) {
                 const isLastLine = index === lines.length - 1;
-                if (currentY + metrics.fontHeight > footerTop - pB) break;
+                // 👑 修正：使用动态计算的 contentBottom
+                if (currentY + metrics.fontHeight > contentBottom) break;
 
                 this.drawJustifiedText(lines[index], pL, currentY, drawWidth, isLastLine, letterSpacing);
                 
@@ -378,7 +387,7 @@ export class LegadoRenderer {
                 currentY += lineHeight;
             }
             currentY += paragraphSpacing;
-            if (currentY > footerTop - pB) break;
+            if (currentY > contentBottom) break;
         }
 
         ctx.restore();
