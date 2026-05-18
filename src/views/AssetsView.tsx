@@ -228,15 +228,6 @@ export default function AssetsView() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {viewMode === 'featured' && (
-            <button
-              onClick={createBlankTheme}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md shadow-primary/20"
-            >
-              <Plus size={18} />
-              新建空白主题
-            </button>
-          )}
           <div className="bg-surface-container p-1 rounded-xl flex gap-1 shadow-inner">
             <button 
               onClick={() => setViewMode('explorer')}
