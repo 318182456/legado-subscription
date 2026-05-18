@@ -506,6 +506,7 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     const chiSimPath = path.join(tessdataPath, "chi_sim.traineddata").replace(/\\/g, "/");
     const engPath = path.join(tessdataPath, "eng.traineddata").replace(/\\/g, "/");
 
+    // 触发自动构建以包含最新的离线 OCR 模块 (trigger build)
     // 3. 静默安全地自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型
     if (!(await fs.pathExists(chiSimPath)) || (await fs.stat(chiSimPath)).size < 1000000) {
       console.log("[OCR] 正在从高速镜像下载 chi_sim.traineddata (高效率 fast 版本)...");
