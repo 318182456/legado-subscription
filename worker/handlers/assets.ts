@@ -479,3 +479,146 @@ export async function handleExtractAssetFromZip(request: Request, env: Env): Pro
   });
 }
 
+/**
+ * 👑 后台高精度离线 OCR 识别与排版参数自动提取
+ */
+export async function handleOcr(request: Request, env: Env): Promise<Response> {
+  try {
+    const { path: imagePath } = await request.json() as any;
+    if (!imagePath) return err("path is required");
+
+    // 1. 从 R2 存储（本地磁盘）读取图片
+    const obj = await env.ASSETS_R2.get(imagePath);
+    if (!obj) return err(`Image not found: ${imagePath}`, 404);
+    
+    // Tesseract.js 识别需要 Buffer 或者 Uint8Array
+    const imgBuffer = Buffer.from(obj.body);
+
+    // 2. 动态导入 Node 原生模块与 tesseract.js，防止 Cloudflare Worker 构建打包期出错
+    const path = await import("path");
+    const fs = await import("fs-extra");
+    const { createWorker } = await import("tesseract.js");
+
+    const assetsPath = process.env.ASSETS_PATH || "./assets";
+    const tessdataPath = path.resolve(assetsPath, "tessdata").replace(/\\/g, "/");
+    await fs.ensureDir(tessdataPath);
+
+    const chiSimPath = path.join(tessdataPath, "chi_sim.traineddata").replace(/\\/g, "/");
+    const engPath = path.join(tessdataPath, "eng.traineddata").replace(/\\/g, "/");
+
+    // 3. 静默安全地自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型
+    if (!(await fs.pathExists(chiSimPath)) || (await fs.stat(chiSimPath)).size < 1000000) {
+      console.log("[OCR] 正在从高速镜像下载 chi_sim.traineddata (高效率 fast 版本)...");
+      const res = await fetch("https://ghproxy.net/https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/chi_sim.traineddata", {
+        signal: AbortSignal.timeout(60000)
+      });
+      if (!res.ok) throw new Error(`下载 chi_sim 训练包失败: ${res.statusText}`);
+      const buf = await res.arrayBuffer();
+      await fs.writeFile(chiSimPath, Buffer.from(buf));
+      console.log("[OCR] chi_sim.traineddata 下载并缓存成功！");
+    }
+
+    if (!(await fs.pathExists(engPath)) || (await fs.stat(engPath)).size < 1000000) {
+      console.log("[OCR] 正在从高速镜像下载 eng.traineddata (高效率 fast 版本)...");
+      const res = await fetch("https://ghproxy.net/https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata", {
+        signal: AbortSignal.timeout(60000)
+      });
+      if (!res.ok) throw new Error(`下载 eng 训练包失败: ${res.statusText}`);
+      const buf = await res.arrayBuffer();
+      await fs.writeFile(engPath, Buffer.from(buf));
+      console.log("[OCR] eng.traineddata 下载并缓存成功！");
+    }
+
+    // 4. 创建本地 OCR Worker，实现 100% 离线识别
+    console.log("[OCR] 正在创建本地高精度 OCR Worker...");
+    const corePath = path.resolve(assetsPath, "ocr_core").replace(/\\/g, "/");
+    await fs.ensureDir(corePath);
+    
+    const localCoreJs = path.join(corePath, "tesseract-core.wasm.js").replace(/\\/g, "/");
+    const localCoreWasm = path.join(corePath, "tesseract-core.wasm").replace(/\\/g, "/");
+
+    if (!(await fs.pathExists(localCoreJs)) || !(await fs.pathExists(localCoreWasm))) {
+      console.log("[OCR] 正在自动配置离线 OCR 核心文件...");
+      const srcJs = path.resolve("./node_modules/tesseract.js-core/tesseract-core.wasm.js").replace(/\\/g, "/");
+      const srcWasm = path.resolve("./node_modules/tesseract.js-core/tesseract-core.wasm").replace(/\\/g, "/");
+      if (await fs.pathExists(srcJs) && await fs.pathExists(srcWasm)) {
+        await fs.copy(srcJs, localCoreJs);
+        await fs.copy(srcWasm, localCoreWasm);
+        console.log("[OCR] 离线 OCR 核心文件配置成功！");
+      }
+    }
+
+    const worker = await (createWorker as any)("chi_sim+eng", 1, {
+      langPath: tessdataPath,
+      cachePath: tessdataPath,
+      corePath: corePath,
+      gzip: false,
+    }) as any;
+
+    console.log("[OCR] 正在识别本地图片...", imagePath);
+    const { data } = (await worker.recognize(imgBuffer)) as any;
+    await worker.terminate();
+    console.log("[OCR] 识别完成，正在解析排版参数...");
+
+    const lines = data.text.split("\n").map((t: string) => ({ text: t }));
+    const newConfig: any = {};
+    let currentSection: "main" | "title" | "header" | "footer" = "main";
+
+    lines.forEach((line: any) => {
+      const text = line.text.replace(/\s+/g, "");
+      if (text.includes("正文标题")) currentSection = "title";
+      else if (text.includes("页眉")) currentSection = "header";
+      else if (text.includes("页脚")) currentSection = "footer";
+      else if (text.includes("正文") && !text.includes("标题")) currentSection = "main";
+
+      const findValue = () => {
+        const cleanText = text.replace(/[-+]/g, "");
+        const matches = cleanText.match(/\d+(\.\d+)?/);
+        return (matches && matches.length > 0) ? parseFloat(matches[0]) : null;
+      };
+
+      const val = findValue();
+      if (val === null || isNaN(val)) return;
+
+      const is = (key: string) => text.includes(key);
+
+      if (currentSection === "main") {
+        if (is("字号")) newConfig.textSize = val;
+        else if (is("字距")) newConfig.letterSpacing = val;
+        else if (is("行距") || is("行间")) newConfig.lineSpacingExtra = val;
+        else if (is("段距") || is("段间") || is("段落")) newConfig.paragraphSpacing = val;
+        else if (is("上边距")) newConfig.paddingTop = val;
+        else if (is("下边距")) newConfig.paddingBottom = val;
+        else if (is("左边距")) newConfig.paddingLeft = val;
+        else if (is("右边距")) newConfig.paddingRight = val;
+      } else if (currentSection === "title") {
+        if (is("字号")) newConfig.titleSize = val;
+        else if (is("上边距")) newConfig.titleTopSpacing = val;
+        else if (is("下边距")) newConfig.titleBottomSpacing = val;
+      } else if (currentSection === "header") {
+        if (is("上边距")) newConfig.headerPaddingTop = val;
+        else if (is("下边距")) newConfig.headerPaddingBottom = val;
+        else if (is("左边距")) newConfig.headerPaddingLeft = val;
+        else if (is("右边距")) newConfig.headerPaddingRight = val;
+      } else if (currentSection === "footer") {
+        if (is("上边距")) newConfig.footerPaddingTop = val;
+        else if (is("下边距")) newConfig.footerPaddingBottom = val;
+        else if (is("左边距")) newConfig.footerPaddingLeft = val;
+        else if (is("右边距")) newConfig.footerPaddingRight = val;
+      }
+    });
+
+    console.log(`[OCR] 排版参数解析完成！成功提取了 ${Object.keys(newConfig).length} 项配置。`);
+    return new Response(JSON.stringify({ ok: true, data: newConfig }), {
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+    });
+  } catch (e) {
+    console.error("[OCR 异常]", e);
+    return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+    });
+  }
+}
+
+

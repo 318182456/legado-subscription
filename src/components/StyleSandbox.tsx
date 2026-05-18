@@ -330,8 +330,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       return;
     }
     if (type === 'image') {
-      const url = `${window.location.origin}/repo/${base.path}`;
-      recognizeLayoutFromImage(url);
+      recognizeLayoutFromImage(base.path);
       return;
     }
     if (type === 'bg') {
@@ -567,86 +566,15 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
   };
 
-  const recognizeLayoutFromImage = async (url: string) => {
+  const recognizeLayoutFromImage = async (imagePath: string) => {
     setLoading(true);
-    let worker: any = null;
     try {
-      let t = (window as any).Tesseract;
-      if (!t) {
-        console.log('正在从 CDN 加载 Tesseract.js v5.1.1...');
-        // @ts-ignore
-        const mod = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/+esm');
-        t = mod.default || mod;
-        (window as any).Tesseract = t;
-      }
+      console.log('正在调用后台高精度离线 OCR 识别...', imagePath);
+      const data = await api.recognizeOcr(imagePath);
       
-      if (!t || !t.createWorker) {
-        throw new Error('无法初始化 OCR 引擎 (Tesseract.js)');
-      }
-
-      console.log('正在创建 OCR Worker...');
-      worker = await t.createWorker('chi_sim+eng', 1, {
-        logger: (m: any) => console.log('OCR 进度:', m),
-        // 使用更统一的 CDN 源，防止 importScripts 跨域失败
-        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.0/tesseract-core-simd.wasm.js',
-        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/dist/worker.min.js',
-      });
-
-      console.log('正在识别图片内容...', url);
-      const { data: { lines } } = await worker.recognize(url);
-      
-      const newConfig: any = {};
-      let currentSection: 'main' | 'title' | 'header' | 'footer' = 'main';
-
-      lines.forEach((line: any) => {
-        const text = line.text.replace(/\s+/g, '');
-        if (text.includes('正文标题')) currentSection = 'title';
-        else if (text.includes('页眉')) currentSection = 'header';
-        else if (text.includes('页脚')) currentSection = 'footer';
-        else if (text.includes('正文') && !text.includes('标题')) currentSection = 'main';
-
-        const findValue = () => {
-          // 增强匹配逻辑：排除滑块符号干扰，匹配冒号或文字后的最后一个有效数字
-          const cleanText = text.replace(/[-+]/g, ''); 
-          const matches = cleanText.match(/\d+(\.\d+)?/);
-          return (matches && matches.length > 0) ? parseFloat(matches[0]) : null;
-        };
-
-        const val = findValue();
-        if (val === null || isNaN(val)) return;
-
-        // 关键词模糊匹配
-        const is = (key: string) => text.includes(key);
-
-        if (currentSection === 'main') {
-          if (is('字号')) newConfig.textSize = val;
-          else if (is('字距')) newConfig.letterSpacing = val;
-          else if (is('行距')) newConfig.lineSpacingExtra = val;
-          else if (is('段距')) newConfig.paragraphSpacing = val;
-          else if (is('上边距')) newConfig.paddingTop = val;
-          else if (is('下边距')) newConfig.paddingBottom = val;
-          else if (is('左边距')) newConfig.paddingLeft = val;
-          else if (is('右边距')) newConfig.paddingRight = val;
-        } else if (currentSection === 'title') {
-          if (is('字号')) newConfig.titleSize = val;
-          else if (is('上边距')) newConfig.titleTopSpacing = val;
-          else if (is('下边距')) newConfig.titleBottomSpacing = val;
-        } else if (currentSection === 'header') {
-          if (is('上边距')) newConfig.headerPaddingTop = val;
-          else if (is('下边距')) newConfig.headerPaddingBottom = val;
-          else if (is('左边距')) newConfig.headerPaddingLeft = val;
-          else if (is('右边距')) newConfig.headerPaddingRight = val;
-        } else if (currentSection === 'footer') {
-          if (is('上边距')) newConfig.footerPaddingTop = val;
-          else if (is('下边距')) newConfig.footerPaddingBottom = val;
-          else if (is('左边距')) newConfig.footerPaddingLeft = val;
-          else if (is('右边距')) newConfig.footerPaddingRight = val;
-        }
-      });
-
-      if (Object.keys(newConfig).length > 0) {
-        setConfig((prev: any) => ({ ...prev, ...newConfig }));
-        alert(`识别成功！提取了 ${Object.keys(newConfig).length} 项参数`);
+      if (data && Object.keys(data).length > 0) {
+        setConfig((prev: any) => ({ ...prev, ...data }));
+        alert(`识别成功！提取了 ${Object.keys(data).length} 项参数`);
       } else {
         alert('未能从图片中提取到有效参数。请确保图片清晰且包含参数数值。');
       }
@@ -654,10 +582,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       console.error('OCR 识别过程发生异常:', e);
       alert('识别失败: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
-      if (worker) {
-        await worker.terminate();
-        console.log('OCR Worker 已终止');
-      }
       setLoading(false);
     }
   };
