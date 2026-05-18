@@ -517,27 +517,42 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     const proxyPrefix = githubProxy ? (githubProxy.endsWith("/") ? githubProxy : githubProxy + "/") : "";
 
     // 触发自动构建以包含最新的离线 OCR 模块 (trigger build)
-    // 3. 静默安全地自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型
+    // 3. 自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型（具备多重加速源和自动降级重试机制）
+    const downloadModel = async (filename: string, destPath: string) => {
+      const urls = [
+        `https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/${filename}`,
+        `${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/${filename}`,
+        `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/${filename}`
+      ];
+      
+      let lastError: Error | null = null;
+      for (const url of urls) {
+        try {
+          console.log(`[OCR] 正在尝试下载模型 ${filename}，来源: ${url}`);
+          const res = await fetch(url, {
+            signal: AbortSignal.timeout(30000)
+          });
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            await fs.writeFile(destPath, Buffer.from(buf));
+            console.log(`[OCR] 模型 ${filename} 从 ${url} 下载并缓存成功！`);
+            return;
+          }
+          throw new Error(`HTTP 状态码: ${res.status}`);
+        } catch (e) {
+          console.warn(`[OCR] 从 ${url} 下载模型失败: ${(e as Error).message}`);
+          lastError = e as Error;
+        }
+      }
+      throw new Error(`所有可用源均下载失败。最后一次错误: ${lastError?.message}`);
+    };
+
     if (!(await fs.pathExists(chiSimPath)) || (await fs.stat(chiSimPath)).size < 1000000) {
-      console.log(`[OCR] 正在从镜像下载 chi_sim.traineddata (高效率 fast 版本)... 代理前缀: ${proxyPrefix}`);
-      const res = await fetch(`${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/chi_sim.traineddata`, {
-        signal: AbortSignal.timeout(60000)
-      });
-      if (!res.ok) throw new Error(`下载 chi_sim 训练包失败: ${res.statusText}`);
-      const buf = await res.arrayBuffer();
-      await fs.writeFile(chiSimPath, Buffer.from(buf));
-      console.log("[OCR] chi_sim.traineddata 下载并缓存成功！");
+      await downloadModel("chi_sim.traineddata", chiSimPath);
     }
 
     if (!(await fs.pathExists(engPath)) || (await fs.stat(engPath)).size < 1000000) {
-      console.log(`[OCR] 正在从镜像下载 eng.traineddata (高效率 fast 版本)... 代理前缀: ${proxyPrefix}`);
-      const res = await fetch(`${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata`, {
-        signal: AbortSignal.timeout(60000)
-      });
-      if (!res.ok) throw new Error(`下载 eng 训练包失败: ${res.statusText}`);
-      const buf = await res.arrayBuffer();
-      await fs.writeFile(engPath, Buffer.from(buf));
-      console.log("[OCR] eng.traineddata 下载并缓存成功！");
+      await downloadModel("eng.traineddata", engPath);
     }
 
     // 4. 创建本地 OCR Worker，实现 100% 离线识别
