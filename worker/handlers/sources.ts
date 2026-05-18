@@ -13,6 +13,8 @@ export async function handleListSources(env: Env, url: URL): Promise<Response> {
   const limit = Math.max(5, Number(url.searchParams.get("limit") || "10"));
   const offset = (page - 1) * limit;
 
+  console.log(`[ListSources] 查询书源列表: q="${q}", filter=${filter}, page=${page}, limit=${limit}`);
+
   let where = "name LIKE ?";
   const params: any[] = [`%${q}%`];
 
@@ -45,6 +47,7 @@ export async function handleListSources(env: Env, url: URL): Promise<Response> {
 }
 
 export async function handleAllSourceIds(env: Env): Promise<Response> {
+  console.log("[AllSourceIds] 查询所有书源的 ID 列表...");
   const { results } = await env.DB.prepare("SELECT id FROM sources").all();
   return ok(results.map((r: any) => r.id));
 }
@@ -54,6 +57,8 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
   const ids = body?.ids || [];
   if (!ids.length) return ok({});
 
+  console.log(`[TestSources] 开始测试选中的书源，共 ${ids.length} 个...`);
+
   const { results: rawSources } = await env.DB.prepare(
     `SELECT id, COALESCE(test_url, book_source_url) as test_url FROM sources WHERE id IN (${ids.map(() => '?').join(',')})`
   ).bind(...ids).all();
@@ -61,19 +66,26 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
   const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   const testResults: Record<number, boolean> = {};
 
-  // 极限并发：推至 Cloudflare 子请求上限 50，因为我们现在逻辑极轻（无正则、无重构）
+  // 滑动窗口并发控制：最大并发 50
   const CONCURRENCY = 50;
-  const chunks: number[][] = [];
-  for (let i = 0; i < ids.length; i += CONCURRENCY) {
-    chunks.push(ids.slice(i, i + CONCURRENCY));
-  }
+  const pool: Promise<void>[] = [];
 
-  for (const chunk of chunks) {
-    await Promise.all(chunk.map(async (id) => {
+  for (const id of ids) {
+    if (pool.length >= CONCURRENCY) {
+      await Promise.race(pool);
+    }
+
+    const promise = (async () => {
       const sourceData = sourcesMap.get(id);
-      if (!sourceData || !sourceData.test_url) { testResults[id] = false; return; }
+      if (!sourceData || !sourceData.test_url) {
+        console.log(`[TestSources] 书源 ID ${id} 无有效测试 URL，跳过。`);
+        testResults[id] = false; 
+        return; 
+      }
 
       const urlToTest = sourceData.test_url;
+      const startTime = Date.now();
+
       const fetchOptions: RequestInit = {
         method: 'GET',
         headers: {
@@ -84,21 +96,28 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
 
       try {
         const res = await fetch(urlToTest, fetchOptions);
-        // 关键：必须显式取消/关闭响应流，否则会占据连接池导致死锁或 503
         await res.body?.cancel();
-        
-        if (res.status >= 200 && res.status < 400) {
-          testResults[id] = true;
-        } else {
-          testResults[id] = false;
-        }
-      } catch (_) {
+        const duration = Date.now() - startTime;
+        const success = (res.status >= 200 && res.status < 400);
+        testResults[id] = success;
+        console.log(`[TestSources] 书源 ID ${id} 测试结果: ${success ? 'SUCCESS' : 'FAILED'} (状态: ${res.status}, 耗时: ${duration}ms)`);
+      } catch (err: any) {
+        const duration = Date.now() - startTime;
         testResults[id] = false;
+        console.log(`[TestSources] 书源 ID ${id} 测试失败 (原因: ${err.message || err}, 耗时: ${duration}ms)`);
       }
-    }));
+    })();
+
+    pool.push(promise);
+    promise.finally(() => {
+      const idx = pool.indexOf(promise);
+      if (idx !== -1) pool.splice(idx, 1);
+    });
   }
 
-  // 批量更新数据库：将 50 个更新简化为 2 个 SQL 语句，大幅节省 CPU
+  await Promise.all(pool);
+
+  // 批量更新数据库：将 50 个更新简化为批量 SQL 语句，大幅节省 CPU（不修改 enabled 状态）
   const availIds = ids.filter(id => testResults[id]);
   const unavailIds = ids.filter(id => !testResults[id]);
 
@@ -106,14 +125,14 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
   if (availIds.length > 0) {
     updateBatch.push(
       env.DB.prepare(
-        `UPDATE sources SET is_available = 1, enabled = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
+        `UPDATE sources SET is_available = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
       ).bind(...availIds)
     );
   }
   if (unavailIds.length > 0) {
     updateBatch.push(
       env.DB.prepare(
-        `UPDATE sources SET is_available = 0, enabled = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
+        `UPDATE sources SET is_available = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
       ).bind(...unavailIds)
     );
   }
@@ -122,17 +141,24 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
     await env.DB.batch(updateBatch);
   }
 
-  // 测试不修改书源定义 (raw_json)，因此不需要重建 KV 缓存，大幅节省内存和 CPU
+  console.log(`[TestSources] 选中书源测试及数据库写入已完成。`);
   return ok(testResults);
 }
 
 export async function handleTestAllSources(env: Env, ctx: any): Promise<Response> {
-  const { results: rawIds } = await env.DB.prepare("SELECT id FROM sources WHERE enabled = 1").all();
-  const ids = rawIds.map((r: any) => r.id);
+  // 单次轻量级全量查询，获取所有启用的书源 id 和测试 url
+  const { results: rawSources } = await env.DB.prepare(
+    "SELECT id, COALESCE(test_url, book_source_url) as test_url FROM sources WHERE enabled = 1"
+  ).all();
+  const ids = rawSources.map((r: any) => r.id);
+  const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
   
   if (!ids.length) {
+    console.log("[TestAllSources] 无启用书源，无需全库测试。");
     return ok({ message: "No sources to test" });
   }
+
+  console.log(`[TestAllSources] 触发后台全库测试，共 ${ids.length} 个启用书源...`);
 
   const progressKey = "test_progress";
   const initialProgress = { current: 0, total: ids.length, running: true };
@@ -142,90 +168,118 @@ export async function handleTestAllSources(env: Env, ctx: any): Promise<Response
     try {
       const CONCURRENCY = 50;
       let finishedCount = 0;
+      const pool: Promise<void>[] = [];
+      const batchBuffer: { id: number; available: boolean }[] = [];
+      let dbWritePromise = Promise.resolve();
 
-      for (let i = 0; i < ids.length; i += CONCURRENCY) {
-        // 在每批次执行前，检查是否被中止
+      // 辅助函数：批量更新数据库与进度，采用链式 Promise 避免并发写入冲突
+      const flushBatch = async () => {
+        if (batchBuffer.length === 0) return;
+        const toWrite = [...batchBuffer];
+        batchBuffer.length = 0;
+
+        dbWritePromise = dbWritePromise.then(async () => {
+          const availIds = toWrite.filter(x => x.available).map(x => x.id);
+          const unavailIds = toWrite.filter(x => !x.available).map(x => x.id);
+
+          const updateBatch = [];
+          if (availIds.length > 0) {
+            updateBatch.push(
+              env.DB.prepare(
+                `UPDATE sources SET is_available = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
+              ).bind(...availIds)
+            );
+          }
+          if (unavailIds.length > 0) {
+            updateBatch.push(
+              env.DB.prepare(
+                `UPDATE sources SET is_available = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
+              ).bind(...unavailIds)
+            );
+          }
+
+          if (updateBatch.length > 0) {
+            await env.DB.batch(updateBatch);
+          }
+
+          // 平滑更新进度与打印日志
+          finishedCount += toWrite.length;
+          console.log(`[TestAllSources] 进度: ${finishedCount}/${ids.length}，本批写入: 成功 ${availIds.length} 个，失败 ${unavailIds.length} 个`);
+
+          const currentProgressRaw = await env.KV.get(progressKey);
+          if (currentProgressRaw) {
+            const currentProgress = JSON.parse(currentProgressRaw);
+            if (currentProgress.running) {
+              await env.KV.put(progressKey, JSON.stringify({
+                current: Math.min(ids.length, finishedCount),
+                total: ids.length,
+                running: true
+              }));
+            }
+          }
+        }).catch(console.error);
+      };
+
+      for (const id of ids) {
+        // 在启动每个子任务前，检查任务是否被中止
         const progressRaw = await env.KV.get(progressKey);
         if (progressRaw) {
           const progress = JSON.parse(progressRaw);
           if (!progress.running) {
-            console.log("后台全库测试任务被用户手动中止。");
+            console.log("[TestAllSources] 检测到中止信号，后台全库测试中止。");
             break;
           }
         } else {
           break;
         }
 
-        const chunk = ids.slice(i, i + CONCURRENCY);
-        const { results: rawSources } = await env.DB.prepare(
-          `SELECT id, COALESCE(test_url, book_source_url) as test_url FROM sources WHERE id IN (${chunk.map(() => '?').join(',')})`
-        ).bind(...chunk).all();
+        if (pool.length >= CONCURRENCY) {
+          await Promise.race(pool);
+        }
 
-        const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
-        const chunkResults: Record<number, boolean> = {};
-
-        await Promise.all(chunk.map(async (id) => {
+        const promise = (async () => {
           const sourceData = sourcesMap.get(id);
-          if (!sourceData || !sourceData.test_url) { chunkResults[id] = false; return; }
+          let available = false;
 
-          const fetchOptions: RequestInit = {
-            method: 'GET',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            signal: AbortSignal.timeout(5000) 
-          };
+          if (sourceData && sourceData.test_url) {
+            const fetchOptions: RequestInit = {
+              method: 'GET',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              },
+              signal: AbortSignal.timeout(5000) 
+            };
 
-          try {
-            const res = await fetch(sourceData.test_url, fetchOptions);
-            await res.body?.cancel();
-            chunkResults[id] = (res.status >= 200 && res.status < 400);
-          } catch (_) {
-            chunkResults[id] = false;
+            try {
+              const res = await fetch(sourceData.test_url, fetchOptions);
+              await res.body?.cancel();
+              available = (res.status >= 200 && res.status < 400);
+            } catch (_) {
+              available = false;
+            }
           }
-        }));
 
-        const availIds = chunk.filter(id => chunkResults[id]);
-        const unavailIds = chunk.filter(id => !chunkResults[id]);
+          batchBuffer.push({ id, available });
 
-        const updateBatch = [];
-        if (availIds.length > 0) {
-          updateBatch.push(
-            env.DB.prepare(
-              `UPDATE sources SET is_available = 1, enabled = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
-            ).bind(...availIds)
-          );
-        }
-        if (unavailIds.length > 0) {
-          updateBatch.push(
-            env.DB.prepare(
-              `UPDATE sources SET is_available = 0, enabled = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
-            ).bind(...unavailIds)
-          );
-        }
-
-        if (updateBatch.length > 0) {
-          await env.DB.batch(updateBatch);
-        }
-
-        finishedCount += chunk.length;
-        
-        // 再次检查 running 状态，确保在写入前没有被中止
-        const currentProgressRaw = await env.KV.get(progressKey);
-        if (currentProgressRaw) {
-          const currentProgress = JSON.parse(currentProgressRaw);
-          if (currentProgress.running) {
-            await env.KV.put(progressKey, JSON.stringify({
-              current: Math.min(ids.length, finishedCount),
-              total: ids.length,
-              running: true
-            }));
-          } else {
-            console.log("后台全库测试在批次更新进度时检测到已被中止。");
-            break;
+          // 积累 50 条测试结果后，触发异步批量写入数据库，绝不阻塞网络并发池
+          if (batchBuffer.length >= 50) {
+            flushBatch().catch(console.error);
           }
-        }
+        })();
+
+        pool.push(promise);
+        promise.finally(() => {
+          const idx = pool.indexOf(promise);
+          if (idx !== -1) pool.splice(idx, 1);
+        });
       }
+
+      // 等待所有网络请求完成
+      await Promise.all(pool);
+      // 写入剩余的测试结果
+      await flushBatch();
+      // 等待所有数据库写入工作最终闭合
+      await dbWritePromise;
 
       // 测试完毕，更新状态为未运行，并自动重建缓存
       const finalProgressRaw = await env.KV.get(progressKey);
@@ -236,9 +290,9 @@ export async function handleTestAllSources(env: Env, ctx: any): Promise<Response
         }
       }
       await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
-      console.log("后台全库测试与缓存重建圆满完成。");
+      console.log("[TestAllSources] 后台全库测试与缓存重建圆满完成。");
     } catch (err) {
-      console.error("后台全库测试发生严重异常:", err);
+      console.error("[TestAllSources] 后台全库测试发生严重异常:", err);
       await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
     }
   };
@@ -253,6 +307,7 @@ export async function handleTestAllSources(env: Env, ctx: any): Promise<Response
 }
 
 export async function handleStopTestSources(env: Env): Promise<Response> {
+  console.log("[TestSources] 收到中止全库测试指令，正在中止后台测试进程并重置状态...");
   const progressKey = "test_progress";
   await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
   return ok();
@@ -268,13 +323,17 @@ export async function handleGetTestProgress(env: Env): Promise<Response> {
 }
 
 export async function handleSourceAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {
+  console.log(`[SourceAction] 触发书源动作: action="${action}", ID=${id}`);
   if (action === "delete") {
     await env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(id).run();
+    console.log(`[SourceAction] 书源 ID ${id} 已成功从数据库中删除`);
   } else if (action === "delete-all") {
     await env.DB.prepare("DELETE FROM sources").run();
+    console.log("[SourceAction] 已成功清空所有书源数据");
   } else if (action === "toggle" && request) {
     const { enabled } = await request.json() as { enabled: number };
     await env.DB.prepare("UPDATE sources SET enabled = ? WHERE id = ?").bind(enabled, id).run();
+    console.log(`[SourceAction] 书源 ID ${id} 的启用状态已变更为: ${enabled === 1 ? "启用" : "禁用"}`);
   }
   return ok();
 }
@@ -283,6 +342,7 @@ export async function handleParseLinks(url: URL): Promise<Response> {
   const targetUrl = url.searchParams.get("url");
   if (!targetUrl) return err("url 不能为空");
 
+  console.log(`[ParseLinks] 开始解析目标网页中的书源导入链接: ${targetUrl}`);
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -298,7 +358,10 @@ export async function handleParseLinks(url: URL): Promise<Response> {
     
     clearTimeout(timeoutId);
 
-    if (!res.ok) return err(`目标网页返回错误: ${res.status}`);
+    if (!res.ok) {
+      console.log(`[ParseLinks] 解析失败，目标网页返回错误状态码: ${res.status}`);
+      return err(`目标网页返回错误: ${res.status}`);
+    }
     const html = await res.text();
     
     const results: { name: string; url: string; type: "source" | "rule" }[] = [];
@@ -374,17 +437,21 @@ export async function handleParseLinks(url: URL): Promise<Response> {
       }
     }
 
+    console.log(`[ParseLinks] 解析成功，在目标网页中共抽取出 ${results.length} 个有效的导入链接`);
     return ok(results);
   } catch (e) {
     const isTimeout = (e as Error).name === 'AbortError';
+    console.log(`[ParseLinks] 解析异常: ${isTimeout ? '请求超时 (15s)' : (e as Error).message}`);
     return err(isTimeout ? "请求超时，目标网站响应过慢" : `解析失败: ${(e as Error).message}`, 500);
   }
 }
 
 export async function handleStats(env: Env): Promise<Response> {
+  console.log("[Stats] 正在统计系统中的有效订阅、书源与规则数量...");
   const subRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN type='source' THEN 1 ELSE 0 END) as sources, SUM(CASE WHEN type='rule' THEN 1 ELSE 0 END) as rules FROM subscriptions WHERE enabled=1").first()) as any;
   const srcRow = (await env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_available=1 THEN 1 ELSE 0 END) as available FROM sources WHERE enabled=1").first()) as any;
   const ruleRow = (await env.DB.prepare("SELECT COUNT(*) as total FROM rules WHERE enabled=1").first()) as any;
+  console.log(`[Stats] 统计完成: 订阅总数=${subRow.total} (书源=${subRow.sources || 0}, 规则=${subRow.rules || 0})，启用书源数=${srcRow.total} (可用=${srcRow.available || 0})，启用规则数=${ruleRow.total}`);
   return ok({ subscriptions: subRow, sources: srcRow, rules: ruleRow });
 }
 

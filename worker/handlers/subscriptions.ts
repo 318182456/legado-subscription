@@ -62,35 +62,47 @@ export async function handleToggleSubscription(request: Request, env: Env, id: n
 }
 
 export async function handleSync(env: Env, id: number | null, ctx?: any): Promise<Response> {
-  const runSync = async () => {
-    try {
-      const subs = id 
-        ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] 
-        : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
-      
-      // 并行同步所有启用的订阅
-      await Promise.all((subs as any[]).map(async (sub) => {
-        try {
-          if (sub.type === "source") await syncSourceSubscription(env, sub.id, sub.url);
-          else await syncRuleSubscription(env, sub.id, sub.url);
-        } catch (e) { 
-          console.error(`Sync failed for [${sub.name}]:`, e); 
-        }
-      }));
+  console.log(`[Sync] 收到手动同步请求: ID=${id || "ALL (全局同步)"}`);
+  const startTime = Date.now();
 
-      await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
-      console.log("后台同步任务与缓存重建已圆满完成。");
-    } catch (err) {
-      console.error("后台异步同步发生致命错误:", err);
-    }
+  const runSync = async () => {
+    const subs = id 
+      ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] 
+      : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
+    
+    console.log(`[Sync] 发现 ${subs.length} 个待同步订阅...`);
+
+    // 并行同步所有启用的订阅
+    await Promise.all((subs as any[]).map(async (sub) => {
+      try {
+        const subStart = Date.now();
+        console.log(`[Sync] 开始同步订阅: [${sub.name || sub.url}]...`);
+        
+        let count = 0;
+        if (sub.type === "source") {
+          count = await syncSourceSubscription(env, sub.id, sub.url);
+        } else {
+          count = await syncRuleSubscription(env, sub.id, sub.url);
+        }
+        
+        console.log(`[Sync] 订阅 [${sub.name || sub.url}] 同步成功，共入库 ${count} 个项目，耗时: ${Date.now() - subStart}ms`);
+      } catch (e: any) { 
+        console.error(`[Sync] 订阅 [${sub.name || sub.url}] 同步失败:`, e.message || e); 
+      }
+    }));
+
+    console.log("[Sync] 正在重新构建全局缓存...");
+    await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
+    console.log(`[Sync] 同步任务与缓存重建已圆满完成，总耗时: ${Date.now() - startTime}ms`);
   };
 
-  if (ctx && typeof ctx.waitUntil === 'function') {
-    ctx.waitUntil(runSync());
-    return ok({ message: "Sync started in background" });
-  } else {
-    // 降级为同步执行（如定时任务或特殊环境）
+  try {
+    // 为了让前端 UI 的“立即同步 / 全局同步”加载状态能准确反映实际同步进度，
+    // 我们直接同步等待同步完成再返回 Response，而不是丢给后台运行。
     await runSync();
-    return ok();
+    return ok({ message: "Sync completed successfully" });
+  } catch (err: any) {
+    console.error("[Sync] 手动同步发生致命错误:", err);
+    return err(`同步发生异常: ${err.message || err}`, 500);
   }
 }
