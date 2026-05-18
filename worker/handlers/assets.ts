@@ -507,7 +507,7 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     const engPath = path.join(tessdataPath, "eng.traineddata").replace(/\\/g, "/");
 
     // 读取用户配置的 GitHub 加速网址
-    let githubProxy = "https://ghproxy.net/";
+    let githubProxy = "https://gh-proxy.com/";
     try {
       const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
       if (row && row.value !== undefined && row.value !== null) {
