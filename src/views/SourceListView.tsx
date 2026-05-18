@@ -66,12 +66,13 @@ export default function SourceListView({
       setCleaning(true);
       try {
         const res = await api.cleanupSources();
+        // 先刷新页面数据和统计卡片，再弹出阻断式 alert，保证卡片上的统计数字和弹窗报告百分之百实时一致
+        await fetchSources(query, 1, filter);
         alert(`全库测试与自动标记完成！\n- 自动禁用并归类失效书源: ${res.markedInvalid} 个\n- 自动禁用并归类重复书源: ${res.markedDuplicates} 个`);
       } catch (e) {
         alert('自动标记清理失败: ' + String(e));
       } finally {
         setCleaning(false);
-        fetchSources(query, 1, filter);
       }
     });
   };
