@@ -23,7 +23,6 @@ export const SCHEMA_STATEMENTS = [
     last_checked    TEXT    DEFAULT NULL,
     url_hash        TEXT    NOT NULL DEFAULT ''
   )`,
-    `ALTER TABLE rules DROP CONSTRAINT IF EXISTS rules_subscription_id_name_pattern_key`,
     `ALTER TABLE sources DROP CONSTRAINT IF EXISTS sources_subscription_id_book_source_url_key`,
     `CREATE TABLE IF NOT EXISTS rules (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +35,7 @@ export const SCHEMA_STATEMENTS = [
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     pattern_hash    TEXT    NOT NULL DEFAULT ''
   )`,
+    `ALTER TABLE rules DROP CONSTRAINT IF EXISTS rules_subscription_id_name_pattern_key`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_type    ON subscriptions(type)`,
     `CREATE INDEX IF NOT EXISTS idx_sources_subscription  ON sources(subscription_id)`,
     `CREATE INDEX IF NOT EXISTS idx_sources_enabled       ON sources(enabled)`,

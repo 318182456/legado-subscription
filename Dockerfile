@@ -18,6 +18,7 @@ COPY --from=builder /app/worker ./worker
 COPY --from=builder /app/adapter ./adapter
 COPY --from=builder /app/entry.node.ts ./
 COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/VERSION ./
 
 # 安装 tsx 用于直接运行 typescript
 RUN npm install -g tsx

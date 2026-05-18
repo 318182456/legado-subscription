@@ -10,6 +10,11 @@ export class RedisKV {
   constructor(connectionString: string, namespace: string) {
     this.redis = new Redis(connectionString);
     this.prefix = `kv:${namespace}:`;
+
+    // 添加错误监听，防止未捕获异常导致进程崩溃
+    this.redis.on('error', (err) => {
+      console.error(`Redis Error [${namespace}]:`, err.message);
+    });
   }
 
   async get(key: string, type: 'text' | 'json' | 'arrayBuffer' | 'stream' = 'text'): Promise<any> {
