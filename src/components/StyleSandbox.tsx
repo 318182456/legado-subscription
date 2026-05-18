@@ -495,6 +495,23 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     if (existing) {
       console.log(`[loadFont] 字体已存在，直接复用: "${fontName}"`);
       setSelectedFontName(fontName);
+      
+      // 👑 修正：即使字体已加载，也必须同步更新配置中的 textFont，确保渲染器能感知并应用该字体
+      setConfig(prev => {
+        const next = { ...prev, textFont: path };
+        if (isBlob) next._textFontName = name;
+        return next;
+      });
+
+      // 预加载字体为 Base64 以供截图使用
+      fetch(fontUrl).then(r => r.blob()).then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => setFontBase64(reader.result as string);
+        reader.readAsDataURL(blob);
+      }).catch(err => {
+        console.warn('Failed to fetch existing font blob for base64:', err);
+      });
+
       return;
     }
 
