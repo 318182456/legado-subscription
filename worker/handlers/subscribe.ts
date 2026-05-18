@@ -29,8 +29,15 @@ export async function handleSubscribeOutput(env: Env, type: "sources" | "rules")
   }
 }
 
+function getRequestOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+  const host = request.headers.get("x-forwarded-host") || url.host;
+  return `${proto}://${host}`;
+}
+
 export async function handleSubscribeIndex(request: Request, env: Env): Promise<Response> {
-  const origin = new URL(request.url).origin;
+  const origin = getRequestOrigin(request);
   
   let html = TEMPLATE_STR;
 
@@ -47,7 +54,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
 }
 
 export function handleSubscribeInfo(request: Request): Response {
-  const origin = new URL(request.url).origin;
+  const origin = getRequestOrigin(request);
   const icon = "https://files.catbox.moe/p9p3f2.png";
   const source = [{
     "sourceName": "✨ Legado 订阅中心",
