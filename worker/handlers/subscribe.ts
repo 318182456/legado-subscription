@@ -55,7 +55,7 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
 
 export function handleSubscribeInfo(request: Request): Response {
   const origin = getRequestOrigin(request);
-  const icon = "https://files.catbox.moe/p9p3f2.png";
+  const icon = `${origin}/repo/logo.png`;
   const source = [{
     "sourceName": "✨ Legado 订阅中心",
     "sourceUrl": `${origin}/subscribe/index`,

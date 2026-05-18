@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, AlignLeft, ImageIcon, Type as FontIcon, Palette, 
-  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight
+  Layout, Type, Settings2, RefreshCw, Share2, ChevronRight,
+  FileText, X
 } from 'lucide-react';
 import * as api from '../api';
 import { Slider } from './Slider';
@@ -227,6 +228,8 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   const [resources, setResources] = useState<any>(null);
   const [bgImageObj, setBgImageObj] = useState<HTMLImageElement | null>(null);
   const [fontBase64, setFontBase64] = useState('');
+  const [jsonText, setJsonText] = useState('');
+  const [showJsonImportModal, setShowJsonImportModal] = useState(false);
 
 
 
@@ -301,6 +304,42 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
     }
     
     return safeDecode(result);
+  };
+
+  const handleImportJson = () => {
+    if (!jsonText.trim()) {
+      alert('请输入有效的 JSON 配置文本');
+      return;
+    }
+
+    try {
+      let cleanText = jsonText.trim();
+      // Remove possible markdown code block wrappers
+      if (cleanText.startsWith('```')) {
+        cleanText = cleanText.replace(/^```(json)?\n/, '').replace(/\n```$/, '');
+      }
+
+      const parsed = JSON.parse(cleanText);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('解析结果不是有效的 JSON 对象');
+      }
+
+      // Merge config
+      setConfig(prev => {
+        const next = { ...prev, ...parsed };
+        if (parsed.bgStr) {
+          next.bgStr = parsed.bgStr;
+          next.bgType = parsed.bgType !== undefined ? parsed.bgType : 2;
+        }
+        return next;
+      });
+
+      alert(`导入成功！已成功载入您粘贴的排版参数。`);
+      setShowJsonImportModal(false);
+      setJsonText('');
+    } catch (e) {
+      alert(`解析失败: ${e instanceof Error ? e.message : '请检查 JSON 格式是否正确'}`);
+    }
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
@@ -762,12 +801,16 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           {activeTab === 'visual' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="space-y-3">
-                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">主题信息</label>
+                <label className="text-[10px] font-bold text-outline uppercase tracking-wider">主题信息与导入</label>
                 <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant space-y-4">
                   <div className="space-y-1.5">
                     <span className="text-[10px] text-secondary">名称</span>
                     <input type="text" value={config.name} onChange={(e) => setConfig({...config, name: e.target.value})} className="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                   </div>
+                  <button onClick={() => setShowJsonImportModal(true)} className="w-full py-2.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
+                    <FileText size={14} />
+                    <span>粘贴 Legado JSON 配置</span>
+                  </button>
                 </div>
               </div>
 
@@ -1028,6 +1071,51 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
                 setShowPicker(null);
             }} onClose={() => setShowPicker(null)} />
           </motion.div>
+        </div>
+      )}
+
+      {showJsonImportModal && (
+        <div className="absolute inset-0 z-150 bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-surface border border-outline-variant rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col gap-4 text-on-surface">
+            <div className="flex items-center justify-between">
+              <h5 className="text-sm font-bold flex items-center gap-2 text-primary">
+                <FileText size={18} />
+                导入 Legado 主题配置 JSON
+              </h5>
+              <button 
+                onClick={() => { setShowJsonImportModal(false); setJsonText(''); }}
+                className="p-1 hover:bg-surface-container rounded-full text-secondary"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <p className="text-[10px] text-secondary">
+              请将从阅读 (Legado) APP 中导出的主题配置 JSON（例如备份或分享文本）直接粘贴在下方。系统将智能解析并应用全部排版和颜色参数。
+            </p>
+
+            <textarea
+              value={jsonText}
+              onChange={(e) => setJsonText(e.target.value)}
+              placeholder='例如：{"textSize":20,"letterSpacing":0.02,"lineSpacingExtra":12,...}'
+              className="w-full h-48 bg-surface-container border border-outline-variant rounded-xl p-3 text-xs font-mono outline-none focus:ring-2 focus:ring-primary/20 text-on-surface resize-none"
+            />
+
+            <div className="flex gap-3 justify-end pt-2">
+              <button 
+                onClick={() => { setShowJsonImportModal(false); setJsonText(''); }}
+                className="px-4 py-2 bg-surface-container-high hover:bg-surface-container rounded-xl text-xs font-bold text-secondary"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleImportJson}
+                className="px-6 py-2 bg-primary text-on-primary rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/30 transition-all"
+              >
+                开始解析导入
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </motion.div>
