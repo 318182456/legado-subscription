@@ -580,12 +580,42 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     }) as any;
 
     console.log("[OCR] 正在识别本地图片...", imagePath);
-    const { data } = (await worker.recognize(imgBuffer)) as any;
+    const { data } = (await worker.recognize(imgBuffer, {}, { tsv: true })) as any;
     await worker.terminate();
     console.log("[OCR] 识别完成，正在解析排版参数...");
 
+    const parseTsvToWords = (tsvString: string) => {
+      const parsed: any[] = [];
+      const lines = tsvString.split("\n");
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const parts = line.split("\t");
+        if (parts.length < 12) continue;
+        const level = parseInt(parts[0]);
+        if (level !== 5) continue;
+        const left = parseInt(parts[6]);
+        const top = parseInt(parts[7]);
+        const width = parseInt(parts[8]);
+        const height = parseInt(parts[9]);
+        const text = parts[11];
+        if (text && text.trim()) {
+          parsed.push({
+            text: text.trim(),
+            bbox: {
+              x0: left,
+              y0: top,
+              x1: left + width,
+              y1: top + height
+            }
+          });
+        }
+      }
+      return parsed;
+    };
+
     const newConfig: any = {};
-    const words = data.words || [];
+    const words = parseTsvToWords(data.tsv || "");
 
     if (words.length > 0) {
       // 1. 根据单词的 bounding box 水平位置自动划分为 N 个等宽垂直列
