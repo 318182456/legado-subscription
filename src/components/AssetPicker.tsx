@@ -9,13 +9,11 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
   const [query, setQuery] = useState('');
   const [searchInNameOnly, setSearchInNameOnly] = useState(true);
   
-  const [confirmItem, setConfirmItem] = useState<any>(null);
-  
   const extensions = useMemo(() => {
     if (type === 'font') return ['.ttf', '.otf', '.woff2'];
     const imgExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
     if (type === 'bg') return [...imgExts, '.zip', '.json'];
-    if (type === 'layout') return ['.json', '.zip', '.txt', ...imgExts];
+    if (type === 'layout') return ['.json', '.zip', '.txt'];
     return [];
   }, [type]);
 
@@ -82,11 +80,7 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
   }, [fileTree, currentPath, query, searchInNameOnly, type, extensions]);
 
   const handleSelect = (item: any) => {
-    if (isImage(item.path)) {
-      setConfirmItem(item);
-    } else {
-      onSelect(item);
-    }
+    onSelect(item);
   };
 
   const title = type === 'font' ? '选择字体' : type === 'bg' ? '选择背景图' : '选择排版方案';
@@ -175,40 +169,6 @@ export function AssetPicker({ type, fileTree, onSelect, onClose }: { type: strin
         )}
       </div>
 
-      {/* 图片用途确认弹窗 */}
-      {confirmItem && (
-        <div className="absolute inset-0 z-110 bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="bg-surface-container-highest border border-outline-variant rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-            <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
-            <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>
-            
-            <div className="aspect-video rounded-xl bg-black/20 mb-6 overflow-hidden border border-outline-variant/30">
-               <img src={`${window.location.origin}/repo/${confirmItem.path}`} className="w-full h-full object-contain" />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button 
-                onClick={() => { onSelect({ ...confirmItem, _action: 'ocr' }); setConfirmItem(null); }}
-                className="w-full py-3 bg-primary text-on-primary rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
-              >
-                <Search size={14} /> 识别排版 (OCR)
-              </button>
-              <button 
-                onClick={() => { onSelect({ ...confirmItem, _action: 'bg' }); setConfirmItem(null); }}
-                className="w-full py-3 bg-surface-container-high text-primary rounded-xl text-xs font-bold border border-primary/20 hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
-              >
-                <ImageIcon size={14} /> 设为背景
-              </button>
-              <button 
-                onClick={() => setConfirmItem(null)}
-                className="w-full py-2 text-[10px] text-outline hover:text-secondary transition-colors"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

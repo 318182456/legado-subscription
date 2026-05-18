@@ -77,7 +77,27 @@ export default function SettingsView() {
       if (res && res.updatedFiles) {
         setUpdatedFiles(res.updatedFiles);
       }
-      alert('更新指令已应用！系统将在 1 秒后自动重启，前台已捕获到以下代码和文件的具体改动。请于数秒后手动刷新页面。');
+      
+      // 开始高可用健康轮询检测重启状态
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const info = await api.getSystemVersion();
+          if (info && info.current) {
+            clearInterval(interval);
+            window.location.reload();
+          }
+        } catch (e) {
+          console.log('正在监测系统重启状态...', attempts);
+        }
+        
+        if (attempts > 30) { // 最多等待 30 秒
+          clearInterval(interval);
+          alert('系统重启可能需要较长时间，请稍后手动刷新页面。');
+          setIsUpdating(false);
+        }
+      }, 1000);
     } catch (e) {
       alert('更新失败: ' + String(e));
       setIsUpdating(false);
@@ -122,7 +142,7 @@ export default function SettingsView() {
     setSavingConfig(true);
     try {
       await api.saveSystemConfig({ github_proxy: githubProxy.trim() });
-      alert('GitHub 加速网址保存成功！下次自动下载离线 OCR 模块时将优先采用此加速源。');
+      alert('GitHub 加速网址保存成功！下次自动拉取更新或静态资源时将优先采用此加速源。');
     } catch (e) {
       alert(`保存失败: ${String(e)}`);
     } finally {
@@ -261,7 +281,7 @@ export default function SettingsView() {
           <div className="px-8 py-5 border-b border-outline-variant bg-surface-bright flex justify-between items-center">
             <div>
               <h3 className="font-semibold text-lg text-on-surface">GitHub 加速配置</h3>
-              <p className="text-xs text-secondary mt-1">配置国内 GitHub 代理加速源，以保证主题下载及 OCR 离线核心文件的极速更新。</p>
+              <p className="text-xs text-secondary mt-1">配置国内 GitHub 代理加速源，以保证精选主题、字体及静态背景图等资源的极速拉取与更新。</p>
             </div>
             <Globe className="text-primary" size={24} />
           </div>

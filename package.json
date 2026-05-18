@@ -20,8 +20,7 @@
     "hono": "^4.6.1",
     "ioredis": "^5.4.1",
     "mime-types": "^2.1.35",
-    "pg": "^8.13.0",
-    "tesseract.js": "^7.0.0"
+    "pg": "^8.13.0"
   },
   "devDependencies": {
     "@simplewebauthn/browser": "^10.0.0",

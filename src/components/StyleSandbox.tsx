@@ -186,13 +186,14 @@ const DEFAULT_CONFIG = {
   darkStatusIcon: true
 };
 
-export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved' | 'image' | 'bg'; onClose: () => void; onSaved: () => void; fileTree: any }) {
+export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileTree }: { initialBase: any; initialType: 'theme' | 'font' | 'zip' | 'saved' | 'image' | 'bg' | 'blank'; onClose: () => void; onSaved: () => void; fileTree: any }) {
   const [config, setConfig] = useState<any>(() => {
     const isSaved = initialType === 'saved';
-    const baseName = initialBase?.name || '未知';
+    const isBlank = initialType === 'blank';
+    const baseName = initialBase?.name || (isBlank ? '自定义主题' : '未知');
     const cfg = {
       ...DEFAULT_CONFIG,
-      name: isSaved ? baseName : (baseName + ' 定制'),
+      name: isSaved ? baseName : (isBlank ? baseName : baseName + ' 定制'),
     };
     if (initialType === 'bg') {
       cfg.bgStr = initialBase.path;
@@ -343,6 +344,9 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   };
 
   const loadBaseConfig = async (type: string, base: any) => {
+    if (type === 'blank') {
+      return;
+    }
     if (type === 'saved') {
       const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
       setConfig(prev => ({ ...DEFAULT_CONFIG, ...data, id: base.id }));
@@ -366,10 +370,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
           loadFont(data.textFont, decodedFont || 'CustomFont');
         }
       }
-      return;
-    }
-    if (type === 'image') {
-      recognizeLayoutFromImage(base.path);
       return;
     }
     if (type === 'bg') {
@@ -602,26 +602,6 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       });
     } catch (e) {
       console.error('Font load failed', e);
-    }
-  };
-
-  const recognizeLayoutFromImage = async (imagePath: string) => {
-    setLoading(true);
-    try {
-      console.log('正在调用后台高精度离线 OCR 识别...', imagePath);
-      const data = await api.recognizeOcr(imagePath);
-      
-      if (data && Object.keys(data).length > 0) {
-        setConfig((prev: any) => ({ ...prev, ...data }));
-        alert(`识别成功！提取了 ${Object.keys(data).length} 项参数`);
-      } else {
-        alert('未能从图片中提取到有效参数。请确保图片清晰且包含参数数值。');
-      }
-    } catch (e) {
-      console.error('OCR 识别过程发生异常:', e);
-      alert('识别失败: ' + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1039,34 +1019,26 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
         >
           <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="w-full md:w-[500px] h-full bg-surface shadow-2xl border-l border-outline-variant flex flex-col">
             <AssetPicker type={showPicker} fileTree={fileTree} onSelect={(r: any) => {
-                if (r._action === 'ocr') {
-                  loadBaseConfig('image', r);
-                } else if (r._action === 'bg') {
-                  setConfig(prev => ({ ...prev, bgStr: r.path, bgType: 2 }));
-                  setManualAssets(p => ({ ...p, bg: true }));
-                } else {
-                  // 原始逻辑
-                  if (showPicker === 'font') { 
-                    loadFont(r.path, r.name); 
-                    setManualAssets(p => ({ ...p, font: true })); 
+                if (showPicker === 'font') { 
+                  loadFont(r.path, r.name); 
+                  setManualAssets(p => ({ ...p, font: true })); 
+                }
+                else if (showPicker === 'bg') { 
+                  if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
+                    loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
+                  } else {
+                    const isBlob = r.path.startsWith('blob:');
+                    setConfig(prev => {
+                      const next = { ...prev, bgStr: r.path, bgType: 2 };
+                      if (isBlob) next._bgStrName = r.name;
+                      return next;
+                    });
+                    setManualAssets(p => ({ ...p, bg: true })); 
                   }
-                  else if (showPicker === 'bg') { 
-                    if (r.path.endsWith('.zip') || r.path.endsWith('.json')) {
-                      loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r);
-                    } else {
-                      const isBlob = r.path.startsWith('blob:');
-                      setConfig(prev => {
-                        const next = { ...prev, bgStr: r.path, bgType: 2 };
-                        if (isBlob) next._bgStrName = r.name;
-                        return next;
-                      });
-                      setManualAssets(p => ({ ...p, bg: true })); 
-                    }
-                  }
-                  else if (showPicker === 'layout') { 
-                    loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); 
-                    setSelectedLayoutName(r.name);
-                  }
+                }
+                else if (showPicker === 'layout') { 
+                  loadBaseConfig(r.path.endsWith('.zip') ? 'zip' : 'theme', r); 
+                  setSelectedLayoutName(r.name);
                 }
                 setShowPicker(null);
             }} onClose={() => setShowPicker(null)} />

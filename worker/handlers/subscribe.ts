@@ -41,12 +41,41 @@ export async function handleSubscribeIndex(request: Request, env: Env): Promise<
   
   let html = TEMPLATE_STR;
 
+  let themeButtonsStr = "";
+  try {
+    const { results: themes } = await env.DB.prepare(
+      "SELECT id, name FROM custom_themes ORDER BY created_at DESC"
+    ).all();
+    
+    if (themes && themes.length > 0) {
+      const buttons = (themes as any[]).map(theme => {
+        const exportUrl = `${origin}/api/custom-themes/${theme.id}/export`;
+        const importUrl = `legado://import/readConfig?src=${encodeURIComponent(exportUrl)}`;
+        return `            <h3>
+                <img src="/repo/logo.png" alt="icon" class="item-icon" />
+                <a href="${importUrl}" class="btn btn-t">
+                    <span style="font-size:1.4rem; margin-bottom:2px; display:block;">🎨</span>
+                    <span style="font-size:0.78rem; font-weight:700;">${theme.name}</span>
+                </a>
+            </h3>`;
+      }).join("\n");
+      
+      themeButtonsStr = `            <div class="themes-grid-header">🎨 导入精选主题</div>
+            <div class="themes-grid">
+${buttons}
+            </div>`;
+    }
+  } catch (e) {
+    console.error("Failed to fetch custom themes for subscription page:", e);
+  }
+
   // 动态注入变量 (仅保留基础 URL)
   html = html
     .replace(/{{ORIGIN}}/g, origin)
     .replace(/{{SOURCES_URL}}/g, encodeURIComponent(origin + '/subscribe/sources'))
     .replace(/{{RULES_URL}}/g, encodeURIComponent(origin + '/subscribe/rules'))
-    .replace(/{{INFO_URL}}/g, encodeURIComponent(origin + '/subscribe/info.json'));
+    .replace(/{{INFO_URL}}/g, encodeURIComponent(origin + '/subscribe/info.json'))
+    .replace(/{{THEME_BUTTONS}}/g, themeButtonsStr);
 
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" },

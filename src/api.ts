@@ -204,9 +204,6 @@ export const getSystemVersion = () =>
 export const performUpdate = () => 
   apiFetch<any>("/api/system/update", { method: "POST" });
 
-export const recognizeOcr = (path: string) => 
-  apiFetch<any>("/api/assets/ocr", { method: "POST", body: JSON.stringify({ path }) });
-
 export const getSystemConfig = () =>
   apiFetch<Record<string, string>>("/api/system/config");
 

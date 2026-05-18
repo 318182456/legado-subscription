@@ -146,7 +146,6 @@ export default {
 
       // ── /api/assets/ensure (资源确保存储) ──────────────────────────
       if (path === "/api/assets/ensure" && method === "POST") return assets.handleEnsureAsset(request, env);
-      if (path === "/api/assets/ocr" && method === "POST") return assets.handleOcr(request, env);
 
       // ── /api/zip (ZIP 资产管理) ───────────────────────────────────
       if (path === "/api/zip/list" && method === "GET") return assets.handleListZipAssets(request, env);

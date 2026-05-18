@@ -77,7 +77,27 @@ export default function App() {
     setIsUpdating(true);
     try {
       await api.performUpdate();
-      alert('更新指令已发送，系统正在重启，请稍后刷新页面。');
+      
+      // 开始高可用健康轮询检测重启状态
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const info = await api.getSystemVersion();
+          if (info && info.current) {
+            clearInterval(interval);
+            window.location.reload();
+          }
+        } catch (e) {
+          console.log('正在监测系统重启状态...', attempts);
+        }
+        
+        if (attempts > 30) { // 最多等待 30 秒
+          clearInterval(interval);
+          alert('系统重启可能需要较长时间，请稍后手动刷新页面。');
+          setIsUpdating(false);
+        }
+      }, 1000);
     } catch (e) {
       alert('更新失败: ' + String(e));
       setIsUpdating(false);

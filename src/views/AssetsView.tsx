@@ -4,7 +4,7 @@ import {
   Search, RefreshCw, Package, Book, Sparkles, Copy, X, Folder, 
   ChevronRight, Home, Trash2, Image as ImageIcon, Type, 
   FileText, Download, Maximize2, Palette, LayoutGrid, List,
-  ArrowUpDown, Filter
+  ArrowUpDown, Filter, Plus
 } from 'lucide-react';
 import * as api from '../api';
 
@@ -35,7 +35,6 @@ export default function AssetsView() {
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'image' | 'font' | 'theme' | 'zip'>('all');
   const [sortOrder, setSortOrder] = useState<'name' | 'type'>('type');
   const [searchInNameOnly, setSearchInNameOnly] = useState(false);
-  const [confirmItem, setConfirmItem] = useState<any>(null);
 
   const isImage = (path: string) => {
     const ext = path?.toLowerCase().split('.').pop();
@@ -44,13 +43,20 @@ export default function AssetsView() {
 
   const handlePaletteClick = (item: any) => {
     if (isImage(item.path)) {
-      setConfirmItem(item);
+      setSandboxConfig({ 
+        base: item, 
+        type: 'bg' 
+      });
     } else {
       setSandboxConfig({ 
         base: item, 
         type: item.extension === 'zip' ? 'zip' : (item.category === 'fonts' ? 'font' : 'theme') 
       });
     }
+  };
+
+  const createBlankTheme = () => {
+    setSandboxConfig({ base: null, type: 'blank' });
   };
 
   const fetchAll = async (refresh = false) => {
@@ -218,16 +224,25 @@ export default function AssetsView() {
             <span className="text-4xl">📚</span> Legado 资源中心
           </h2>
           <p className="text-sm text-secondary mt-1">
-            {viewMode === 'explorer' ? '整合全网优质书源与规则资源。' : '查看已保存到云端的精选定制主题。'}
+            {viewMode === 'explorer' ? '浏览与管理云端 R2 存储的排版布局、字体及背景图片资源。' : '查看已保存到云端的精选定制主题。'}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {viewMode === 'featured' && (
+            <button
+              onClick={createBlankTheme}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md shadow-primary/20"
+            >
+              <Plus size={18} />
+              新建空白主题
+            </button>
+          )}
           <div className="bg-surface-container p-1 rounded-xl flex gap-1 shadow-inner">
             <button 
               onClick={() => setViewMode('explorer')}
               className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'explorer' ? 'bg-surface-bright shadow-md text-primary scale-105' : 'text-secondary hover:bg-surface-bright/50'}`}
             >
-              订阅整合
+              资源浏览器
             </button>
             <button 
               onClick={() => setViewMode('featured')}
@@ -425,9 +440,31 @@ export default function AssetsView() {
         /* 精选主题视图 */
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
           {customThemes.length === 0 ? (
-            <div className="py-20 text-center text-secondary border border-dashed border-outline-variant rounded-2xl"><Sparkles size={48} className="mx-auto mb-4 opacity-10" /><p>暂无精选主题。</p></div>
+            <div className="py-20 text-center text-secondary border border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center p-8 gap-4">
+              <Sparkles size={48} className="opacity-10" />
+              <p>暂无精选主题。</p>
+              <button 
+                onClick={createBlankTheme}
+                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md"
+              >
+                <Plus size={16} /> 创建第一个空白主题
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+              {/* 新建空白主题卡片 */}
+              <motion.div 
+                layout
+                onClick={createBlankTheme}
+                className="bg-surface-container-lowest border-2 border-dashed border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group flex flex-col justify-center items-center p-6 h-[300px]"
+              >
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
+                  <Plus className="text-primary" size={32} />
+                </div>
+                <h4 className="font-bold text-lg text-on-surface group-hover:text-primary transition-colors">新建空白主题</h4>
+                <p className="text-xs text-secondary text-center mt-2 px-2">从零开始配置专属排版样式</p>
+              </motion.div>
+
               {customThemes.map((item) => {
                 const config = JSON.parse(item.config);
                 return (
@@ -481,44 +518,6 @@ export default function AssetsView() {
 
       {/* 预览弹窗 */}
       <AnimatePresence>{previewItem && <PreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}</AnimatePresence>
-
-      {/* 图片用途确认弹窗 */}
-      {confirmItem && (
-        <div 
-          onClick={(e) => e.target === e.currentTarget && setConfirmItem(null)}
-          className="fixed inset-0 z-100 bg-black/60 backdrop-blur-md flex items-center justify-center p-6"
-        >
-          <div className="bg-surface-container-highest border border-outline-variant rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
-            <h5 className="text-sm font-bold mb-2">处理图片资源</h5>
-            <p className="text-[10px] text-secondary mb-6">您可以将此图片作为背景使用，或者尝试识别其中的排版参数。</p>
-            
-            <div className="aspect-video rounded-xl bg-black/20 mb-6 overflow-hidden border border-outline-variant/30">
-               <img src={`${window.location.origin}/repo/${confirmItem.path}`} className="w-full h-full object-contain" />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button 
-                onClick={() => { setSandboxConfig({ base: confirmItem, type: 'image' }); setConfirmItem(null); }}
-                className="w-full py-3 bg-primary text-on-primary rounded-xl text-xs font-bold shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
-              >
-                <Search size={14} /> 识别排版 (OCR)
-              </button>
-              <button 
-                onClick={() => { setSandboxConfig({ base: confirmItem, type: 'bg' }); setConfirmItem(null); }}
-                className="w-full py-3 bg-surface-container-high text-primary rounded-xl text-xs font-bold border border-primary/20 hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
-              >
-                <ImageIcon size={14} /> 设为背景
-              </button>
-              <button 
-                onClick={() => setConfirmItem(null)}
-                className="w-full py-2 text-[10px] text-outline hover:text-secondary transition-colors"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

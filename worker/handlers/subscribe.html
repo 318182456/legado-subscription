@@ -283,6 +283,52 @@
             box-shadow: 0 6px 22px rgba(236, 72, 153, 0.55);
         }
         
+        .btn-t { 
+            background: linear-gradient(135deg, #ec4899, #8b5cf6); 
+            color: white; 
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
+        }
+        .btn-t:hover {
+            box-shadow: 0 6px 22px rgba(139, 92, 246, 0.55);
+        }
+        
+        /* 自适应主题导入卡片网格 */
+        .themes-grid-header {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin: 22px 0 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .themes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .themes-grid h3 {
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            display: block !important;
+        }
+
+        .themes-grid .btn-t {
+            margin-bottom: 0;
+            padding: 14px 10px;
+            font-size: 0.82rem;
+            flex-direction: column;
+            text-align: center;
+            gap: 4px;
+            min-height: 85px;
+            justify-content: center;
+            border-radius: 14px;
+        }
+        
         .btn-d { 
             background: rgba(239, 68, 68, 0.08); 
             color: #f87171; 
@@ -465,6 +511,7 @@
                 <img src="/repo/logo.png" alt="icon" class="item-icon" />
                 <a href="legado://import/rssSource?src={{INFO_URL}}" class="btn btn-o">📌 添加到阅读发现</a>
             </h3>
+            {{THEME_BUTTONS}}
         </div>
         <div class="card">
             <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:12px;">高级操作</p>
