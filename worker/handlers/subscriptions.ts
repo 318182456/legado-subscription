@@ -7,6 +7,7 @@ import {
   syncRuleSubscription,
   rebuildCache,
 } from "../utils";
+import { runWorkerPool } from "./worker-runner";
 
 export async function handleListSubscriptions(env: Env): Promise<Response> {
   const { results } = await env.DB.prepare("SELECT * FROM subscriptions ORDER BY created_at DESC").all();
@@ -62,7 +63,7 @@ export async function handleToggleSubscription(request: Request, env: Env, id: n
 }
 
 export async function handleSync(env: Env, id: number | null, ctx?: any): Promise<Response> {
-  console.log(`[Sync] 收到手动同步请求: ID=${id || "ALL (全局同步)"}`);
+  console.log(`[Sync] 收到手动多线程同步请求: ID=${id || "ALL (全局同步)"}`);
   const startTime = Date.now();
 
   const runSync = async () => {
@@ -72,28 +73,50 @@ export async function handleSync(env: Env, id: number | null, ctx?: any): Promis
     
     console.log(`[Sync] 发现 ${subs.length} 个待同步订阅...`);
 
-    // 并行同步所有启用的订阅
-    await Promise.all((subs as any[]).map(async (sub) => {
-      try {
-        const subStart = Date.now();
-        console.log(`[Sync] 开始同步订阅: [${sub.name || sub.url}]...`);
-        
-        let count = 0;
-        if (sub.type === "source") {
-          count = await syncSourceSubscription(env, sub.id, sub.url);
-        } else {
-          count = await syncRuleSubscription(env, sub.id, sub.url);
-        }
-        
-        console.log(`[Sync] 订阅 [${sub.name || sub.url}] 同步成功，共入库 ${count} 个项目，耗时: ${Date.now() - subStart}ms`);
-      } catch (e: any) { 
-        console.error(`[Sync] 订阅 [${sub.name || sub.url}] 同步失败:`, e.message || e); 
-      }
+    const itemsToSync = (subs as any[]).map(sub => ({
+      id: sub.id,
+      url: sub.url,
+      type: sub.type,
+      name: sub.name
     }));
+
+    // 运行我们的通用多线程任务池！
+    await runWorkerPool({
+      taskType: "sync-subscriptions",
+      items: itemsToSync,
+      threadCount: Math.min(4, itemsToSync.length), // 动态按数量分配线程
+      concurrencyPerThread: 5, // 订阅抓取通常每线程并发 5 个即可，防被封
+      onResult: async (msg) => {
+        const sub = itemsToSync.find(x => x.id === msg.id);
+        if (!sub) return;
+
+        const subStart = Date.now();
+        console.log(`[Sync] 正在保存订阅数据到数据库: [${sub.name || sub.url}]...`);
+
+        if (msg.success) {
+          try {
+            let count = 0;
+            if (sub.type === "source") {
+              count = await syncSourceSubscription(env, sub.id, sub.url, msg.rawItems);
+            } else {
+              count = await syncRuleSubscription(env, sub.id, sub.url, msg.rawItems);
+            }
+            console.log(`[Sync] 订阅 [${sub.name || sub.url}] 数据库同步成功，入库 ${count} 个项目，耗时: ${Date.now() - subStart}ms`);
+          } catch (dbErr: any) {
+            console.error(`[Sync] 订阅 [${sub.name || sub.url}] 保存数据库失败:`, dbErr.message || dbErr);
+          }
+        } else {
+          console.error(`[Sync] 订阅 [${sub.name || sub.url}] 抓取/解析失败:`, msg.error);
+        }
+      },
+      onWorkerDone: (t) => {
+        console.log(`[Sync] 订阅同步工作线程 ${t + 1} 已圆满完成其分配的分片任务。`);
+      }
+    });
 
     console.log("[Sync] 正在重新构建全局缓存...");
     await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
-    console.log(`[Sync] 同步任务与缓存重建已圆满完成，总耗时: ${Date.now() - startTime}ms`);
+    console.log(`[Sync] 全局同步任务与缓存重建已圆满完成，总耗时: ${Date.now() - startTime}ms`);
   };
 
   try {

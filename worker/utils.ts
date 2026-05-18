@@ -89,9 +89,10 @@ export async function fetchRules(url: string): Promise<unknown[]> {
 export async function syncSourceSubscription(
   env: Env,
   subId: number,
-  url: string
+  url: string,
+  preFetchedItems?: any[]
 ): Promise<number> {
-  const rawItems = await fetchSources(url);
+  const rawItems = preFetchedItems ?? await fetchSources(url);
   
   // 1. 过滤无效书源并按 URL 去重 (模拟阅读 App 底层机制)
   const itemsMap = new Map<string, Record<string, unknown>>();
@@ -179,9 +180,10 @@ export async function syncSourceSubscription(
 export async function syncRuleSubscription(
   env: Env,
   subId: number,
-  url: string
+  url: string,
+  preFetchedItems?: any[]
 ): Promise<number> {
-  const rawItems = await fetchRules(url);
+  const rawItems = preFetchedItems ?? await fetchRules(url);
   
   const itemsMap = new Map<string, Record<string, unknown>>();
   for (const r of rawItems) {
