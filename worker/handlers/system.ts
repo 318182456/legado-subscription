@@ -1,11 +1,11 @@
-import { ok, err } from "../utils";
+import { ok, err, parseBody } from "../utils";
 import { Env } from "../types";
 import path from "path";
 import fs from "fs-extra";
 import { unzipSync } from "fflate";
 
 const GITHUB_REPO = "318182456/legado-subscription"; // 请确认您的仓库地址
-export async function handleGetVersion() {
+export async function handleGetVersion(env: Env) {
   let currentVersion = "1.0.0";
   try {
     const versionPath = path.join(process.cwd(), "VERSION");
@@ -14,30 +14,55 @@ export async function handleGetVersion() {
     }
   } catch (_) {}
 
+  // 读取用户配置的 GitHub 加速网址
+  let githubProxy = "https://ghproxy.net/";
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/VERSION?ref=main`, {
+    const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
+    if (row && row.value !== undefined && row.value !== null) {
+      githubProxy = row.value.trim();
+    }
+  } catch (_) {}
+  const proxyPrefix = githubProxy ? (githubProxy.endsWith("/") ? githubProxy : githubProxy + "/") : "";
+
+  try {
+    const targetUrl = `${proxyPrefix}https://raw.githubusercontent.com/${GITHUB_REPO}/main/VERSION`;
+    console.log(`[VersionCheck] 正在从镜像获取最新版本... 目标 URL: ${targetUrl}`);
+    const res = await fetch(targetUrl, {
       headers: { "User-Agent": "LegadoSubscription-Updater" }
     });
     if (!res.ok) throw new Error("无法获取 GitHub 版本信息");
-    const data = await res.json() as any;
-    const decoded = atob(data.content.replace(/\s/g, ''));
-    const latestVersion = decoded.trim();
+    const rawText = await res.text();
+    const latestVersion = rawText.trim();
     
     return ok({
       current: currentVersion,
       latest: latestVersion,
       hasUpdate: latestVersion !== currentVersion,
-      changelog: "最新开发分支版本，包含全新的分类网页导入、后台异步测速与极速新增订阅等升级。"
+      changelog: "最新开发分支版本，包含全国内加速、全新分类网页导入、后台异步测速与极速新增订阅等升级。"
     });
   } catch (e) {
+    console.error("[VersionCheck] 获取版本失败，使用本地版本:", e);
     return ok({ current: currentVersion, latest: currentVersion, hasUpdate: false });
   }
 }
 
-export async function handlePerformUpdate() {
+export async function handlePerformUpdate(env: Env) {
   try {
     console.log("Starting self-update...");
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/zipball/main`, {
+
+    // 读取用户配置的 GitHub 加速网址
+    let githubProxy = "https://ghproxy.net/";
+    try {
+      const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
+      if (row && row.value !== undefined && row.value !== null) {
+        githubProxy = row.value.trim();
+      }
+    } catch (_) {}
+    const proxyPrefix = githubProxy ? (githubProxy.endsWith("/") ? githubProxy : githubProxy + "/") : "";
+
+    const targetUrl = `${proxyPrefix}https://github.com/${GITHUB_REPO}/archive/refs/heads/main.zip`;
+    console.log(`[SelfUpdate] 正在从镜像下载更新包... 目标 URL: ${targetUrl}`);
+    const res = await fetch(targetUrl, {
       headers: { "User-Agent": "LegadoSubscription-Updater" }
     });
     if (!res.ok) throw new Error("下载更新包失败");
@@ -98,5 +123,40 @@ export async function handlePerformUpdate() {
   } catch (e) {
     console.error("Update failed:", e);
     return err(`更新失败: ${(e as Error).message}`);
+  }
+}
+
+export async function handleGetConfig(env: Env) {
+  try {
+    const rows = await env.DB.prepare("SELECT key, value FROM system_config").all();
+    const config: Record<string, string> = {};
+    rows.results.forEach((row: any) => {
+      config[row.key as string] = row.value as string;
+    });
+    if (!config.github_proxy) {
+      config.github_proxy = "https://ghproxy.net/";
+    }
+    return ok(config);
+  } catch (e: any) {
+    return err(`获取配置失败: ${e.message}`);
+  }
+}
+
+export async function handleSaveConfig(request: Request, env: Env) {
+  const body = await parseBody<Record<string, string>>(request);
+  if (!body) return err("请求体不能为空");
+  
+  try {
+    const stmts = Object.entries(body).map(([key, value]) => {
+      return env.DB.prepare(
+        "INSERT INTO system_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+      ).bind(key, value);
+    });
+    if (stmts.length > 0) {
+      await env.DB.batch(stmts);
+    }
+    return ok({ message: "配置保存成功" });
+  } catch (e: any) {
+    return err(`保存配置失败: ${e.message}`);
   }
 }

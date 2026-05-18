@@ -506,11 +506,21 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     const chiSimPath = path.join(tessdataPath, "chi_sim.traineddata").replace(/\\/g, "/");
     const engPath = path.join(tessdataPath, "eng.traineddata").replace(/\\/g, "/");
 
+    // 读取用户配置的 GitHub 加速网址
+    let githubProxy = "https://ghproxy.net/";
+    try {
+      const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
+      if (row && row.value !== undefined && row.value !== null) {
+        githubProxy = row.value.trim();
+      }
+    } catch (_) {}
+    const proxyPrefix = githubProxy ? (githubProxy.endsWith("/") ? githubProxy : githubProxy + "/") : "";
+
     // 触发自动构建以包含最新的离线 OCR 模块 (trigger build)
     // 3. 静默安全地自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型
     if (!(await fs.pathExists(chiSimPath)) || (await fs.stat(chiSimPath)).size < 1000000) {
-      console.log("[OCR] 正在从高速镜像下载 chi_sim.traineddata (高效率 fast 版本)...");
-      const res = await fetch("https://ghproxy.net/https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/chi_sim.traineddata", {
+      console.log(`[OCR] 正在从镜像下载 chi_sim.traineddata (高效率 fast 版本)... 代理前缀: ${proxyPrefix}`);
+      const res = await fetch(`${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/chi_sim.traineddata`, {
         signal: AbortSignal.timeout(60000)
       });
       if (!res.ok) throw new Error(`下载 chi_sim 训练包失败: ${res.statusText}`);
@@ -520,8 +530,8 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     }
 
     if (!(await fs.pathExists(engPath)) || (await fs.stat(engPath)).size < 1000000) {
-      console.log("[OCR] 正在从高速镜像下载 eng.traineddata (高效率 fast 版本)...");
-      const res = await fetch("https://ghproxy.net/https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata", {
+      console.log(`[OCR] 正在从镜像下载 eng.traineddata (高效率 fast 版本)... 代理前缀: ${proxyPrefix}`);
+      const res = await fetch(`${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata`, {
         signal: AbortSignal.timeout(60000)
       });
       if (!res.ok) throw new Error(`下载 eng 训练包失败: ${res.statusText}`);

@@ -207,3 +207,12 @@ export const performUpdate = () =>
 export const recognizeOcr = (path: string) => 
   apiFetch<any>("/api/assets/ocr", { method: "POST", body: JSON.stringify({ path }) });
 
+export const getSystemConfig = () =>
+  apiFetch<Record<string, string>>("/api/system/config");
+
+export const saveSystemConfig = (config: Record<string, string>) =>
+  apiFetch<any>("/api/system/config", {
+    method: "POST",
+    body: JSON.stringify(config)
+  });
+

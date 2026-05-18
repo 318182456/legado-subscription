@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Fingerprint, ShieldCheck, Plus, RefreshCw, Info, Package } from 'lucide-react';
+import { Fingerprint, ShieldCheck, Plus, RefreshCw, Info, Package, Globe } from 'lucide-react';
 import * as api from '../api';
 
 const formatDate = (dateInput: string | number | Date) => {
@@ -28,6 +28,8 @@ export default function SettingsView() {
   const [versionInfo, setVersionInfo] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updatedFiles, setUpdatedFiles] = useState<string[] | null>(null);
+  const [githubProxy, setGithubProxy] = useState('https://ghproxy.net/');
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const fetchPasskeys = async () => {
     try {
@@ -49,9 +51,21 @@ export default function SettingsView() {
     }
   };
 
+  const fetchConfig = async () => {
+    try {
+      const config = await api.getSystemConfig();
+      if (config && config.github_proxy) {
+        setGithubProxy(config.github_proxy);
+      }
+    } catch (e) {
+      console.error('获取系统配置失败', e);
+    }
+  };
+
   useEffect(() => {
     fetchPasskeys();
     fetchVersion();
+    fetchConfig();
   }, []);
 
   const handleUpdate = async () => {
@@ -102,6 +116,20 @@ export default function SettingsView() {
       setSyncingAll(false);
     }
   };
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      await api.saveSystemConfig({ github_proxy: githubProxy.trim() });
+      alert('GitHub 加速网址保存成功！下次自动下载离线 OCR 模块时将优先采用此加速源。');
+    } catch (e) {
+      alert(`保存失败: ${String(e)}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
 
   return (
     <div className="space-y-8">
@@ -227,6 +255,44 @@ export default function SettingsView() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+          <div className="px-8 py-5 border-b border-outline-variant bg-surface-bright flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold text-lg text-on-surface">GitHub 加速配置</h3>
+              <p className="text-xs text-secondary mt-1">配置国内 GitHub 代理加速源，以保证主题下载及 OCR 离线核心文件的极速更新。</p>
+            </div>
+            <Globe className="text-primary" size={24} />
+          </div>
+          <form onSubmit={handleSaveConfig} className="p-8 space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="github-proxy" className="block text-sm font-medium text-on-surface">
+                GitHub 代理/加速网址
+              </label>
+              <div className="flex gap-4">
+                <input
+                  id="github-proxy"
+                  type="url"
+                  placeholder="https://ghproxy.net/"
+                  value={githubProxy}
+                  onChange={(e) => setGithubProxy(e.target.value)}
+                  className="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-sm text-on-surface placeholder-secondary focus:outline-none focus:border-primary transition-colors"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={savingConfig}
+                  className="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-all shadow-sm disabled:opacity-50"
+                >
+                  {savingConfig ? '正在保存...' : '保存配置'}
+                </button>
+              </div>
+              <p className="text-xs text-secondary">
+                默认值为 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://ghproxy.net/</code>。留空或输入 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://github.com/</code> 则代表直连 GitHub（无代理）。
+              </p>
+            </div>
+          </form>
         </section>
 
         <section className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">

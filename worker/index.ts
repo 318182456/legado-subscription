@@ -168,10 +168,15 @@ export default {
       }
 
       // ── /api/system ─────────────────────────────────────────────
-      if (path === "/api/system/version" && method === "GET") return system.handleGetVersion();
+      if (path === "/api/system/version" && method === "GET") return system.handleGetVersion(env);
       if (path === "/api/system/update" && method === "POST") {
         if (!auth.isAuthed(request, env)) return err("Unauthorized", 401);
-        return system.handlePerformUpdate();
+        return system.handlePerformUpdate(env);
+      }
+      if (path === "/api/system/config" && method === "GET") return system.handleGetConfig(env);
+      if (path === "/api/system/config" && method === "POST") {
+        if (!auth.isAuthed(request, env)) return err("Unauthorized", 401);
+        return system.handleSaveConfig(request, env);
       }
 
       return err("Not Found", 404);
