@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Search, Zap, ShieldCheck, Upload, BookOpen, CheckCircle2, AlertCircle, MoreVertical, Copy, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Search, Zap, ShieldCheck, Upload, BookOpen, CheckCircle2, AlertCircle, MoreVertical, Copy, Trash2, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import * as api from '../api';
 import { StatCard } from '../components/StatCard';
 
@@ -25,6 +25,21 @@ export default function SourceListView({
   const [filter, setFilter] = useState('all');
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [cleaning, setCleaning] = useState(false);
+
+  const handleCleanup = async () => {
+    if (!confirm('确定要对系统书源进行去重与失效标记清理吗？\n此操作将对所有重复的及测试不可用的书源执行“禁用 + 归类标记”，不做任何物理删除，安全可靠。')) return;
+    setCleaning(true);
+    try {
+      const res = await api.cleanupSources();
+      alert(`标记清理成功！\n- 自动禁用并归类失效书源: ${res.markedInvalid} 个\n- 自动禁用并归类重复书源: ${res.markedDuplicates} 个`);
+      fetchSources(query, 1, filter);
+    } catch (e) {
+      alert('标记清理失败: ' + String(e));
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   const fetchSources = async (q = '', p = 1, f = 'all') => {
     setLoading(true);
@@ -180,6 +195,16 @@ export default function SourceListView({
                 style={{ width: `${(testProgress.current / testProgress.total) * 100}%` }}
               />
             )}
+          </button>
+
+          <button 
+            onClick={handleCleanup}
+            disabled={cleaning || loading}
+            className={`border border-outline-variant bg-surface-container-low text-on-surface px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-surface-container-high flex items-center gap-1.5 disabled:opacity-50 transition-all ${cleaning ? 'ring-1 ring-primary/30' : ''}`}
+            title="一键标记禁用失效和重复的冗余书源，不做任何物理删除"
+          >
+            <Sparkles size={14} className={cleaning ? 'animate-spin text-primary animate-pulse' : 'text-primary'} />
+            {cleaning ? '标记中...' : '标记去重'}
           </button>
 
           <button 

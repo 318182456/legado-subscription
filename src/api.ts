@@ -158,6 +158,7 @@ export const getTestProgress = () =>
 export const toggleSource = (id: number, enabled: boolean) => apiFetch<any>(`/api/sources/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
 export const deleteSource = (id: number) => apiFetch<any>(`/api/sources/${id}`, { method: "DELETE" });
 export const deleteAllSources = () => apiFetch<any>("/api/sources/all", { method: "DELETE" });
+export const cleanupSources = () => apiFetch<{ markedInvalid: number; markedDuplicates: number }>("/api/sources/cleanup", { method: "POST" });
 export const toggleRule = (id: number, enabled: boolean) => apiFetch<any>(`/api/rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
 export const deleteRule = (id: number) => apiFetch<any>(`/api/rules/${id}`, { method: "DELETE" });
 export const updateRule = (id: number, data: { name: string; pattern: string; replacement: string }) => apiFetch<any>(`/api/rules/${id}`, { method: "PUT", body: JSON.stringify(data) });

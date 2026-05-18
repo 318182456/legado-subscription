@@ -444,3 +444,58 @@ export async function handleStats(env: Env): Promise<Response> {
   return ok({ subscriptions: subRow, sources: srcRow, rules: ruleRow });
 }
 
+export async function handleCleanupSources(env: Env): Promise<Response> {
+  console.log("[CleanupSources] 开始标记失效与重复书源...");
+  try {
+    // 1. 标记失效书源：将 is_available = 0 的书源禁用，并归类到“失效”分组
+    const markInvalidStmt = env.DB.prepare(`
+      UPDATE sources
+      SET enabled = 0,
+          group_name = CASE
+            WHEN group_name IS NULL OR group_name = '' THEN '失效'
+            WHEN group_name LIKE '%失效%' THEN group_name
+            ELSE group_name || ',失效'
+          END
+      WHERE is_available = 0
+    `);
+
+    // 2. 标记重复书源：使用窗口函数对相同 url_hash 的书源进行排序
+    //    保留优先级最高的项（rn = 1），将其余项禁用并归类到“重复”分组
+    const markDuplicateStmt = env.DB.prepare(`
+      WITH ranked_sources AS (
+        SELECT id, ROW_NUMBER() OVER (
+          PARTITION BY url_hash
+          ORDER BY enabled DESC, is_available DESC, updated_at DESC, id DESC
+        ) as rn
+        FROM sources
+        WHERE url_hash IS NOT NULL AND url_hash != ''
+      )
+      UPDATE sources
+      SET enabled = 0,
+          group_name = CASE
+            WHEN group_name IS NULL OR group_name = '' THEN '重复'
+            WHEN group_name LIKE '%重复%' THEN group_name
+            ELSE group_name || ',重复'
+          END
+      WHERE id IN (SELECT id FROM ranked_sources WHERE rn > 1)
+    `);
+
+    // 批量执行
+    const batchRes = await env.DB.batch([markInvalidStmt, markDuplicateStmt]);
+    const markedInvalid = batchRes[0]?.meta?.changes ?? 0;
+    const markedDuplicates = batchRes[1]?.meta?.changes ?? 0;
+
+    console.log(`[CleanupSources] 标记完成: 禁用并归类失效书源 ${markedInvalid} 个，重复书源 ${markedDuplicates} 个`);
+
+    // 3. 重新构建全局书源 KV 缓存
+    console.log("[CleanupSources] 正在重新构建全局书源缓存...");
+    await rebuildCache(env, "source");
+
+    return ok({ markedInvalid, markedDuplicates });
+  } catch (e: any) {
+    console.error("[CleanupSources] 标记清理发生异常:", e);
+    return err(`标记清理失败: ${e.message || e}`, 500);
+  }
+}
+
+

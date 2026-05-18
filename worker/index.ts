@@ -110,6 +110,7 @@ export default {
       if (path === "/api/sources/test/all" && method === "POST") return sources.handleTestAllSources(env, ctx);
       if (path === "/api/sources/test/stop" && method === "POST") return sources.handleStopTestSources(env);
       if (path === "/api/sources/test/progress" && method === "GET") return sources.handleGetTestProgress(env);
+      if (path === "/api/sources/cleanup" && method === "POST") return sources.handleCleanupSources(env);
       if (path === "/api/sources/all" && method === "DELETE") return sources.handleSourceAction(env, 0, "delete-all");
       if (path === "/api/parse-links" && method === "GET") return sources.handleParseLinks(url);
 
