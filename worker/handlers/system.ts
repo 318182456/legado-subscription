@@ -15,18 +15,19 @@ export async function handleGetVersion() {
   } catch (_) {}
 
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/VERSION?ref=main`, {
       headers: { "User-Agent": "LegadoSubscription-Updater" }
     });
     if (!res.ok) throw new Error("无法获取 GitHub 版本信息");
     const data = await res.json() as any;
-    const latestVersion = data.tag_name.replace(/^v/, "");
+    const decoded = atob(data.content.replace(/\s/g, ''));
+    const latestVersion = decoded.trim();
     
     return ok({
       current: currentVersion,
       latest: latestVersion,
       hasUpdate: latestVersion !== currentVersion,
-      changelog: data.body
+      changelog: "最新开发分支版本，包含全新的分类网页导入、后台异步测速与极速新增订阅等升级。"
     });
   } catch (e) {
     return ok({ current: currentVersion, latest: currentVersion, hasUpdate: false });
