@@ -28,7 +28,7 @@ export default function SettingsView() {
   const [versionInfo, setVersionInfo] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updatedFiles, setUpdatedFiles] = useState<string[] | null>(null);
-  const [githubProxy, setGithubProxy] = useState('https://gh-proxy.com/');
+  const [githubProxy, setGithubProxy] = useState('https://edgeone.gh-proxy.org/');
   const [savingConfig, setSavingConfig] = useState(false);
 
   const fetchPasskeys = async () => {
@@ -274,7 +274,7 @@ export default function SettingsView() {
                 <input
                   id="github-proxy"
                   type="url"
-                  placeholder="https://gh-proxy.com/"
+                  placeholder="https://edgeone.gh-proxy.org/"
                   value={githubProxy}
                   onChange={(e) => setGithubProxy(e.target.value)}
                   className="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-sm text-on-surface placeholder-secondary focus:outline-none focus:border-primary transition-colors"
@@ -288,7 +288,7 @@ export default function SettingsView() {
                 </button>
               </div>
               <p className="text-xs text-secondary">
-                默认值为 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://gh-proxy.com/</code>。留空或输入 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://github.com/</code> 则代表直连 GitHub（无代理）。
+                默认值为 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://edgeone.gh-proxy.org/</code>。留空或输入 <code className="font-mono bg-surface-container-high px-1.5 py-0.5 rounded text-primary">https://github.com/</code> 则代表直连 GitHub（无代理）。
               </p>
             </div>
           </form>

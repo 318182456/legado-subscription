@@ -4,6 +4,8 @@ import {
   checkAuth,
 } from "../utils";
 import { unzipSync } from "fflate";
+import path from "path";
+import fs from "fs-extra";
 
 
 export async function handleRepoProxy(request: Request, env: Env): Promise<Response> {
@@ -494,9 +496,7 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     // Tesseract.js 识别需要 Buffer 或者 Uint8Array
     const imgBuffer = Buffer.from(obj.body);
 
-    // 2. 动态导入 Node 原生模块与 tesseract.js，防止 Cloudflare Worker 构建打包期出错
-    const path = await import("path");
-    const fs = await import("fs-extra");
+    // 2. 动态导入 tesseract.js，防止 Cloudflare Worker 构建打包期出错
     const { createWorker } = await import("tesseract.js");
 
     const assetsPath = process.env.ASSETS_PATH || "./assets";
@@ -507,7 +507,7 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     const engPath = path.join(tessdataPath, "eng.traineddata").replace(/\\/g, "/");
 
     // 读取用户配置的 GitHub 加速网址
-    let githubProxy = "https://gh-proxy.com/";
+    let githubProxy = "https://edgeone.gh-proxy.org/";
     try {
       const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
       if (row && row.value !== undefined && row.value !== null) {
@@ -520,9 +520,7 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     // 3. 自动从国内极速 JSDelivr 镜像下载并永久缓存 tessdata_fast 高效率模型（具备多重加速源和自动降级重试机制）
     const downloadModel = async (filename: string, destPath: string) => {
       const urls = [
-        `https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/${filename}`,
-        `${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/${filename}`,
-        `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/${filename}`
+        `${proxyPrefix}https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/${filename}`
       ];
       
       let lastError: Error | null = null;

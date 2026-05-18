@@ -15,7 +15,7 @@ export async function handleGetVersion(env: Env) {
   } catch (_) {}
 
   // 读取用户配置的 GitHub 加速网址
-  let githubProxy = "https://gh-proxy.com/";
+  let githubProxy = "https://edgeone.gh-proxy.org/";
   try {
     const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
     if (row && row.value !== undefined && row.value !== null) {
@@ -51,7 +51,7 @@ export async function handlePerformUpdate(env: Env) {
     console.log("Starting self-update...");
 
     // 读取用户配置的 GitHub 加速网址
-    let githubProxy = "https://gh-proxy.com/";
+    let githubProxy = "https://edgeone.gh-proxy.org/";
     try {
       const row = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'github_proxy'").first() as any;
       if (row && row.value !== undefined && row.value !== null) {
@@ -134,7 +134,7 @@ export async function handleGetConfig(env: Env) {
       config[row.key as string] = row.value as string;
     });
     if (!config.github_proxy) {
-      config.github_proxy = "https://gh-proxy.com/";
+      config.github_proxy = "https://edgeone.gh-proxy.org/";
     }
     return ok(config);
   } catch (e: any) {
