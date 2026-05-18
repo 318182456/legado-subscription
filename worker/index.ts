@@ -87,7 +87,7 @@ export default {
       // ── /api/sync ─────────────────────────────────────────────────
       if (path.startsWith("/api/sync") && method === "POST") {
         const idStr = path.replace("/api/sync", "").replace("/", "");
-        return subs.handleSync(env, idStr ? Number(idStr) : null);
+        return subs.handleSync(env, idStr ? Number(idStr) : null, ctx);
       }
 
       // ── /api/subscriptions ────────────────────────────────────────

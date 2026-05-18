@@ -48,19 +48,36 @@ export async function handleToggleSubscription(request: Request, env: Env, id: n
   return ok();
 }
 
-export async function handleSync(env: Env, id: number | null): Promise<Response> {
-  const subs = id ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
-  
-  // 并行同步所有启用的订阅
-  await Promise.all((subs as any[]).map(async (sub) => {
+export async function handleSync(env: Env, id: number | null, ctx?: any): Promise<Response> {
+  const runSync = async () => {
     try {
-      if (sub.type === "source") await syncSourceSubscription(env, sub.id, sub.url);
-      else await syncRuleSubscription(env, sub.id, sub.url);
-    } catch (e) { 
-      console.error(`Sync failed for [${sub.name}]:`, e); 
-    }
-  }));
+      const subs = id 
+        ? [await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(id).first()] 
+        : (await env.DB.prepare("SELECT * FROM subscriptions WHERE enabled=1").all()).results;
+      
+      // 并行同步所有启用的订阅
+      await Promise.all((subs as any[]).map(async (sub) => {
+        try {
+          if (sub.type === "source") await syncSourceSubscription(env, sub.id, sub.url);
+          else await syncRuleSubscription(env, sub.id, sub.url);
+        } catch (e) { 
+          console.error(`Sync failed for [${sub.name}]:`, e); 
+        }
+      }));
 
-  await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
-  return ok();
+      await Promise.all([rebuildCache(env, "source"), rebuildCache(env, "rule")]);
+      console.log("后台同步任务与缓存重建已圆满完成。");
+    } catch (err) {
+      console.error("后台异步同步发生致命错误:", err);
+    }
+  };
+
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(runSync());
+    return ok({ message: "Sync started in background" });
+  } else {
+    // 降级为同步执行（如定时任务或特殊环境）
+    await runSync();
+    return ok();
+  }
 }
