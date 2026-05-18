@@ -27,6 +27,7 @@ export default function SettingsView() {
   const [syncingAll, setSyncingAll] = useState(false);
   const [versionInfo, setVersionInfo] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [updatedFiles, setUpdatedFiles] = useState<string[] | null>(null);
 
   const fetchPasskeys = async () => {
     try {
@@ -56,9 +57,13 @@ export default function SettingsView() {
   const handleUpdate = async () => {
     if (!confirm('确定要更新到最新代码版本并自动重启吗？')) return;
     setIsUpdating(true);
+    setUpdatedFiles(null);
     try {
-      await api.performUpdate();
-      alert('更新指令已发送，系统正在重启，请于数秒后刷新页面。');
+      const res = await api.performUpdate() as any;
+      if (res && res.updatedFiles) {
+        setUpdatedFiles(res.updatedFiles);
+      }
+      alert('更新指令已应用！系统将在 1 秒后自动重启，前台已捕获到以下代码和文件的具体改动。请于数秒后手动刷新页面。');
     } catch (e) {
       alert('更新失败: ' + String(e));
       setIsUpdating(false);
@@ -189,6 +194,38 @@ export default function SettingsView() {
                 {isUpdating ? '正在更新...' : versionInfo?.hasUpdate ? '立即升级' : '强制在线更新'}
               </button>
             </div>
+
+            {updatedFiles && (
+              <div className="mt-4 border border-outline-variant bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs rounded-lg overflow-hidden shadow-inner">
+                <div className="bg-[#2d2d2d] px-4 py-2 border-b border-[#3c3c3c] flex justify-between items-center text-[#9b9b9b]">
+                  <span>已更新文件列表 ({updatedFiles.length} 个项目)</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
+                  </span>
+                </div>
+                <div className="p-4 max-h-60 overflow-y-auto space-y-1 scrollbar-thin">
+                  {updatedFiles.length === 0 ? (
+                    <div className="text-[#858585] text-center py-2">所有代码文件均已是最新，无文件发生实际变更。</div>
+                  ) : (
+                    updatedFiles.map((file, idx) => {
+                      const isNew = file.startsWith("[NEW]");
+                      return (
+                        <div key={idx} className="flex gap-2 leading-relaxed">
+                          <span className={isNew ? "text-[#4fc1ff]" : "text-[#ce9178]"}>
+                            {file.split(" ")[0]}
+                          </span>
+                          <span className="text-[#9cdcfe]">
+                            {file.split(" ").slice(1).join(" ")}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

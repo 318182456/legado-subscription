@@ -50,6 +50,7 @@ export async function handlePerformUpdate() {
     const rootDir = entries[0].split('/')[0] + '/';
     
     const projectRoot = process.cwd();
+    const updatedFiles: string[] = [];
     
     for (const [name, data] of Object.entries(unzipped)) {
       if (name.endsWith('/') || !name.startsWith(rootDir)) continue;
@@ -58,8 +59,23 @@ export async function handlePerformUpdate() {
       if (!relativePath) continue;
       
       const destPath = path.join(projectRoot, relativePath);
-      await fs.ensureDir(path.dirname(destPath));
-      await fs.writeFile(destPath, data);
+      
+      let isNew = true;
+      let isModified = false;
+      
+      if (await fs.pathExists(destPath)) {
+        isNew = false;
+        const oldContent = await fs.readFile(destPath);
+        if (!oldContent.equals(Buffer.from(data))) {
+          isModified = true;
+        }
+      }
+      
+      if (isNew || isModified) {
+        await fs.ensureDir(path.dirname(destPath));
+        await fs.writeFile(destPath, data);
+        updatedFiles.push(`${isNew ? "[NEW]" : "[MOD]"} ${relativePath}`);
+      }
     }
     
     try {
@@ -78,7 +94,7 @@ export async function handlePerformUpdate() {
       process.exit(0); 
     }, 1000);
     
-    return ok({ message: "更新已应用，系统正在重启..." });
+    return ok({ message: "更新已应用，系统正在重启...", updatedFiles });
   } catch (e) {
     console.error("Update failed:", e);
     return err(`更新失败: ${(e as Error).message}`);
