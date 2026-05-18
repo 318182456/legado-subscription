@@ -57,7 +57,7 @@ export function handleSubscribeInfo(request: Request): Response {
   const origin = getRequestOrigin(request);
   const icon = `${origin}/repo/logo.png`;
   const source = [{
-    "sourceName": "✨ Legado 订阅中心",
+    "sourceName": "订阅中心",
     "sourceUrl": `${origin}/subscribe/index`,
     "sourceIcon": icon,
     "sourceGroup": "整合",
