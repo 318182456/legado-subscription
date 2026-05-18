@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, AlertCircle, ImageIcon, FileText, Archive } from 'lucide-react';
 import { LegadoRendererComponent } from '../utils/LegadoRenderer';
 
+const isLocalDevicePath = (p: string) => {
+  if (!p) return false;
+  return p.startsWith('content://') || p.startsWith('file://') || /^\/(storage|sdcard|data)\//i.test(p);
+};
+
 export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: initialPreviewUrl }: { path?: string; name: string; config?: any; previewUrl?: string }) {
   const [config, setConfig] = useState<any>(initialConfig);
   const [loading, setLoading] = useState(!initialConfig);
@@ -110,9 +115,10 @@ export function ThemeThumbnail({ path, name, config: initialConfig, previewUrl: 
       }).catch((e: any) => console.error('Theme font load failed', e));
     };
 
+    const isLocal = isLocalDevicePath(config.textFont);
     if (config.textFont.startsWith('blob:')) {
       tryLoad(config.textFont, 'BlobFont_' + Math.random().toString(36).substring(7));
-    } else if (!config.textFont.startsWith('content://')) {
+    } else if (!isLocal) {
       const fontName = decodedFont.split('.')[0] || 'ThemeFont';
       tryLoad(config.textFont, fontName);
     } else if (resources) {

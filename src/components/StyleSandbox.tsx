@@ -11,6 +11,11 @@ import { argbToCss, cssToArgb, getHex6 } from '../utils/color';
 import { PREVIEW_TITLE, PREVIEW_PARAS, getTipText } from '../utils/constants';
 import { LegadoRenderer } from '../utils/LegadoRenderer';
 
+const isLocalDevicePath = (p: string) => {
+  if (!p) return false;
+  return p.startsWith('content://') || p.startsWith('file://') || /^\/(storage|sdcard|data)\//i.test(p);
+};
+
 // --- Canvas 预览组件 ---
 const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -39,7 +44,7 @@ const CanvasPreview = ({ config, device, fontFamily, bgImage, loading }: any) =>
 
       const { config: c, device: d_dev, fontFamily: f, bgImage: b } = latestRef.current;
 
-      if (c.textFont && !c.textFont.startsWith('content://') && !f) {
+      if (c.textFont && !isLocalDevicePath(c.textFont) && !f) {
         return;
       }
 
@@ -227,7 +232,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
 
   // 预加载背景图为 Image 对象
   useEffect(() => {
-    if (config.bgType === 2 && config.bgStr && !config.bgStr.startsWith('content://')) {
+    if (config.bgType === 2 && config.bgStr && !isLocalDevicePath(config.bgStr)) {
       const url = config.bgStr.startsWith('blob:') ? config.bgStr : `${window.location.origin}/repo/${config.bgStr.split('/').map(s => encodeURIComponent(s)).join('/')}`;
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -303,10 +308,24 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
       const data = typeof base.config === 'string' ? JSON.parse(base.config) : base.config;
       setConfig(prev => ({ ...DEFAULT_CONFIG, ...data, id: base.id }));
       if (data.textFont) {
-        // 对初始路径也进行一次安全提取
         let decoded = data.textFont;
         try { decoded = decodeURIComponent(data.textFont); } catch(e){}
-        loadFont(data.textFont, decoded.split('/').pop() || 'CustomFont');
+        const decodedFont = decoded.split('/').pop() || '';
+        
+        if (isLocalDevicePath(data.textFont)) {
+          // 👑 优先在云端查找匹配的同名或同路径字体资源并加载
+          api.getResources().then(res => {
+            const foundFont = res.fonts?.find((f: any) => {
+              const fDecoded = decodeURIComponent(f.path).split('/').pop();
+              return fDecoded === decodedFont || f.path === data.textFont;
+            });
+            if (foundFont) {
+              loadFont(foundFont.path, foundFont.name);
+            }
+          });
+        } else {
+          loadFont(data.textFont, decodedFont || 'CustomFont');
+        }
       }
       return;
     }
@@ -482,7 +501,7 @@ export function StyleSandbox({ initialBase, initialType, onClose, onSaved, fileT
   };
 
   const loadFont = async (path: string, name: string) => {
-    if (!path || path.startsWith('content://')) return;
+    if (!path || isLocalDevicePath(path)) return;
     const isBlob = path.startsWith('blob:');
     const fontUrl = isBlob ? path : `${window.location.origin}/repo/${path}`;
 
