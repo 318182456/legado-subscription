@@ -8,6 +8,11 @@ export class PostgresD1 {
 
   constructor(connectionString: string) {
     this.pool = new pg.Pool({ connectionString });
+    
+    // 监听连接池中的意外错误，防止未捕获异常导致 Node.js 进程意外退出
+    this.pool.on('error', (err) => {
+      console.error('Unexpected error on idle pg client:', err.message);
+    });
   }
 
   prepare(query: string) {

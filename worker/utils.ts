@@ -309,29 +309,59 @@ export function b64urlToU8(s: string): Uint8Array {
 export let schemaVerified = false;
 
 /**
- * 确保数据库表结构已初始化
- * 优化：使用 KV 标志位 + 内存缓存，双重保障减少 CPU 开销
+ * 确保数据库表结构已初始化与升级
  */
 export async function ensureDatabase(env: Env): Promise<void> {
   if (schemaVerified) return;
 
-  // 1. 尝试从 KV 读取初始化状态
-  const isVerified = await env.KV.get("db_verified");
-  
-  // 即使已验证，也做一个快速检查，防止回滚导致的空库
-  if (isVerified === "true") {
-    try {
-      // 检查核心表是否存在
-      await env.DB.prepare("SELECT 1 FROM subscriptions LIMIT 1").run();
-      schemaVerified = true;
-      return;
-    } catch (e) {
-      // 如果报错说明表不存在，清除标志位重新初始化
-      console.warn("数据库标志位存在但核心表缺失，正在强制重新初始化...");
+  let needInit = false;
+  let fileVersion = "";
+  let dbVersion = "";
+
+  // 1. 读取本地版本文件
+  try {
+    const versionPath = path.join(process.cwd(), "VERSION");
+    if (await fs.pathExists(versionPath)) {
+      fileVersion = (await fs.readFile(versionPath, "utf-8")).trim();
+    }
+  } catch (err) {
+    console.error("读取 VERSION 文件失败:", err);
+  }
+
+  // 2. 尝试获取数据库当前版本
+  try {
+    const dbVerRow = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'version'").first() as any;
+    dbVersion = dbVerRow?.value || "";
+  } catch (_) {
+    // 如果表不存在或查询报错，说明需要初始化
+    needInit = true;
+  }
+
+  // 3. 比较版本，如果版本不一致，强制执行初始化与结构升级
+  if (fileVersion && dbVersion && fileVersion !== dbVersion) {
+    console.log(`检测到版本更新: ${dbVersion} -> ${fileVersion}，强制执行数据库结构升级...`);
+    needInit = true;
+  }
+
+  // 4. 如果不需要强制升级，且 KV 中标记已验证，进行快速验证
+  if (!needInit) {
+    const isVerified = await env.KV.get("db_verified");
+    if (isVerified === "true") {
+      try {
+        // 快速检查核心表
+        await env.DB.prepare("SELECT 1 FROM subscriptions LIMIT 1").run();
+        schemaVerified = true;
+        return;
+      } catch (e) {
+        console.warn("数据库标志位存在但核心表缺失，正在强制重新初始化...");
+        needInit = true;
+      }
+    } else {
+      needInit = true;
     }
   }
 
-  console.log("正在执行数据库初始化...");
+  console.log("正在执行数据库初始化与结构同步...");
   let successCount = 0;
   let failCount = 0;
 
@@ -368,34 +398,23 @@ export async function ensureDatabase(env: Env): Promise<void> {
     if (successCount > 0 && failCount === 0) {
       await env.KV.put("db_verified", "true");
       schemaVerified = true;
-      console.log(`数据库初始化完成: 成功 ${successCount} 条`);
+      console.log(`数据库初始化与升级完成: 成功 ${successCount} 条`);
 
-      // ─── 版本同步逻辑 ──────────────────
-      try {
-        const versionPath = path.join(process.cwd(), "VERSION");
-        if (await fs.pathExists(versionPath)) {
-          const fileVersion = (await fs.readFile(versionPath, "utf-8")).trim();
-          
-          // 获取 DB 中的版本
-          const dbVerRow = await env.DB.prepare("SELECT value FROM system_config WHERE key = 'version'").first() as any;
-          const dbVersion = dbVerRow?.value;
-
-          if (fileVersion !== dbVersion) {
-            console.log(`检测到版本更新: ${dbVersion || 'NONE'} -> ${fileVersion}`);
-            // 更新 DB 版本
-            await env.DB.prepare("INSERT INTO system_config (key, value) VALUES ('version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-              .bind(fileVersion)
-              .run();
-            // 标记 KV，前端可以通过此标志位显示“更新成功”或执行后续迁移
-            await env.KV.put("last_version_update", JSON.stringify({
-              old: dbVersion,
-              new: fileVersion,
-              time: new Date().toISOString()
-            }));
-          }
+      // ─── 更新版本号到数据库 ──────────────────
+      if (fileVersion) {
+        try {
+          await env.DB.prepare("INSERT INTO system_config (key, value) VALUES ('version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+            .bind(fileVersion)
+            .run();
+          await env.KV.put("last_version_update", JSON.stringify({
+            old: dbVersion,
+            new: fileVersion,
+            time: new Date().toISOString()
+          }));
+          console.log(`版本号同步成功: ${fileVersion}`);
+        } catch (verErr) {
+          console.error("版本号更新失败:", verErr);
         }
-      } catch (verErr) {
-        console.error("版本同步失败:", verErr);
       }
       // ──────────────────────────────────
     } else {

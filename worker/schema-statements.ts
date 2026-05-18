@@ -42,7 +42,9 @@ export const SCHEMA_STATEMENTS = [
     `CREATE INDEX IF NOT EXISTS idx_rules_subscription    ON rules(subscription_id)`,
     `CREATE INDEX IF NOT EXISTS idx_rules_enabled         ON rules(enabled)`,
     `CREATE INDEX IF NOT EXISTS idx_sources_available       ON sources(is_available)`,
+    `DROP INDEX IF EXISTS idx_sources_unique`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_unique ON sources(subscription_id, url_hash)`,
+    `DROP INDEX IF EXISTS idx_rules_unique`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_rules_unique   ON rules(subscription_id, name, pattern_hash)`,
     `CREATE TABLE IF NOT EXISTS passkeys (
     id          TEXT PRIMARY KEY,
