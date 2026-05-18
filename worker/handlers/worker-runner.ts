@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import os from "os";
 
 let WorkerClass: any = null;
 let isMain = true;
@@ -72,6 +73,7 @@ if (!isMain && pPort && wData) {
       }
       await Promise.all(pool);
       pPort!.postMessage({ type: "done" });
+      process.exit(0);
 
     } else if (taskType === "sync-subscriptions") {
       // 订阅同步拉取与格式化校验任务
@@ -121,12 +123,14 @@ if (!isMain && pPort && wData) {
       }
       await Promise.all(pool);
       pPort!.postMessage({ type: "done" });
+      process.exit(0);
     }
   };
 
   run().catch((err) => {
     console.error(`[Worker] 子线程未捕获致命异常:`, err);
     pPort!.postMessage({ type: "done" });
+    process.exit(1);
   });
 }
 
@@ -145,7 +149,22 @@ export async function runWorkerPool<T, R>(options: {
   const items = options.items;
   if (!items.length) return;
 
-  const totalThreads = options.threadCount || Math.min(4, items.length);
+  let defaultThreadCount = 4;
+  try {
+    const cpus = os.cpus();
+    if (cpus && cpus.length) {
+      defaultThreadCount = Math.max(1, Math.min(cpus.length, 8)); // 默认最高使用 8 个核心，防过度占用
+    }
+  } catch (_) {}
+
+  if (typeof process !== "undefined" && process.env && process.env.THREAD_COUNT) {
+    const parsed = parseInt(process.env.THREAD_COUNT, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      defaultThreadCount = parsed;
+    }
+  }
+
+  const totalThreads = options.threadCount || Math.min(defaultThreadCount, items.length);
   const concurrency = options.concurrencyPerThread || 15;
 
   if (!WorkerClass) {
@@ -259,7 +278,6 @@ export async function runWorkerPool<T, R>(options: {
           }
         } else if (msg.type === "done") {
           if (options.onWorkerDone) options.onWorkerDone(t);
-          worker.terminate().catch(console.error);
         }
       });
 
