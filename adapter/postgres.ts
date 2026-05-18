@@ -96,8 +96,10 @@ class PostgresPreparedStatement {
     let sql = this.convertQuery();
     
     // 自动为 INSERT 语句添加 RETURNING id 以支持 meta.last_row_id
+    // 特殊处理：system_config 表主键为 key，没有 id 列，应避免追加 RETURNING id 防止 Postgres 事务中断
     const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
-    if (isInsert && !sql.toUpperCase().includes('RETURNING')) {
+    const isSystemConfig = sql.toUpperCase().includes('SYSTEM_CONFIG');
+    if (isInsert && !isSystemConfig && !sql.toUpperCase().includes('RETURNING')) {
       sql += ' RETURNING id';
     }
 

@@ -278,7 +278,6 @@ export default function SettingsView() {
                   value={githubProxy}
                   onChange={(e) => setGithubProxy(e.target.value)}
                   className="flex-1 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-sm text-on-surface placeholder-secondary focus:outline-none focus:border-primary transition-colors"
-                  required
                 />
                 <button
                   type="submit"
