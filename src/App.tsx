@@ -239,8 +239,8 @@ export default function App() {
       >
         <div className="h-16 flex items-center px-6 border-b border-outline-variant/30 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden whitespace-nowrap">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
-              <Sparkles className="text-on-primary" size={18} />
+            <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-lg shadow-primary/10 border border-outline-variant/30">
+              <img src="/repo/logo.png" alt="Logo" className="w-full h-full object-cover" />
             </div>
             {isSidebarOpen && <span className="font-bold tracking-tight text-lg">Legado Hub</span>}
           </div>

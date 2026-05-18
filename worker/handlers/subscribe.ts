@@ -69,9 +69,10 @@ export function handleSubscribeInfo(request: Request): Response {
     "singleUrl": true,
     "header": JSON.stringify({ "User-Agent": "Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; MI 8 Lite Build/OPM1.171019.019) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.108 UCBrowser/13.2.0.1100 Mobile Safari/537.36" }),
     "sortUrl": `首页::${origin}/subscribe/index`,
-    "ruleArticles": ".container@h3",
-    "ruleTitle": "a@textNodes",
+    "ruleArticles": "#tab-0 h3",
+    "ruleTitle": "a@text",
     "ruleLink": "a@href",
+    "ruleImage": "img@src",
     "type": 0
   }];
   return new Response(JSON.stringify(source), { headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
