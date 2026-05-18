@@ -49,7 +49,7 @@ export default function App() {
   const [testingIds, setTestingIds] = useState<Set<number>>(new Set());
   const [testProgress, setTestProgress] = useState({ current: 0, total: 0 });
   const [isTestingAll, setIsTestingAll] = useState(false);
-  const cancelTestingRef = React.useRef(false);
+  const pollingTimerRef = React.useRef<any>(null);
 
   useEffect(() => {
     const token = api.getToken();
@@ -89,6 +89,53 @@ export default function App() {
     setIsLoggedIn(false);
   };
 
+  const startPollingProgress = useCallback((onFinished?: () => void) => {
+    if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+
+    pollingTimerRef.current = setInterval(async () => {
+      try {
+        const progress = await api.getTestProgress();
+        if (progress.running) {
+          setIsTestingAll(true);
+          setTestProgress({ current: progress.current, total: progress.total });
+        } else {
+          if (pollingTimerRef.current) {
+            clearInterval(pollingTimerRef.current);
+            pollingTimerRef.current = null;
+          }
+          setIsTestingAll(false);
+          setTestProgress({ current: 0, total: 0 });
+          onFinished?.();
+        }
+      } catch (e) {
+        console.error('轮询测试进度失败:', e);
+      }
+    }, 2000);
+  }, []);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      api.getTestProgress().then(progress => {
+        if (progress.running) {
+          setIsTestingAll(true);
+          setTestProgress({ current: progress.current, total: progress.total });
+          startPollingProgress();
+        }
+      }).catch(console.error);
+    } else {
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
+    };
+  }, [isLoggedIn, startPollingProgress]);
+
   // Test Logic (Shared)
   const handleTest = useCallback(async (ids: number[], onFinished?: () => void) => {
     const nextTesting = new Set(testingIds);
@@ -112,67 +159,32 @@ export default function App() {
   const handleTestAll = useCallback(async (onFinished?: () => void) => {
     if (isTestingAll) {
       if (confirm('确定要停止测试吗？')) {
-        cancelTestingRef.current = true;
+        try {
+          await api.stopTestSources();
+          if (pollingTimerRef.current) {
+            clearInterval(pollingTimerRef.current);
+            pollingTimerRef.current = null;
+          }
+          setIsTestingAll(false);
+          setTestProgress({ current: 0, total: 0 });
+        } catch (e) {
+          alert('中止测试失败: ' + String(e));
+        }
       }
       return;
     }
 
     setIsTestingAll(true);
-    cancelTestingRef.current = false;
-    
+    setTestProgress({ current: 0, total: 100 });
+
     try {
-      const allIds = await api.getAllSourceIds();
-      setTestProgress({ current: 0, total: allIds.length });
-      
-      const batchSize = 50; // 配合后端极限并发
-      const concurrency = 10; // 同时发起 10 路，总计瞬时 500 并发测试
-
-      // 切分批次
-      const chunks: number[][] = [];
-      for (let i = 0; i < allIds.length; i += batchSize) {
-        chunks.push(allIds.slice(i, i + batchSize));
-      }
-
-      let finishedCount = 0;
-
-      // 定义并行工作者
-      const worker = async () => {
-        while (chunks.length > 0 && !cancelTestingRef.current) {
-          const batch = chunks.shift()!;
-          try {
-            await api.testSources(batch);
-          } catch (e) {
-            console.error('批次测试失败', e);
-          }
-
-          finishedCount += batch.length;
-          // 更新进度
-          setTestProgress(prev => ({ ...prev, current: Math.min(allIds.length, finishedCount) }));
-
-          // 阶段性回调（同步中间结果）
-          if (finishedCount % 500 === 0 || finishedCount >= allIds.length) {
-            onFinished?.();
-          }
-
-          // 每个工作者执行完一批后稍微停顿，降低数据库瞬间并发压力
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      };
-
-      // 启动多个并行工作者
-      await Promise.all(Array(concurrency).fill(null).map(worker));
-      
-      // 全部结束后，触发一次 KV 缓存重建
-      await api.syncAll();
-      onFinished?.();
+      await api.testAllSources();
+      startPollingProgress(onFinished);
     } catch (e) {
-      alert('批量测试失败: ' + String(e));
-    } finally {
+      alert('启动后台测试失败: ' + String(e));
       setIsTestingAll(false);
-      setTestProgress({ current: 0, total: 0 });
-      cancelTestingRef.current = false;
     }
-  }, [isTestingAll]);
+  }, [isTestingAll, startPollingProgress]);
 
   const renderActiveView = useMemo(() => {
     switch (activeTab) {

@@ -151,6 +151,10 @@ export const getResources = () => apiFetch<any>("/api/resources");
 export const refreshResources = () => apiFetch<any>("/api/resources/refresh", { method: "POST" });
 
 export const testSources = (ids: number[]) => apiFetch<Record<number, boolean>>("/api/sources/test", { method: "POST", body: JSON.stringify({ ids }) });
+export const testAllSources = () => apiFetch<any>("/api/sources/test/all", { method: "POST" });
+export const stopTestSources = () => apiFetch<any>("/api/sources/test/stop", { method: "POST" });
+export const getTestProgress = () => 
+  apiFetch<{ current: number; total: number; running: boolean }>("/api/sources/test/progress");
 export const toggleSource = (id: number, enabled: boolean) => apiFetch<any>(`/api/sources/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enabled ? 1 : 0 }) });
 export const deleteSource = (id: number) => apiFetch<any>(`/api/sources/${id}`, { method: "DELETE" });
 export const deleteAllSources = () => apiFetch<any>("/api/sources/all", { method: "DELETE" });

@@ -61,6 +61,15 @@ export async function handlePerformUpdate() {
       await fs.writeFile(destPath, data);
     }
     
+    try {
+      console.log("Compiling frontend assets...");
+      const { execSync } = await import("child_process");
+      execSync("npm run build", { cwd: projectRoot });
+      console.log("Frontend assets compiled successfully!");
+    } catch (buildErr) {
+      console.error("Frontend build failed:", buildErr);
+    }
+    
     console.log("Update applied successfully. Restarting...");
     
     // 延迟退出，确保响应能发出

@@ -12,7 +12,7 @@ interface WebDiscoveryModalProps {
 export function WebDiscoveryModal({ isOpen, onClose, onAdded }: WebDiscoveryModalProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [list, setList] = useState<{ name: string; url: string }[]>([]);
+  const [list, setList] = useState<{ name: string; url: string; type: 'source' | 'rule' }[]>([]);
   const [history, setHistory] = useState<string[]>([]);
   const [editingNames, setEditingNames] = useState<Record<number, string>>({});
   const [adding, setAdding] = useState<string | null>(null);
@@ -46,11 +46,11 @@ export function WebDiscoveryModal({ isOpen, onClose, onAdded }: WebDiscoveryModa
     }
   };
 
-  const handleAdd = async (item: { name: string; url: string }) => {
+  const handleAdd = async (item: { name: string; url: string; type: 'source' | 'rule' }) => {
     if (existingUrls.has(item.url)) return;
     setAdding(item.url);
     try {
-      await api.addSubscription({ name: item.name, url: item.url, type: 'source' });
+      await api.addSubscription({ name: item.name, url: item.url, type: item.type });
       setExistingUrls(prev => new Set([...prev, item.url]));
     } catch (e) {
       alert('添加失败: ' + String(e));
@@ -68,7 +68,7 @@ export function WebDiscoveryModal({ isOpen, onClose, onAdded }: WebDiscoveryModa
       if (item && !existingUrls.has(subUrl)) {
         try {
           const name = editingNames[list.indexOf(item)] ?? item.name;
-          await api.addSubscription({ name, url: subUrl, type: 'source' });
+          await api.addSubscription({ name, url: subUrl, type: item.type });
           success++;
         } catch (e) {
           console.error(`Failed to add ${subUrl}`, e);
@@ -197,6 +197,11 @@ export function WebDiscoveryModal({ isOpen, onClose, onAdded }: WebDiscoveryModa
                             disabled={isAdded}
                             className={`font-bold text-sm bg-transparent border-b border-transparent hover:border-outline focus:border-primary px-1 py-0.5 outline-none transition-all w-full ${isAdded ? 'text-secondary' : ''}`}
                           />
+                          {item.type === 'source' ? (
+                            <span className="shrink-0 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 text-[10px] rounded font-bold">书源</span>
+                          ) : (
+                            <span className="shrink-0 px-1.5 py-0.5 bg-purple-500/10 text-purple-600 text-[10px] rounded font-bold">净化规则</span>
+                          )}
                           {isAdded && (
                             <span className="shrink-0 px-1.5 py-0.5 bg-surface-container-highest text-secondary text-[10px] rounded font-bold">已添加</span>
                           )}

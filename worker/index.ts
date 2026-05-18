@@ -93,7 +93,7 @@ export default {
       // ── /api/subscriptions ────────────────────────────────────────
       if (path === "/api/subscriptions") {
         if (method === "GET") return subs.handleListSubscriptions(env);
-        if (method === "POST") return subs.handleAddSubscription(request, env);
+        if (method === "POST") return subs.handleAddSubscription(request, env, ctx);
       }
 
       const subMatch = path.match(/^\/api\/subscriptions\/(\d+)$/);
@@ -107,6 +107,9 @@ export default {
       if (path === "/api/sources" && method === "GET") return sources.handleListSources(env, url);
       if (path === "/api/sources/ids" && method === "GET") return sources.handleAllSourceIds(env);
       if (path === "/api/sources/test" && method === "POST") return sources.handleTestSources(env, request, ctx);
+      if (path === "/api/sources/test/all" && method === "POST") return sources.handleTestAllSources(env, ctx);
+      if (path === "/api/sources/test/stop" && method === "POST") return sources.handleStopTestSources(env);
+      if (path === "/api/sources/test/progress" && method === "GET") return sources.handleGetTestProgress(env);
       if (path === "/api/sources/all" && method === "DELETE") return sources.handleSourceAction(env, 0, "delete-all");
       if (path === "/api/parse-links" && method === "GET") return sources.handleParseLinks(url);
 

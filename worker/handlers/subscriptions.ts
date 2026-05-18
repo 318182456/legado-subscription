@@ -13,16 +13,29 @@ export async function handleListSubscriptions(env: Env): Promise<Response> {
   return ok(results);
 }
 
-export async function handleAddSubscription(request: Request, env: Env): Promise<Response> {
+export async function handleAddSubscription(request: Request, env: Env, ctx?: any): Promise<Response> {
   const body = await parseBody<{ name?: string; url: string; type: "source" | "rule" }>(request);
   if (!body?.url) return err("url 不能为空");
   const { meta } = await env.DB.prepare("INSERT INTO subscriptions (name, url, type) VALUES (?, ?, ?)").bind(body.name ?? "", body.url, body.type).run();
   const newId = Number(meta.last_row_id);
-  try {
-    if (body.type === "source") await syncSourceSubscription(env, newId, body.url);
-    else await syncRuleSubscription(env, newId, body.url);
-    await rebuildCache(env, body.type);
-  } catch (e) { console.warn("首次同步失败:", e); }
+  
+  const runInitialSync = async () => {
+    try {
+      if (body.type === "source") await syncSourceSubscription(env, newId, body.url);
+      else await syncRuleSubscription(env, newId, body.url);
+      await rebuildCache(env, body.type);
+      console.log(`新订阅 [${body.name || body.url}] 首次后台同步与缓存重建已完成。`);
+    } catch (e) {
+      console.warn("首次后台同步失败:", e);
+    }
+  };
+
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(runInitialSync());
+  } else {
+    runInitialSync().catch(console.error);
+  }
+
   const sub = await env.DB.prepare("SELECT * FROM subscriptions WHERE id=?").bind(newId).first();
   return ok(sub);
 }

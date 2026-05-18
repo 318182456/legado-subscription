@@ -126,6 +126,147 @@ export async function handleTestSources(env: Env, request: Request, ctx: any): P
   return ok(testResults);
 }
 
+export async function handleTestAllSources(env: Env, ctx: any): Promise<Response> {
+  const { results: rawIds } = await env.DB.prepare("SELECT id FROM sources WHERE enabled = 1").all();
+  const ids = rawIds.map((r: any) => r.id);
+  
+  if (!ids.length) {
+    return ok({ message: "No sources to test" });
+  }
+
+  const progressKey = "test_progress";
+  const initialProgress = { current: 0, total: ids.length, running: true };
+  await env.KV.put(progressKey, JSON.stringify(initialProgress));
+
+  const runAllTests = async () => {
+    try {
+      const CONCURRENCY = 50;
+      let finishedCount = 0;
+
+      for (let i = 0; i < ids.length; i += CONCURRENCY) {
+        // 在每批次执行前，检查是否被中止
+        const progressRaw = await env.KV.get(progressKey);
+        if (progressRaw) {
+          const progress = JSON.parse(progressRaw);
+          if (!progress.running) {
+            console.log("后台全库测试任务被用户手动中止。");
+            break;
+          }
+        } else {
+          break;
+        }
+
+        const chunk = ids.slice(i, i + CONCURRENCY);
+        const { results: rawSources } = await env.DB.prepare(
+          `SELECT id, COALESCE(test_url, book_source_url) as test_url FROM sources WHERE id IN (${chunk.map(() => '?').join(',')})`
+        ).bind(...chunk).all();
+
+        const sourcesMap = new Map(rawSources.map((s: any) => [s.id, s]));
+        const chunkResults: Record<number, boolean> = {};
+
+        await Promise.all(chunk.map(async (id) => {
+          const sourceData = sourcesMap.get(id);
+          if (!sourceData || !sourceData.test_url) { chunkResults[id] = false; return; }
+
+          const fetchOptions: RequestInit = {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            signal: AbortSignal.timeout(5000) 
+          };
+
+          try {
+            const res = await fetch(sourceData.test_url, fetchOptions);
+            await res.body?.cancel();
+            chunkResults[id] = (res.status >= 200 && res.status < 400);
+          } catch (_) {
+            chunkResults[id] = false;
+          }
+        }));
+
+        const availIds = chunk.filter(id => chunkResults[id]);
+        const unavailIds = chunk.filter(id => !chunkResults[id]);
+
+        const updateBatch = [];
+        if (availIds.length > 0) {
+          updateBatch.push(
+            env.DB.prepare(
+              `UPDATE sources SET is_available = 1, enabled = 1, last_checked = datetime('now') WHERE id IN (${availIds.map(() => "?").join(",")})`
+            ).bind(...availIds)
+          );
+        }
+        if (unavailIds.length > 0) {
+          updateBatch.push(
+            env.DB.prepare(
+              `UPDATE sources SET is_available = 0, enabled = 0, last_checked = datetime('now') WHERE id IN (${unavailIds.map(() => "?").join(",")})`
+            ).bind(...unavailIds)
+          );
+        }
+
+        if (updateBatch.length > 0) {
+          await env.DB.batch(updateBatch);
+        }
+
+        finishedCount += chunk.length;
+        
+        // 再次检查 running 状态，确保在写入前没有被中止
+        const currentProgressRaw = await env.KV.get(progressKey);
+        if (currentProgressRaw) {
+          const currentProgress = JSON.parse(currentProgressRaw);
+          if (currentProgress.running) {
+            await env.KV.put(progressKey, JSON.stringify({
+              current: Math.min(ids.length, finishedCount),
+              total: ids.length,
+              running: true
+            }));
+          } else {
+            console.log("后台全库测试在批次更新进度时检测到已被中止。");
+            break;
+          }
+        }
+      }
+
+      // 测试完毕，更新状态为未运行，并自动重建缓存
+      const finalProgressRaw = await env.KV.get(progressKey);
+      if (finalProgressRaw) {
+        const finalProgress = JSON.parse(finalProgressRaw);
+        if (finalProgress.running) {
+          await rebuildCache(env, "source");
+        }
+      }
+      await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
+      console.log("后台全库测试与缓存重建圆满完成。");
+    } catch (err) {
+      console.error("后台全库测试发生严重异常:", err);
+      await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
+    }
+  };
+
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(runAllTests());
+  } else {
+    runAllTests().catch(console.error);
+  }
+
+  return ok({ message: "Test started in background" });
+}
+
+export async function handleStopTestSources(env: Env): Promise<Response> {
+  const progressKey = "test_progress";
+  await env.KV.put(progressKey, JSON.stringify({ current: 0, total: 0, running: false }));
+  return ok();
+}
+
+export async function handleGetTestProgress(env: Env): Promise<Response> {
+  const progressKey = "test_progress";
+  const progressRaw = await env.KV.get(progressKey);
+  if (progressRaw) {
+    return ok(JSON.parse(progressRaw));
+  }
+  return ok({ current: 0, total: 0, running: false });
+}
+
 export async function handleSourceAction(env: Env, id: number, action: string, request?: Request): Promise<Response> {
   if (action === "delete") {
     await env.DB.prepare("DELETE FROM sources WHERE id = ?").bind(id).run();
@@ -160,11 +301,11 @@ export async function handleParseLinks(url: URL): Promise<Response> {
     if (!res.ok) return err(`目标网页返回错误: ${res.status}`);
     const html = await res.text();
     
-    const results: { name: string; url: string }[] = [];
-    const linkRegex = /src=([^"& ]+)/g;
+    const results: { name: string; url: string; type: "source" | "rule" }[] = [];
+    const linkRegex = /(?:(importBookSource[s]?|importReplaceRule[s]?)\?src=|src=)([^"& '"]+)/gi;
     let match;
     while ((match = linkRegex.exec(html)) !== null) {
-      const subUrl = decodeURIComponent(match[1]).replace(/['"]$/, '');
+      const subUrl = decodeURIComponent(match[2]).replace(/['"]$/, '');
       if (!subUrl.startsWith('http')) continue;
 
       const matchIndex = match.index;
@@ -208,9 +349,28 @@ export async function handleParseLinks(url: URL): Promise<Response> {
         .trim();
 
       if (!name) name = "未知来源";
+
+      let type: "source" | "rule" = "source";
+      if (match[1]) {
+        const lowerImportType = match[1].toLowerCase();
+        if (lowerImportType.includes("replace") || lowerImportType.includes("rule")) {
+          type = "rule";
+        }
+      } else {
+        const lowerUrl = subUrl.toLowerCase();
+        const lowerName = name.toLowerCase();
+        if (
+          lowerUrl.includes("replace") || 
+          lowerUrl.includes("rule") || 
+          lowerName.includes("净化") || 
+          lowerName.includes("规则")
+        ) {
+          type = "rule";
+        }
+      }
       
       if (!results.find(r => r.url === subUrl)) {
-        results.push({ name, url: subUrl });
+        results.push({ name, url: subUrl, type });
       }
     }
 
