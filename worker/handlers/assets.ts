@@ -584,53 +584,230 @@ export async function handleOcr(request: Request, env: Env): Promise<Response> {
     await worker.terminate();
     console.log("[OCR] 识别完成，正在解析排版参数...");
 
-    const lines = data.text.split("\n").map((t: string) => ({ text: t }));
     const newConfig: any = {};
-    let currentSection: "main" | "title" | "header" | "footer" = "main";
+    const words = data.words || [];
 
-    lines.forEach((line: any) => {
-      const text = line.text.replace(/\s+/g, "");
-      if (text.includes("正文标题")) currentSection = "title";
-      else if (text.includes("页眉")) currentSection = "header";
-      else if (text.includes("页脚")) currentSection = "footer";
-      else if (text.includes("正文") && !text.includes("标题")) currentSection = "main";
+    if (words.length > 0) {
+      // 1. 根据单词的 bounding box 水平位置自动划分为 N 个等宽垂直列
+      const xs = words.map((w: any) => w.bbox.x0).concat(words.map((w: any) => w.bbox.x1));
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const width = maxX - minX;
 
-      const findValue = () => {
-        const cleanText = text.replace(/[-+]/g, "");
-        const matches = cleanText.match(/\d+(\.\d+)?/);
-        return (matches && matches.length > 0) ? parseFloat(matches[0]) : null;
+      const ys = words.map((w: any) => w.bbox.y0).concat(words.map((w: any) => w.bbox.y1));
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const height = maxY - minY;
+
+      const ratio = width / height;
+      // 单张常规手机截图的高宽比通常在 1.7 到 2.3 之间（即 width/height 约 0.45 ~ 0.56）
+      // 拼图时的长宽比为 N * 0.5，这里动态决定分栏数 cols
+      const cols = Math.max(1, Math.round(ratio / 0.5));
+      const colWidth = width / cols;
+
+      console.log(`[OCR 分栏解析] 检测到整体宽度: ${width}, 高度: ${height}, 长宽比: ${ratio.toFixed(2)}, 自动划分为 ${cols} 栏`);
+
+      // 2. 初始化每栏单词容器并归类
+      const colWords: any[][] = Array.from({ length: cols }, () => []);
+      words.forEach((word: any) => {
+        const cx = (word.bbox.x0 + word.bbox.x1) / 2 - minX;
+        const colIdx = Math.min(cols - 1, Math.floor(cx / colWidth));
+        colWords[colIdx].push(word);
+      });
+
+      // 定义指示文本与状态栏参数项之间的值映射规则
+      const tipLabelToValue = (label: string): number => {
+        if (label.includes("无")) return 0;
+        if (label.includes("书名")) return 7;
+        if (label.includes("时间及电量%")) return 9;
+        if (label.includes("时间及电量")) return 8;
+        if (label.includes("电量%")) return 10;
+        if (label.includes("电量")) return 3;
+        if (label.includes("页数及进度")) return 6;
+        if (label.includes("进度(%)") || label.includes("进度%")) return 5;
+        if (label.includes("进度")) return 11;
+        if (label.includes("页数")) return 4;
+        if (label.includes("标题")) return 1;
+        if (label.includes("时间")) return 2;
+        return 0;
       };
 
-      const val = findValue();
-      if (val === null || isNaN(val)) return;
+      // 3. 逐栏独立进行行聚合与排版参数匹配
+      colWords.forEach((wordsInCol, colIdx) => {
+        if (wordsInCol.length === 0) return;
 
-      const is = (key: string) => text.includes(key);
+        // 对列内的单词进行垂直高度扫描并聚合成物理排版行
+        wordsInCol.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+        const linesInCol: string[] = [];
+        let currentLineWords: any[] = [];
 
-      if (currentSection === "main") {
-        if (is("字号")) newConfig.textSize = val;
-        else if (is("字距")) newConfig.letterSpacing = val;
-        else if (is("行距") || is("行间")) newConfig.lineSpacingExtra = val;
-        else if (is("段距") || is("段间") || is("段落")) newConfig.paragraphSpacing = val;
-        else if (is("上边距")) newConfig.paddingTop = val;
-        else if (is("下边距")) newConfig.paddingBottom = val;
-        else if (is("左边距")) newConfig.paddingLeft = val;
-        else if (is("右边距")) newConfig.paddingRight = val;
-      } else if (currentSection === "title") {
-        if (is("字号")) newConfig.titleSize = val;
-        else if (is("上边距")) newConfig.titleTopSpacing = val;
-        else if (is("下边距")) newConfig.titleBottomSpacing = val;
-      } else if (currentSection === "header") {
-        if (is("上边距")) newConfig.headerPaddingTop = val;
-        else if (is("下边距")) newConfig.headerPaddingBottom = val;
-        else if (is("左边距")) newConfig.headerPaddingLeft = val;
-        else if (is("右边距")) newConfig.headerPaddingRight = val;
-      } else if (currentSection === "footer") {
-        if (is("上边距")) newConfig.footerPaddingTop = val;
-        else if (is("下边距")) newConfig.footerPaddingBottom = val;
-        else if (is("左边距")) newConfig.footerPaddingLeft = val;
-        else if (is("右边距")) newConfig.footerPaddingRight = val;
-      }
-    });
+        wordsInCol.forEach((w) => {
+          if (currentLineWords.length === 0) {
+            currentLineWords.push(w);
+          } else {
+            const prev = currentLineWords[currentLineWords.length - 1];
+            const prevCenter = (prev.bbox.y0 + prev.bbox.y1) / 2;
+            const currentCenter = (w.bbox.y0 + w.bbox.y1) / 2;
+            const prevHeight = prev.bbox.y1 - prev.bbox.y0;
+            
+            // 垂直中心距离小于前一单词高度的 0.6 倍，则判定为在同一行中
+            if (Math.abs(currentCenter - prevCenter) < prevHeight * 0.6) {
+              currentLineWords.push(w);
+            } else {
+              currentLineWords.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+              linesInCol.push(currentLineWords.map((item) => item.text).join(" "));
+              currentLineWords = [w];
+            }
+          }
+        });
+        if (currentLineWords.length > 0) {
+          currentLineWords.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+          linesInCol.push(currentLineWords.map((item) => item.text).join(" "));
+        }
+
+        console.log(`--- [OCR 分栏 ${colIdx + 1}/${cols}] 开始解析以下行数据 ---`);
+        linesInCol.forEach(l => console.log(`  ${l}`));
+
+        let currentSection: "main" | "title" | "header" | "footer" = "main";
+
+        linesInCol.forEach((lineText: string) => {
+          const text = lineText.replace(/\s+/g, "");
+          if (text.includes("正文标题")) currentSection = "title";
+          else if (text.includes("页眉")) currentSection = "header";
+          else if (text.includes("页脚")) currentSection = "footer";
+          else if (text.includes("正文") && !text.includes("标题")) currentSection = "main";
+
+          // 提取数值 helper：完美保留负数/小数/整数，且优先取末尾主参数（以应对滑块符号干扰）
+          const findValue = () => {
+            const matches = text.match(/-?\d+(\.\d+)?/g);
+            if (matches && matches.length > 0) {
+              const val = parseFloat(matches[matches.length - 1]);
+              return isNaN(val) ? null : val;
+            }
+            return null;
+          };
+
+          const val = findValue();
+          const is = (key: string) => text.includes(key);
+
+          // A. 处理数值型排版设置
+          if (val !== null) {
+            if (currentSection === "main") {
+              if (is("字号")) newConfig.textSize = val;
+              else if (is("字距")) newConfig.letterSpacing = val;
+              else if (is("行距") || is("行间")) newConfig.lineSpacingExtra = val;
+              else if (is("段距") || is("段间") || is("段落")) newConfig.paragraphSpacing = val;
+              else if (is("上边距")) newConfig.paddingTop = val;
+              else if (is("下边距")) newConfig.paddingBottom = val;
+              else if (is("左边距")) newConfig.paddingLeft = val;
+              else if (is("右边距")) newConfig.paddingRight = val;
+            } else if (currentSection === "title") {
+              if (is("字号")) newConfig.titleSize = val;
+              else if (is("上边距")) newConfig.titleTopSpacing = val;
+              else if (is("下边距")) newConfig.titleBottomSpacing = val;
+            } else if (currentSection === "header") {
+              if (is("上边距")) newConfig.headerPaddingTop = val;
+              else if (is("下边距")) newConfig.headerPaddingBottom = val;
+              else if (is("左边距")) newConfig.headerPaddingLeft = val;
+              else if (is("右边距")) newConfig.headerPaddingRight = val;
+            } else if (currentSection === "footer") {
+              if (is("上边距")) newConfig.footerPaddingTop = val;
+              else if (is("下边距")) newConfig.footerPaddingBottom = val;
+              else if (is("左边距")) newConfig.footerPaddingLeft = val;
+              else if (is("右边距")) newConfig.footerPaddingRight = val;
+            }
+          }
+
+          // B. 处理开关/选项型高级排版参数
+          // B.1 标题对齐模式 (titleMode)
+          if (currentSection === "title" && (is("靠左") || is("居中") || is("隐藏"))) {
+            if (is("靠左")) newConfig.titleMode = 0;
+            else if (is("居中")) newConfig.titleMode = 1;
+            else if (is("隐藏")) newConfig.titleMode = 2;
+          }
+
+          // B.2 页眉页脚显示模式开关 (headerMode, footerMode)
+          if (is("显示/隐藏")) {
+            const clean = text.replace("显示/隐藏", "");
+            const isShow = clean.includes("显示") && !clean.includes("隐藏");
+            if (currentSection === "header") {
+              newConfig.headerMode = isShow ? 1 : 2;
+            } else if (currentSection === "footer") {
+              newConfig.footerMode = isShow ? 0 : 1;
+            }
+          }
+
+          // B.3 状态栏显示字段配置 (tipHeaderLeft, tipHeaderMiddle, etc.)
+          const isLeft = is("左") && !is("边距");
+          const isRight = is("右") && !is("边距");
+          const isMiddle = is("中") && !is("粗");
+          if (isLeft || isMiddle || isRight) {
+            const cleanText = text.replace(/^(左|中|右)/, "");
+            const tipVal = tipLabelToValue(cleanText);
+            if (currentSection === "header") {
+              if (isLeft) newConfig.tipHeaderLeft = tipVal;
+              else if (isMiddle) newConfig.tipHeaderMiddle = tipVal;
+              else if (isRight) newConfig.tipHeaderRight = tipVal;
+            } else if (currentSection === "footer") {
+              if (isLeft) newConfig.tipFooterLeft = tipVal;
+              else if (isMiddle) newConfig.tipFooterMiddle = tipVal;
+              else if (isRight) newConfig.tipFooterRight = tipVal;
+            }
+          }
+        });
+      });
+    } else {
+      // 4. 极端无单词返回时的全文本降级匹配逻辑
+      const lines = data.text.split("\n").map((t: string) => ({ text: t }));
+      let currentSection: "main" | "title" | "header" | "footer" = "main";
+
+      lines.forEach((line: any) => {
+        const text = line.text.replace(/\s+/g, "");
+        if (text.includes("正文标题")) currentSection = "title";
+        else if (text.includes("页眉")) currentSection = "header";
+        else if (text.includes("页脚")) currentSection = "footer";
+        else if (text.includes("正文") && !text.includes("标题")) currentSection = "main";
+
+        const findValue = () => {
+          const matches = text.match(/-?\d+(\.\d+)?/g);
+          if (matches && matches.length > 0) {
+            const val = parseFloat(matches[matches.length - 1]);
+            return isNaN(val) ? null : val;
+          }
+          return null;
+        };
+
+        const val = findValue();
+        if (val === null || isNaN(val)) return;
+
+        const is = (key: string) => text.includes(key);
+
+        if (currentSection === "main") {
+          if (is("字号")) newConfig.textSize = val;
+          else if (is("字距")) newConfig.letterSpacing = val;
+          else if (is("行距") || is("行间")) newConfig.lineSpacingExtra = val;
+          else if (is("段距") || is("段间") || is("段落")) newConfig.paragraphSpacing = val;
+          else if (is("上边距")) newConfig.paddingTop = val;
+          else if (is("下边距")) newConfig.paddingBottom = val;
+          else if (is("左边距")) newConfig.paddingLeft = val;
+          else if (is("右边距")) newConfig.paddingRight = val;
+        } else if (currentSection === "title") {
+          if (is("字号")) newConfig.titleSize = val;
+          else if (is("上边距")) newConfig.titleTopSpacing = val;
+          else if (is("下边距")) newConfig.titleBottomSpacing = val;
+        } else if (currentSection === "header") {
+          if (is("上边距")) newConfig.headerPaddingTop = val;
+          else if (is("下边距")) newConfig.headerPaddingBottom = val;
+          else if (is("左边距")) newConfig.headerPaddingLeft = val;
+          else if (is("右边距")) newConfig.headerPaddingRight = val;
+        } else if (currentSection === "footer") {
+          if (is("上边距")) newConfig.footerPaddingTop = val;
+          else if (is("下边距")) newConfig.footerPaddingBottom = val;
+          else if (is("左边距")) newConfig.footerPaddingLeft = val;
+          else if (is("右边距")) newConfig.footerPaddingRight = val;
+        }
+      });
+    }
 
     console.log(`[OCR] 排版参数解析完成！成功提取了 ${Object.keys(newConfig).length} 项配置。`);
     return new Response(JSON.stringify({ ok: true, data: newConfig }), {
